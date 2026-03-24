@@ -1,0 +1,15 @@
+DualPathBaseline
+================
+
+Topology
+- hostA -> r1 -> r2 -> r3 -> hostB
+- backup branch: r1 -> r4 -> r3
+
+Routing
+- Primary path: hostA -> r1 -> r2 -> r3 -> hostB
+- Backup path: hostA -> r1 -> r4 -> r3 -> hostB
+- OSPF interface costs prefer the r1-r2-r3 branch and keep the r1-r4-r3 branch as a higher-cost alternative.
+
+Goal
+- Provide the smallest clean dissertation baseline for dual-path routing.
+- Establish a deterministic OSPF topology before adding failures, proactive rerouting logic, or custom code.
