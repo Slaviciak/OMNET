@@ -1,0 +1,2306 @@
+file 266351 1774359626                                          
+version 3
+run AlwaysUp-0-20260324-14:40:08-33180
+attr configname AlwaysUp
+attr datetime 20260324-14:40:08
+attr datetimef 20260324-144008
+attr experiment AlwaysUp
+attr inifile omnetpp.ini
+attr iterationvars ""
+attr iterationvarsd ""
+attr iterationvarsf ""
+attr measurement ""
+attr network SimpleTest
+attr processid 33180
+attr repetition 0
+attr replication #0
+attr resultdir results
+attr runnumber 0
+attr seedset 0
+config image-path ../../../inet4.5/images
+config **.scenarioManager.script "xml(\"<empty/>\")"
+config network SimpleTest
+config **.ospf.ospfConfig "xmldoc(\"ASConfig.xml\")"
+config **.H*.numApps 2
+config **.app[0].typename UdpBasicApp
+config **.app[0].destPort 1234
+config **.app[0].messageLength "32 bytes"
+config **.app[0].sendInterval 0.1s
+config **.app[0].startTime 4s
+config **.H2.app[0].destAddresses "\"H1\""
+config **.H1.app[0].destAddresses "\"H2\""
+config **.app[1].typename UdpEchoApp
+config **.app[1].localPort 1234
+config **.arp.cacheTimeout 1s
+
+vector 0 SimpleTest.H1.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 1 SimpleTest.H1.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 2 SimpleTest.H1.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 3 SimpleTest.H1.lo[0].lo rcvdPkFromHl:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packets received from higher layer, packetBytes"
+vector 4 SimpleTest.H1.lo[0].lo passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 5 SimpleTest.H1.lo[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 6 SimpleTest.H1.lo[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 7 SimpleTest.H1.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 8 SimpleTest.H1.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 9 SimpleTest.H1.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 10 SimpleTest.H1.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 11 SimpleTest.H1.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 12 SimpleTest.H1.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 13 SimpleTest.H1.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 14 SimpleTest.H1.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 15 SimpleTest.H1.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 16 SimpleTest.H1.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 17 SimpleTest.H1.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 18 SimpleTest.H1.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 19 SimpleTest.H1.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 20 SimpleTest.H1.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 21 SimpleTest.H1.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 22 SimpleTest.H1.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 23 SimpleTest.H1.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 24 SimpleTest.H1.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 25 SimpleTest.H1.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 26 SimpleTest.H1.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 27 SimpleTest.H1.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 28 SimpleTest.H1.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 29 SimpleTest.H1.ipv4.ip packetDropAddressResolutionFailed:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsAddressResolutionFailed(packetDropped)
+attr title "packet drop: address resolution failed, packetBytes"
+vector 30 SimpleTest.H1.ipv4.ip packetDropHopLimitReached:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsHopLimitReached(packetDropped)
+attr title "packet drop: hop limit reached, packetBytes"
+vector 31 SimpleTest.H1.ipv4.ip packetDropForwardingDisabled:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsForwardingDisabled(packetDropped)
+attr title "packet drop: forwarding disabled, packetBytes"
+vector 32 SimpleTest.H1.ipv4.ip packetDropNoInterfaceFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoInterfaceFound(packetDropped)
+attr title "packet drop: no interface found, packetBytes"
+vector 33 SimpleTest.H1.ipv4.ip packetDropNoRouteFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoRouteFound(packetDropped)
+attr title "packet drop: no route found, packetBytes"
+vector 34 SimpleTest.H1.ipv4.ip packetDropUndefined:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsUndefined(packetDropped)
+attr title "packet drop: undefined, packetBytes"
+vector 35 SimpleTest.H1.ipv4.arp arpRequestSent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpRequestSent
+attr title "ARP request sent, packetBytes"
+vector 36 SimpleTest.H1.ipv4.arp arpReplySent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpReplySent
+attr title "ARP replies sent, packetBytes"
+vector 37 SimpleTest.H1.udp packetSent:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSent
+attr title "packets sent, packetBytes"
+vector 38 SimpleTest.H1.udp packetReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceived
+attr title "packets received, packetBytes"
+vector 39 SimpleTest.H1.udp passedUpPk:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetSentToUpper
+attr title "packets passed up, count"
+vector 40 SimpleTest.H1.udp droppedPkWrongPort:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetDropReasonIsNoPortFound(packetDropped)
+attr title "packets dropped (wrong port), count"
+vector 41 SimpleTest.H1.udp droppedPkBadChecksum:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packets dropped (checksum error), count"
+vector 42 SimpleTest.H1.app[0] packetReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceived
+attr title "packets received, packetBytes"
+vector 43 SimpleTest.H1.app[0] throughput:vector ETV
+attr recordingmode vector
+attr source throughput(packetReceived)
+attr title throughput
+attr unit bps
+vector 44 SimpleTest.H1.app[0] packetSent:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSent
+attr title "packets sent, packetBytes"
+vector 45 SimpleTest.H1.app[0] rcvdPkLifetime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source dataAge(packetReceived)
+attr title "received packet lifetime"
+attr unit s
+vector 46 SimpleTest.H1.app[0] rcvdPkSeqNo:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source appPkSeqNo(packetReceived)
+attr title "received packet sequence number"
+vector 47 SimpleTest.H1.app[1] echoedPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSent
+attr title "packets echoed, packetBytes"
+vector 48 SimpleTest.N1.bridging packetDropped:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr title "packets dropped, packetBytes"
+vector 49 SimpleTest.N1.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 50 SimpleTest.N1.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 51 SimpleTest.N1.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 52 SimpleTest.N1.ieee8021q.qTagHeaderInserter incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming packet lengths"
+attr unit b
+vector 53 SimpleTest.N1.ieee8021q.qTagHeaderInserter incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming data rate"
+attr unit bps
+vector 54 SimpleTest.N1.ieee8021q.qTagHeaderInserter outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing packet lengths"
+attr unit b
+vector 55 SimpleTest.N1.ieee8021q.qTagHeaderInserter outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing data rate"
+attr unit bps
+vector 56 SimpleTest.N1.ieee8021q.qTagHeaderInserter flowIncomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming packet lengths"
+attr unit b
+vector 57 SimpleTest.N1.ieee8021q.qTagHeaderInserter flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 58 SimpleTest.N1.ieee8021q.qTagHeaderInserter flowOutgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing packet lengths"
+attr unit b
+vector 59 SimpleTest.N1.ieee8021q.qTagHeaderInserter flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 60 SimpleTest.N1.ieee8021q.qTagHeaderChecker incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming packet lengths"
+attr unit b
+vector 61 SimpleTest.N1.ieee8021q.qTagHeaderChecker incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming data rate"
+attr unit bps
+vector 62 SimpleTest.N1.ieee8021q.qTagHeaderChecker outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing packet lengths"
+attr unit b
+vector 63 SimpleTest.N1.ieee8021q.qTagHeaderChecker outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing data rate"
+attr unit bps
+vector 64 SimpleTest.N1.ieee8021q.qTagHeaderChecker droppedPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropped)
+attr title "dropped packet lengths"
+attr unit b
+vector 65 SimpleTest.N1.ieee8021q.qTagHeaderChecker droppedDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetDropped)
+attr title "dropped data rate"
+attr unit bps
+vector 66 SimpleTest.N1.ieee8021q.qTagHeaderChecker flowIncomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming packet lengths"
+attr unit b
+vector 67 SimpleTest.N1.ieee8021q.qTagHeaderChecker flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 68 SimpleTest.N1.ieee8021q.qTagHeaderChecker flowOutgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing packet lengths"
+attr unit b
+vector 69 SimpleTest.N1.ieee8021q.qTagHeaderChecker flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 70 SimpleTest.N1.ieee8021q.qTagHeaderChecker flowDroppedPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(demuxFlow(packetDropped))
+attr title "flow specific dropped packet lengths"
+attr unit b
+vector 71 SimpleTest.N1.ieee8021q.qTagHeaderChecker flowDroppedDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(demuxFlow(packetDropped))
+attr title "flow specific dropped data rate"
+attr unit bps
+vector 72 SimpleTest.N1.ieee8021r.rTagHeaderInserter incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming packet lengths"
+attr unit b
+vector 73 SimpleTest.N1.ieee8021r.rTagHeaderInserter incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming data rate"
+attr unit bps
+vector 74 SimpleTest.N1.ieee8021r.rTagHeaderInserter outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing packet lengths"
+attr unit b
+vector 75 SimpleTest.N1.ieee8021r.rTagHeaderInserter outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing data rate"
+attr unit bps
+vector 76 SimpleTest.N1.ieee8021r.rTagHeaderInserter flowIncomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming packet lengths"
+attr unit b
+vector 77 SimpleTest.N1.ieee8021r.rTagHeaderInserter flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 78 SimpleTest.N1.ieee8021r.rTagHeaderInserter flowOutgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing packet lengths"
+attr unit b
+vector 79 SimpleTest.N1.ieee8021r.rTagHeaderInserter flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 80 SimpleTest.N1.ieee8021r.rTagHeaderChecker incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming packet lengths"
+attr unit b
+vector 81 SimpleTest.N1.ieee8021r.rTagHeaderChecker incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming data rate"
+attr unit bps
+vector 82 SimpleTest.N1.ieee8021r.rTagHeaderChecker outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing packet lengths"
+attr unit b
+vector 83 SimpleTest.N1.ieee8021r.rTagHeaderChecker outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing data rate"
+attr unit bps
+vector 84 SimpleTest.N1.ieee8021r.rTagHeaderChecker droppedPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropped)
+attr title "dropped packet lengths"
+attr unit b
+vector 85 SimpleTest.N1.ieee8021r.rTagHeaderChecker droppedDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetDropped)
+attr title "dropped data rate"
+attr unit bps
+vector 86 SimpleTest.N1.ieee8021r.rTagHeaderChecker flowIncomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming packet lengths"
+attr unit b
+vector 87 SimpleTest.N1.ieee8021r.rTagHeaderChecker flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 88 SimpleTest.N1.ieee8021r.rTagHeaderChecker flowOutgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing packet lengths"
+attr unit b
+vector 89 SimpleTest.N1.ieee8021r.rTagHeaderChecker flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 90 SimpleTest.N1.ieee8021r.rTagHeaderChecker flowDroppedPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(demuxFlow(packetDropped))
+attr title "flow specific dropped packet lengths"
+attr unit b
+vector 91 SimpleTest.N1.ieee8021r.rTagHeaderChecker flowDroppedDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(demuxFlow(packetDropped))
+attr title "flow specific dropped data rate"
+attr unit bps
+vector 92 SimpleTest.N1.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 93 SimpleTest.N1.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 94 SimpleTest.N1.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 95 SimpleTest.N1.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 96 SimpleTest.N1.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 97 SimpleTest.N1.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 98 SimpleTest.N1.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 99 SimpleTest.N1.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 100 SimpleTest.N1.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 101 SimpleTest.N1.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 102 SimpleTest.N1.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 103 SimpleTest.N1.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 104 SimpleTest.N1.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 105 SimpleTest.N1.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 106 SimpleTest.N1.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 107 SimpleTest.N1.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 108 SimpleTest.N1.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 109 SimpleTest.N1.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 110 SimpleTest.N1.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 111 SimpleTest.N1.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 112 SimpleTest.N1.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 113 SimpleTest.N1.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 114 SimpleTest.N1.eth[1].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 115 SimpleTest.N1.eth[1].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 116 SimpleTest.N1.eth[1].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 117 SimpleTest.N1.eth[1].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 118 SimpleTest.N1.eth[1].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 119 SimpleTest.N1.eth[1].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 120 SimpleTest.N1.eth[1].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 121 SimpleTest.N1.eth[1].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 122 SimpleTest.N1.eth[1].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 123 SimpleTest.N1.eth[1].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 124 SimpleTest.N1.eth[1].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 125 SimpleTest.N1.eth[1].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 126 SimpleTest.N1.eth[1].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 127 SimpleTest.N1.eth[1].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 128 SimpleTest.N1.eth[1].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 129 SimpleTest.N1.eth[1].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 130 SimpleTest.N1.eth[1].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 131 SimpleTest.N1.eth[1].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 132 SimpleTest.N1.eth[1].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 133 SimpleTest.N1.eth[1].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 134 SimpleTest.N1.eth[1] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 135 SimpleTest.N1.eth[1] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 136 SimpleTest.R1.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 137 SimpleTest.R1.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 138 SimpleTest.R1.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 139 SimpleTest.R1.lo[0].lo rcvdPkFromHl:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packets received from higher layer, packetBytes"
+vector 140 SimpleTest.R1.lo[0].lo passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 141 SimpleTest.R1.lo[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 142 SimpleTest.R1.lo[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 143 SimpleTest.R1.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 144 SimpleTest.R1.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 145 SimpleTest.R1.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 146 SimpleTest.R1.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 147 SimpleTest.R1.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 148 SimpleTest.R1.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 149 SimpleTest.R1.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 150 SimpleTest.R1.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 151 SimpleTest.R1.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 152 SimpleTest.R1.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 153 SimpleTest.R1.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 154 SimpleTest.R1.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 155 SimpleTest.R1.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 156 SimpleTest.R1.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 157 SimpleTest.R1.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 158 SimpleTest.R1.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 159 SimpleTest.R1.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 160 SimpleTest.R1.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 161 SimpleTest.R1.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 162 SimpleTest.R1.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 163 SimpleTest.R1.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 164 SimpleTest.R1.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 165 SimpleTest.R1.eth[1].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 166 SimpleTest.R1.eth[1].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 167 SimpleTest.R1.eth[1].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 168 SimpleTest.R1.eth[1].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 169 SimpleTest.R1.eth[1].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 170 SimpleTest.R1.eth[1].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 171 SimpleTest.R1.eth[1].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 172 SimpleTest.R1.eth[1].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 173 SimpleTest.R1.eth[1].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 174 SimpleTest.R1.eth[1].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 175 SimpleTest.R1.eth[1].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 176 SimpleTest.R1.eth[1].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 177 SimpleTest.R1.eth[1].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 178 SimpleTest.R1.eth[1].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 179 SimpleTest.R1.eth[1].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 180 SimpleTest.R1.eth[1].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 181 SimpleTest.R1.eth[1].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 182 SimpleTest.R1.eth[1].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 183 SimpleTest.R1.eth[1].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 184 SimpleTest.R1.eth[1].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 185 SimpleTest.R1.eth[1] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 186 SimpleTest.R1.eth[1] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 187 SimpleTest.R1.ipv4.ip packetDropAddressResolutionFailed:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsAddressResolutionFailed(packetDropped)
+attr title "packet drop: address resolution failed, packetBytes"
+vector 188 SimpleTest.R1.ipv4.ip packetDropHopLimitReached:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsHopLimitReached(packetDropped)
+attr title "packet drop: hop limit reached, packetBytes"
+vector 189 SimpleTest.R1.ipv4.ip packetDropForwardingDisabled:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsForwardingDisabled(packetDropped)
+attr title "packet drop: forwarding disabled, packetBytes"
+vector 190 SimpleTest.R1.ipv4.ip packetDropNoInterfaceFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoInterfaceFound(packetDropped)
+attr title "packet drop: no interface found, packetBytes"
+vector 191 SimpleTest.R1.ipv4.ip packetDropNoRouteFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoRouteFound(packetDropped)
+attr title "packet drop: no route found, packetBytes"
+vector 192 SimpleTest.R1.ipv4.ip packetDropUndefined:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsUndefined(packetDropped)
+attr title "packet drop: undefined, packetBytes"
+vector 193 SimpleTest.R1.ipv4.arp arpRequestSent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpRequestSent
+attr title "ARP request sent, packetBytes"
+vector 194 SimpleTest.R1.ipv4.arp arpReplySent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpReplySent
+attr title "ARP replies sent, packetBytes"
+vector 195 SimpleTest.R2.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 196 SimpleTest.R2.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 197 SimpleTest.R2.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 198 SimpleTest.R2.lo[0].lo rcvdPkFromHl:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packets received from higher layer, packetBytes"
+vector 199 SimpleTest.R2.lo[0].lo passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 200 SimpleTest.R2.lo[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 201 SimpleTest.R2.lo[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 202 SimpleTest.R2.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 203 SimpleTest.R2.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 204 SimpleTest.R2.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 205 SimpleTest.R2.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 206 SimpleTest.R2.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 207 SimpleTest.R2.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 208 SimpleTest.R2.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 209 SimpleTest.R2.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 210 SimpleTest.R2.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 211 SimpleTest.R2.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 212 SimpleTest.R2.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 213 SimpleTest.R2.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 214 SimpleTest.R2.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 215 SimpleTest.R2.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 216 SimpleTest.R2.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 217 SimpleTest.R2.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 218 SimpleTest.R2.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 219 SimpleTest.R2.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 220 SimpleTest.R2.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 221 SimpleTest.R2.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 222 SimpleTest.R2.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 223 SimpleTest.R2.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 224 SimpleTest.R2.eth[1].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 225 SimpleTest.R2.eth[1].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 226 SimpleTest.R2.eth[1].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 227 SimpleTest.R2.eth[1].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 228 SimpleTest.R2.eth[1].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 229 SimpleTest.R2.eth[1].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 230 SimpleTest.R2.eth[1].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 231 SimpleTest.R2.eth[1].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 232 SimpleTest.R2.eth[1].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 233 SimpleTest.R2.eth[1].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 234 SimpleTest.R2.eth[1].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 235 SimpleTest.R2.eth[1].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 236 SimpleTest.R2.eth[1].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 237 SimpleTest.R2.eth[1].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 238 SimpleTest.R2.eth[1].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 239 SimpleTest.R2.eth[1].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 240 SimpleTest.R2.eth[1].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 241 SimpleTest.R2.eth[1].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 242 SimpleTest.R2.eth[1].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 243 SimpleTest.R2.eth[1].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 244 SimpleTest.R2.eth[1] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 245 SimpleTest.R2.eth[1] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 246 SimpleTest.R2.ipv4.ip packetDropAddressResolutionFailed:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsAddressResolutionFailed(packetDropped)
+attr title "packet drop: address resolution failed, packetBytes"
+vector 247 SimpleTest.R2.ipv4.ip packetDropHopLimitReached:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsHopLimitReached(packetDropped)
+attr title "packet drop: hop limit reached, packetBytes"
+vector 248 SimpleTest.R2.ipv4.ip packetDropForwardingDisabled:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsForwardingDisabled(packetDropped)
+attr title "packet drop: forwarding disabled, packetBytes"
+vector 249 SimpleTest.R2.ipv4.ip packetDropNoInterfaceFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoInterfaceFound(packetDropped)
+attr title "packet drop: no interface found, packetBytes"
+vector 250 SimpleTest.R2.ipv4.ip packetDropNoRouteFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoRouteFound(packetDropped)
+attr title "packet drop: no route found, packetBytes"
+vector 251 SimpleTest.R2.ipv4.ip packetDropUndefined:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsUndefined(packetDropped)
+attr title "packet drop: undefined, packetBytes"
+vector 252 SimpleTest.R2.ipv4.arp arpRequestSent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpRequestSent
+attr title "ARP request sent, packetBytes"
+vector 253 SimpleTest.R2.ipv4.arp arpReplySent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpReplySent
+attr title "ARP replies sent, packetBytes"
+vector 254 SimpleTest.N2.bridging packetDropped:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr title "packets dropped, packetBytes"
+vector 255 SimpleTest.N2.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 256 SimpleTest.N2.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 257 SimpleTest.N2.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 258 SimpleTest.N2.ieee8021q.qTagHeaderInserter incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming packet lengths"
+attr unit b
+vector 259 SimpleTest.N2.ieee8021q.qTagHeaderInserter incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming data rate"
+attr unit bps
+vector 260 SimpleTest.N2.ieee8021q.qTagHeaderInserter outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing packet lengths"
+attr unit b
+vector 261 SimpleTest.N2.ieee8021q.qTagHeaderInserter outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing data rate"
+attr unit bps
+vector 262 SimpleTest.N2.ieee8021q.qTagHeaderInserter flowIncomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming packet lengths"
+attr unit b
+vector 263 SimpleTest.N2.ieee8021q.qTagHeaderInserter flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 264 SimpleTest.N2.ieee8021q.qTagHeaderInserter flowOutgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing packet lengths"
+attr unit b
+vector 265 SimpleTest.N2.ieee8021q.qTagHeaderInserter flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 266 SimpleTest.N2.ieee8021q.qTagHeaderChecker incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming packet lengths"
+attr unit b
+vector 267 SimpleTest.N2.ieee8021q.qTagHeaderChecker incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming data rate"
+attr unit bps
+vector 268 SimpleTest.N2.ieee8021q.qTagHeaderChecker outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing packet lengths"
+attr unit b
+vector 269 SimpleTest.N2.ieee8021q.qTagHeaderChecker outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing data rate"
+attr unit bps
+vector 270 SimpleTest.N2.ieee8021q.qTagHeaderChecker droppedPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropped)
+attr title "dropped packet lengths"
+attr unit b
+vector 271 SimpleTest.N2.ieee8021q.qTagHeaderChecker droppedDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetDropped)
+attr title "dropped data rate"
+attr unit bps
+vector 272 SimpleTest.N2.ieee8021q.qTagHeaderChecker flowIncomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming packet lengths"
+attr unit b
+vector 273 SimpleTest.N2.ieee8021q.qTagHeaderChecker flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 274 SimpleTest.N2.ieee8021q.qTagHeaderChecker flowOutgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing packet lengths"
+attr unit b
+vector 275 SimpleTest.N2.ieee8021q.qTagHeaderChecker flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 276 SimpleTest.N2.ieee8021q.qTagHeaderChecker flowDroppedPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(demuxFlow(packetDropped))
+attr title "flow specific dropped packet lengths"
+attr unit b
+vector 277 SimpleTest.N2.ieee8021q.qTagHeaderChecker flowDroppedDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(demuxFlow(packetDropped))
+attr title "flow specific dropped data rate"
+attr unit bps
+vector 278 SimpleTest.N2.ieee8021r.rTagHeaderInserter incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming packet lengths"
+attr unit b
+vector 279 SimpleTest.N2.ieee8021r.rTagHeaderInserter incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming data rate"
+attr unit bps
+vector 280 SimpleTest.N2.ieee8021r.rTagHeaderInserter outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing packet lengths"
+attr unit b
+vector 281 SimpleTest.N2.ieee8021r.rTagHeaderInserter outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing data rate"
+attr unit bps
+vector 282 SimpleTest.N2.ieee8021r.rTagHeaderInserter flowIncomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming packet lengths"
+attr unit b
+vector 283 SimpleTest.N2.ieee8021r.rTagHeaderInserter flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 284 SimpleTest.N2.ieee8021r.rTagHeaderInserter flowOutgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing packet lengths"
+attr unit b
+vector 285 SimpleTest.N2.ieee8021r.rTagHeaderInserter flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 286 SimpleTest.N2.ieee8021r.rTagHeaderChecker incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming packet lengths"
+attr unit b
+vector 287 SimpleTest.N2.ieee8021r.rTagHeaderChecker incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedIn, packetPulledIn))"
+attr title "incoming data rate"
+attr unit bps
+vector 288 SimpleTest.N2.ieee8021r.rTagHeaderChecker outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing packet lengths"
+attr unit b
+vector 289 SimpleTest.N2.ieee8021r.rTagHeaderChecker outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(merge(packetPushedOut, packetPulledOut))"
+attr title "outgoing data rate"
+attr unit bps
+vector 290 SimpleTest.N2.ieee8021r.rTagHeaderChecker droppedPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropped)
+attr title "dropped packet lengths"
+attr unit b
+vector 291 SimpleTest.N2.ieee8021r.rTagHeaderChecker droppedDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetDropped)
+attr title "dropped data rate"
+attr unit bps
+vector 292 SimpleTest.N2.ieee8021r.rTagHeaderChecker flowIncomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming packet lengths"
+attr unit b
+vector 293 SimpleTest.N2.ieee8021r.rTagHeaderChecker flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedIn, packetPulledIn)))"
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 294 SimpleTest.N2.ieee8021r.rTagHeaderChecker flowOutgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source "packetLength(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing packet lengths"
+attr unit b
+vector 295 SimpleTest.N2.ieee8021r.rTagHeaderChecker flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source "throughput(demuxFlow(merge(packetPushedOut, packetPulledOut)))"
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 296 SimpleTest.N2.ieee8021r.rTagHeaderChecker flowDroppedPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(demuxFlow(packetDropped))
+attr title "flow specific dropped packet lengths"
+attr unit b
+vector 297 SimpleTest.N2.ieee8021r.rTagHeaderChecker flowDroppedDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(demuxFlow(packetDropped))
+attr title "flow specific dropped data rate"
+attr unit bps
+vector 298 SimpleTest.N2.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 299 SimpleTest.N2.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 300 SimpleTest.N2.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 301 SimpleTest.N2.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 302 SimpleTest.N2.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 303 SimpleTest.N2.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 304 SimpleTest.N2.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 305 SimpleTest.N2.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 306 SimpleTest.N2.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 307 SimpleTest.N2.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 308 SimpleTest.N2.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 309 SimpleTest.N2.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 310 SimpleTest.N2.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 311 SimpleTest.N2.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 312 SimpleTest.N2.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 313 SimpleTest.N2.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 314 SimpleTest.N2.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 315 SimpleTest.N2.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 316 SimpleTest.N2.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 317 SimpleTest.N2.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 318 SimpleTest.N2.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 319 SimpleTest.N2.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 320 SimpleTest.N2.eth[1].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 321 SimpleTest.N2.eth[1].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 322 SimpleTest.N2.eth[1].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 323 SimpleTest.N2.eth[1].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 324 SimpleTest.N2.eth[1].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 325 SimpleTest.N2.eth[1].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 326 SimpleTest.N2.eth[1].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 327 SimpleTest.N2.eth[1].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 328 SimpleTest.N2.eth[1].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 329 SimpleTest.N2.eth[1].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 330 SimpleTest.N2.eth[1].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 331 SimpleTest.N2.eth[1].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 332 SimpleTest.N2.eth[1].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 333 SimpleTest.N2.eth[1].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 334 SimpleTest.N2.eth[1].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 335 SimpleTest.N2.eth[1].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 336 SimpleTest.N2.eth[1].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 337 SimpleTest.N2.eth[1].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 338 SimpleTest.N2.eth[1].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 339 SimpleTest.N2.eth[1].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 340 SimpleTest.N2.eth[1] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 341 SimpleTest.N2.eth[1] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 342 SimpleTest.H2.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 343 SimpleTest.H2.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 344 SimpleTest.H2.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 345 SimpleTest.H2.lo[0].lo rcvdPkFromHl:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packets received from higher layer, packetBytes"
+vector 346 SimpleTest.H2.lo[0].lo passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 347 SimpleTest.H2.lo[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 348 SimpleTest.H2.lo[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 349 SimpleTest.H2.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 350 SimpleTest.H2.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 351 SimpleTest.H2.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 352 SimpleTest.H2.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 353 SimpleTest.H2.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 354 SimpleTest.H2.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 355 SimpleTest.H2.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 356 SimpleTest.H2.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 357 SimpleTest.H2.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 358 SimpleTest.H2.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 359 SimpleTest.H2.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 360 SimpleTest.H2.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 361 SimpleTest.H2.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 362 SimpleTest.H2.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 363 SimpleTest.H2.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 364 SimpleTest.H2.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 365 SimpleTest.H2.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 366 SimpleTest.H2.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 367 SimpleTest.H2.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 368 SimpleTest.H2.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 369 SimpleTest.H2.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 370 SimpleTest.H2.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 371 SimpleTest.H2.ipv4.ip packetDropAddressResolutionFailed:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsAddressResolutionFailed(packetDropped)
+attr title "packet drop: address resolution failed, packetBytes"
+vector 372 SimpleTest.H2.ipv4.ip packetDropHopLimitReached:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsHopLimitReached(packetDropped)
+attr title "packet drop: hop limit reached, packetBytes"
+vector 373 SimpleTest.H2.ipv4.ip packetDropForwardingDisabled:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsForwardingDisabled(packetDropped)
+attr title "packet drop: forwarding disabled, packetBytes"
+vector 374 SimpleTest.H2.ipv4.ip packetDropNoInterfaceFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoInterfaceFound(packetDropped)
+attr title "packet drop: no interface found, packetBytes"
+vector 375 SimpleTest.H2.ipv4.ip packetDropNoRouteFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoRouteFound(packetDropped)
+attr title "packet drop: no route found, packetBytes"
+vector 376 SimpleTest.H2.ipv4.ip packetDropUndefined:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsUndefined(packetDropped)
+attr title "packet drop: undefined, packetBytes"
+vector 377 SimpleTest.H2.ipv4.arp arpRequestSent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpRequestSent
+attr title "ARP request sent, packetBytes"
+vector 378 SimpleTest.H2.ipv4.arp arpReplySent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpReplySent
+attr title "ARP replies sent, packetBytes"
+vector 379 SimpleTest.H2.udp packetSent:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSent
+attr title "packets sent, packetBytes"
+vector 380 SimpleTest.H2.udp packetReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceived
+attr title "packets received, packetBytes"
+vector 381 SimpleTest.H2.udp passedUpPk:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetSentToUpper
+attr title "packets passed up, count"
+vector 382 SimpleTest.H2.udp droppedPkWrongPort:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetDropReasonIsNoPortFound(packetDropped)
+attr title "packets dropped (wrong port), count"
+vector 383 SimpleTest.H2.udp droppedPkBadChecksum:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packets dropped (checksum error), count"
+vector 384 SimpleTest.H2.app[0] packetReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceived
+attr title "packets received, packetBytes"
+vector 385 SimpleTest.H2.app[0] throughput:vector ETV
+attr recordingmode vector
+attr source throughput(packetReceived)
+attr title throughput
+attr unit bps
+vector 386 SimpleTest.H2.app[0] packetSent:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSent
+attr title "packets sent, packetBytes"
+vector 387 SimpleTest.H2.app[0] rcvdPkLifetime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source dataAge(packetReceived)
+attr title "received packet lifetime"
+attr unit s
+vector 388 SimpleTest.H2.app[0] rcvdPkSeqNo:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source appPkSeqNo(packetReceived)
+attr title "received packet sequence number"
+vector 389 SimpleTest.H2.app[1] echoedPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSent
+attr title "packets echoed, packetBytes"
+0	96238 1019 197 4053 4 6.3 50 28 60 2904 171552
+1	97257 1043 18 4037 0.089484698282 6.20007652 48 46 64 2870 171812
+7	98300 1920 0 4055 0 6.3 96 0 20 1093 16785
+8	100220 2126 0 4055 0 6.3 96 0 12480 682032 6535676160
+9	102346 1331 199 4055 4 6.3 50 0 0.0001568 0.00437094 5.298880916e-07
+10	103677 1119 199 4055 4 6.3 50 368 624 30432 18706944
+11	104796 892 199 4055 0.1 6.3 63 0 265760 298080 70966963200
+12	105688 1129 199 4055 4 6.3 50 368 624 30432 18706944
+13	106817 892 199 4055 0.1 6.3 63 0 265760 298080 70966963200
+18	107709 1129 201 4057 4.00000576 6.30000688 50 64 78 3858 298236
+19	108838 1091 17 4035 0.089484698282 6.20007652 48 64 82 3734 290684
+20	109929 1091 17 4035 0.089484698282 6.20007652 48 64 82 3734 290684
+23	111020 1079 199 4055 4 6.3 50 46 78 3804 292296
+35	112099 39 195 429 4 6 3 28 28 84 2352
+37	112138 877 192 4049 4 6.3 47 40 40 1880 75200
+38	113015 1044 744 4041 6.00005834 6.20007652 46 40 40 1840 73600
+39	114059 1045 0 4041 0 6.20007652 47 0 46 1081 33511
+40	115104 10 0 0 0 0 1 0 0 0 0
+41	115114 10 0 0 0 0 1 0 0 0 0
+42	115124 524 2384 4043 6.00022298 6.20007652 23 32 32 736 23552
+43	115648 925 2384 4043 0.1 6.2 62 0 53760 56320 2896691200
+44	116573 357 183 4047 4 6.3 24 32 32 768 24576
+45	116930 701 2384 4043 6.00022298 6.20007652 23 6.98e-05 2.00022298 21.0064753 28.711452565484
+46	117631 514 2384 4043 6.00022298 6.20007652 23 0 22 253 3795
+47	118145 520 746 3966 6.00005834 6.20004162 23 32 32 736 23552
+49	118665 2222 13 4065 0.089477398282 6.30000698 98 46 64 5828 347360
+50	120887 2221 11 4061 0.089477398282 6.30000698 98 46 64 5828 347360
+92	123108 1093 0 4029 0 6.20006954 53 0 0 0 0
+93	124201 1093 0 4029 0 6.20006954 53 0 0 0 0
+94	125294 1043 14 4029 0.089477398282 6.20006954 48 0 0 0 0
+95	126337 1139 14 4029 0.089477398282 6.20006954 48 512 656 29872 18603776
+96	127476 870 497 3950 0.1 6.2 62 0 267200 286240 71594624000
+97	128346 1139 14 4029 0.089477398282 6.20006954 48 512 656 29872 18603776
+98	129485 870 497 3950 0.1 6.2 62 0 267200 286240 71594624000
+103	130355 1137 16 4033 0.089484598282 6.20007642 48 64 82 3734 290684
+104	131492 1181 203 4059 4.00000586 6.30000698 50 64 78 3858 298236
+105	132673 1181 203 4059 4.00000586 6.30000698 50 64 78 3858 298236
+108	133854 1139 14 4029 0.089477398282 6.20006954 48 64 82 3734 290684
+114	134993 1186 0 4067 0 6.30000698 55 0 0 0 0
+115	136179 1186 0 4067 0 6.30000698 55 0 0 0 0
+116	137365 1131 211 4067 4.00000586 6.30000698 50 0 0 0 0
+117	138496 1231 211 4067 4.00000586 6.30000698 50 512 624 30864 19087104
+118	139727 955 211 4067 0.1 6.3 63 0 267200 302400 71759769600
+119	140682 1231 211 4067 4.00000586 6.30000698 50 512 624 30864 19087104
+120	141913 955 211 4067 0.1 6.3 63 0 267200 302400 71759769600
+125	142868 1182 215 4071 4.00001162 6.30001386 50 64 78 3858 298236
+126	144050 1138 10 4021 0.089477398282 6.20006954 48 64 82 3734 290684
+127	145188 1138 10 4021 0.089477398282 6.20006954 48 64 82 3734 290684
+130	146326 1181 211 4067 4.00000586 6.30000698 50 64 78 3858 298236
+136	147507 2581 7 4079 0.089470098282 6.30001396 108 28 108 6448 395648
+137	150088 2609 43 4075 0.10853300675 6.30001396 109 46 108 6562 401916
+143	152697 1146 0 4015 0 6.20006256 53 0 0 0 0
+144	153843 1146 0 4015 0 6.20006256 53 0 0 0 0
+145	154989 1091 8 4015 0.089470098282 6.20006256 48 0 0 0 0
+146	156080 1187 8 4015 0.089470098282 6.20006256 48 368 656 29728 18477056
+147	157267 932 483 3928 0.1 6.2 62 0 265760 284800 70827161600
+148	158199 1187 8 4015 0.089470098282 6.20006256 48 368 656 29728 18477056
+149	159386 932 483 3928 0.1 6.2 62 0 265760 284800 70827161600
+154	160318 1138 9 4019 0.089477298282 6.20006944 48 64 82 3734 290684
+155	161456 1180 217 4073 4.00001172 6.30001396 50 64 78 3858 298236
+156	162636 1180 217 4073 4.00001172 6.30001396 50 64 78 3858 298236
+159	163816 1139 8 4015 0.089470098282 6.20006256 48 46 82 3716 288704
+165	164955 1585 0 4081 0 6.30001396 71 0 2 8 10
+166	166540 1600 0 4081 0 6.30001396 71 0 1008 4768 3676672
+167	168140 1419 50 4081 0.108847807824 6.30001396 60 0 1.168e-05 3.736e-05 3.194904e-10
+168	169559 1502 50 4081 0.108847807824 6.30001396 60 368 1008 37408 23940096
+169	171061 956 50 4081 0.1 6.3 63 0 268640 367840 75465292800
+170	172017 1502 50 4081 0.108847807824 6.30001396 60 368 1008 37408 23940096
+171	173519 956 50 4081 0.1 6.3 63 0 268640 367840 75465292800
+176	174475 1429 51 4006 0.108855327824 6.20006246 59 64 126 4670 375900
+177	175904 1430 42 4007 0.10853300675 6.20006256 59 64 126 4666 375228
+178	177334 1430 42 4007 0.10853300675 6.20006256 59 64 126 4666 375228
+181	178764 1443 50 4081 0.108847807824 6.30001396 60 46 126 4676 374064
+193	180207 51 328 3891 5.108913087824 6.20001396 2 28 28 56 1568
+194	180258 74 347 3906 5.108919807824 6.20001982 3 28 28 84 2352
+195	180332 2579 23 4080 0.107198867093 6.30001396 108 28 108 6444 395120
+196	182911 2610 53 4076 0.108855427824 6.30001396 109 46 108 6566 402444
+202	185521 1556 0 4082 0 6.30001396 70 0 2 9 13
+203	187077 1572 0 4082 0 6.30001396 70 0 1376 5328 4904192
+204	188649 1410 40 4082 0.10852570675 6.30001396 60 0 1.34e-05 3.348e-05 3.36388e-10
+205	190059 1499 40 4082 0.10852570675 6.30001396 60 368 1008 37376 23897088
+206	191558 956 40 4082 0.1 6.3 63 0 268640 367520 75433753600
+207	192514 1500 40 4082 0.10852570675 6.30001396 60 368 1008 37376 23897088
+208	194014 956 40 4082 0.1 6.3 63 0 268640 367520 75433753600
+213	194970 1427 41 4005 0.10853290675 6.20006246 59 64 126 4666 375228
+214	196397 1431 52 4008 0.108855427824 6.20006256 59 64 126 4670 375900
+215	197828 1431 52 4008 0.108855427824 6.20006256 59 64 126 4670 375900
+218	199259 1441 40 4082 0.10852570675 6.30001396 60 46 126 4672 373392
+224	200700 1147 0 4016 0 6.20006256 53 0 0 0 0
+225	201847 1147 0 4016 0 6.20006256 53 0 0 0 0
+226	202994 1092 24 4016 0.107198867093 6.20006256 48 0 0 0 0
+227	204086 1188 24 4016 0.107198867093 6.20006256 48 368 656 29728 18477056
+228	205274 931 24 3927 0.1 6.2 62 0 265760 284800 70827161600
+229	206205 1188 24 4016 0.107198867093 6.20006256 48 368 656 29728 18477056
+230	207393 931 24 3927 0.1 6.2 62 0 265760 284800 70827161600
+235	208324 1139 25 4020 0.107206067093 6.20006944 48 64 82 3734 290684
+236	209463 1180 218 4074 4.00001172 6.30001396 50 64 78 3858 298236
+237	210643 1180 218 4074 4.00001172 6.30001396 50 64 78 3858 298236
+240	211823 1140 24 4016 0.107198867093 6.20006256 48 46 82 3716 288704
+252	212963 51 332 3892 5.108913947824 6.20001396 2 28 28 56 1568
+253	213014 74 338 3905 5.108918947824 6.20001982 3 28 28 84 2352
+255	213088 2319 29 4066 0.107206167093 6.30000698 98 46 64 5828 347360
+256	215407 2319 27 4062 0.107206167093 6.30000698 98 46 64 5828 347360
+298	217726 1186 0 4068 0 6.30000698 55 0 0 0 0
+299	218912 1186 0 4068 0 6.30000698 55 0 0 0 0
+300	220098 1131 212 4068 4.00000586 6.30000698 50 0 0 0 0
+301	221229 1231 212 4068 4.00000586 6.30000698 50 512 624 30864 19087104
+302	222460 955 212 4068 0.1 6.3 63 0 267200 302400 71759769600
+303	223415 1231 212 4068 4.00000586 6.30000698 50 512 624 30864 19087104
+304	224646 955 212 4068 0.1 6.3 63 0 267200 302400 71759769600
+309	225601 1182 216 4072 4.00001162 6.30001386 50 64 78 3858 298236
+310	226783 1138 26 4022 0.107206167093 6.20006954 48 64 82 3734 290684
+311	227921 1138 26 4022 0.107206167093 6.20006954 48 64 82 3734 290684
+314	229059 1181 212 4068 4.00000586 6.30000698 50 64 78 3858 298236
+320	230240 1146 0 4030 0 6.20006954 53 0 0 0 0
+321	231386 1146 0 4030 0 6.20006954 53 0 0 0 0
+322	232532 1091 30 4030 0.107206167093 6.20006954 48 0 0 0 0
+323	233623 1187 30 4030 0.107206167093 6.20006954 48 512 656 29872 18603776
+324	234810 931 30 3949 0.1 6.2 62 0 267200 286240 71594624000
+325	235741 1187 30 4030 0.107206167093 6.20006954 48 512 656 29872 18603776
+326	236928 931 30 3949 0.1 6.2 62 0 267200 286240 71594624000
+331	237859 1137 32 4034 0.107213367093 6.20007642 48 64 82 3734 290684
+332	238996 1181 204 4060 4.00000586 6.30000698 50 64 78 3858 298236
+333	240177 1181 204 4060 4.00000586 6.30000698 50 64 78 3858 298236
+336	241358 1139 30 4030 0.107206167093 6.20006954 48 64 82 3734 290684
+342	242497 1119 198 4054 4 6.3 50 28 60 2904 171552
+343	243616 1139 34 4038 0.107213467093 6.20007652 48 46 64 2870 171812
+349	244755 2112 0 4056 0 6.3 96 0 20 1093 16785
+350	246867 2318 0 4056 0 6.3 96 0 12480 682032 6535676160
+351	249185 1431 200 4056 4 6.3 50 0 0.0001568 0.00437094 5.298880916e-07
+352	250616 1169 200 4056 4 6.3 50 368 624 30432 18706944
+353	251785 955 200 4056 0.1 6.3 63 0 265760 298080 70966963200
+354	252740 1179 200 4056 4 6.3 50 368 624 30432 18706944
+355	253919 955 200 4056 0.1 6.3 63 0 265760 298080 70966963200
+360	254874 1179 202 4058 4.00000576 6.30000688 50 64 78 3858 298236
+361	256053 1139 33 4036 0.107213467093 6.20007652 48 64 82 3734 290684
+362	257192 1139 33 4036 0.107213467093 6.20007652 48 64 82 3734 290684
+365	258331 1129 200 4056 4 6.3 50 46 78 3804 292296
+377	259460 42 196 430 4 6 3 28 28 84 2352
+379	259502 924 194 4050 4 6.3 47 40 40 1880 75200
+380	260426 1090 743 4042 6.00005834 6.20007652 46 40 40 1840 73600
+381	261516 1092 0 4042 0 6.20007652 47 0 46 1081 33511
+382	262608 11 0 0 0 0 1 0 0 0 0
+383	262619 11 0 0 0 0 1 0 0 0 0
+384	262630 547 2383 4044 6.00022298 6.20007652 23 32 32 736 23552
+385	263177 987 2383 4044 0.1 6.2 62 0 53760 56320 2896691200
+386	264164 381 184 4048 4 6.3 24 32 32 768 24576
+387	264545 724 2383 4044 6.00022298 6.20007652 23 6.98e-05 2.00022298 21.0064753 28.711452565484
+388	265269 537 2383 4044 6.00022298 6.20007652 23 0 22 253 3795
+389	265806 543 745 3965 6.00005834 6.20004162 23 32 32 736 23552
+
