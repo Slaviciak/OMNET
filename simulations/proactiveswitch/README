@@ -1,0 +1,23 @@
+ProactiveSwitch
+===============
+
+Overview
+- This is a scripted proactive-switch prototype built on the same dual-path topology as the baseline and reactive failure scenarios.
+- Its purpose is to model the effect of switching away from the primary path before a hard failure occurs, using a very small project-local controller module.
+
+Topology
+- Primary path: hostA -> r1 -> r2 -> r3 -> hostB
+- Backup path: hostA -> r1 -> r4 -> r3 -> hostB
+
+Events
+- At 18s, the custom InterfaceWithdrawController administratively withdraws the r2-r3 path by setting interfaces r2.eth[1] and r3.eth[0] down.
+- At 20s, the physical link between r2 and r3 is disconnected by ScenarioManager.
+
+Difference from ReactiveFailure
+- ReactiveFailure waits for the physical failure at 20s and then OSPF reacts.
+- ProactiveSwitch withdraws the primary path earlier at 18s while the cable is still present, so traffic can move to the backup path before the hard failure time.
+
+Expected behavior
+- Before 18s, traffic should use r1 -> r2 -> r3.
+- After reconvergence following the 18s event, traffic should use r1 -> r4 -> r3.
+- The 20s hard failure should have little or no additional traffic impact because the primary path has already been removed from routing use.

@@ -1,0 +1,4313 @@
+version 3
+run ProactiveSwitch-0-20260325-12:52:36-21652
+attr configname ProactiveSwitch
+attr datetime 20260325-12:52:36
+attr datetimef 20260325-125236
+attr experiment ProactiveSwitch
+attr inifile omnetpp.ini
+attr iterationvars ""
+attr iterationvarsd ""
+attr iterationvarsf ""
+attr measurement ""
+attr network dissertationsim.simulations.proactiveswitch.ProactiveSwitch
+attr processid 21652
+attr repetition 0
+attr replication #0
+attr resultdir results
+attr runnumber 0
+attr seedset 0
+config image-path ../../../inet4.5/images
+config description "Prototype proactive switch at 18s, followed by hard failure of the same primary link at 20s"
+config network dissertationsim.simulations.proactiveswitch.ProactiveSwitch
+config sim-time-limit 60s
+config output-scalar-file ../../results/proactiveswitch/eval/ProactiveSwitch-0.sca
+config output-vector-file ../../results/proactiveswitch/eval/ProactiveSwitch-0.vec
+config eventlog-file ../../results/proactiveswitch/debug/ProactiveSwitch-0.elog
+config record-eventlog false
+config **.ospf.ospfConfig "xmldoc(\"ASConfig.xml\")"
+config **.hostA.numApps 1
+config **.hostB.numApps 1
+config **.hostA.app[0].typename UdpBasicApp
+config **.hostA.app[0].destAddresses "\"hostB\""
+config **.hostA.app[0].destPort 5000
+config **.hostA.app[0].messageLength 512B
+config **.hostA.app[0].sendInterval 1s
+config **.hostA.app[0].startTime 10s
+config **.hostB.app[0].typename UdpSink
+config **.hostB.app[0].localPort 5000
+config **.scenarioManager.script "xml(         \"<script>\\n\" +         \"<at t='18s'><disconnect src-module='r2' src-gate='ethg$o[1]'/></at>\\n\" +         \"<at t='18s'><disconnect src-module='r3' src-gate='ethg$o[0]'/></at>\\n\" +         \"<at t='20s'><disconnect src-module='r2' src-gate='ethg$o[1]'/></at>\\n\" +         \"<at t='20s'><disconnect src-module='r3' src-gate='ethg$o[0]'/></at>\\n\" +         \"</script>\")"
+config **.app[0].packetSent.result-recording-modes count,vector
+config **.app[0].packetReceived.result-recording-modes count,vector
+config **.ipv4.ip.packetDropNoRouteFound.result-recording-modes count
+config **.ipv4.ip.packetDropInterfaceDown.result-recording-modes count
+
+vector 0 ProactiveSwitch.hostA.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 1 ProactiveSwitch.hostA.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 2 ProactiveSwitch.hostA.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 3 ProactiveSwitch.hostA.lo[0].lo rcvdPkFromHl:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packets received from higher layer, packetBytes"
+vector 4 ProactiveSwitch.hostA.lo[0].lo passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 5 ProactiveSwitch.hostA.lo[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 6 ProactiveSwitch.hostA.lo[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 7 ProactiveSwitch.hostA.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 8 ProactiveSwitch.hostA.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 9 ProactiveSwitch.hostA.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 10 ProactiveSwitch.hostA.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 11 ProactiveSwitch.hostA.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 12 ProactiveSwitch.hostA.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 13 ProactiveSwitch.hostA.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 14 ProactiveSwitch.hostA.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 15 ProactiveSwitch.hostA.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 16 ProactiveSwitch.hostA.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 17 ProactiveSwitch.hostA.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 18 ProactiveSwitch.hostA.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 19 ProactiveSwitch.hostA.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 20 ProactiveSwitch.hostA.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 21 ProactiveSwitch.hostA.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 22 ProactiveSwitch.hostA.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 23 ProactiveSwitch.hostA.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 24 ProactiveSwitch.hostA.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 25 ProactiveSwitch.hostA.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 26 ProactiveSwitch.hostA.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 27 ProactiveSwitch.hostA.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 28 ProactiveSwitch.hostA.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 29 ProactiveSwitch.hostA.ipv4.ip packetDropAddressResolutionFailed:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsAddressResolutionFailed(packetDropped)
+attr title "packet drop: address resolution failed, packetBytes"
+vector 30 ProactiveSwitch.hostA.ipv4.ip packetDropHopLimitReached:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsHopLimitReached(packetDropped)
+attr title "packet drop: hop limit reached, packetBytes"
+vector 31 ProactiveSwitch.hostA.ipv4.ip packetDropForwardingDisabled:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsForwardingDisabled(packetDropped)
+attr title "packet drop: forwarding disabled, packetBytes"
+vector 32 ProactiveSwitch.hostA.ipv4.ip packetDropNoInterfaceFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoInterfaceFound(packetDropped)
+attr title "packet drop: no interface found, packetBytes"
+vector 33 ProactiveSwitch.hostA.ipv4.ip packetDropUndefined:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsUndefined(packetDropped)
+attr title "packet drop: undefined, packetBytes"
+vector 34 ProactiveSwitch.hostA.ipv4.arp arpRequestSent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpRequestSent
+attr title "ARP request sent, packetBytes"
+vector 35 ProactiveSwitch.hostA.ipv4.arp arpReplySent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpReplySent
+attr title "ARP replies sent, packetBytes"
+vector 36 ProactiveSwitch.hostA.udp packetSent:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSent
+attr title "packets sent, packetBytes"
+vector 37 ProactiveSwitch.hostA.udp packetReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceived
+attr title "packets received, packetBytes"
+vector 38 ProactiveSwitch.hostA.udp passedUpPk:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetSentToUpper
+attr title "packets passed up, count"
+vector 39 ProactiveSwitch.hostA.udp droppedPkWrongPort:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetDropReasonIsNoPortFound(packetDropped)
+attr title "packets dropped (wrong port), count"
+vector 40 ProactiveSwitch.hostA.udp droppedPkBadChecksum:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packets dropped (checksum error), count"
+vector 41 ProactiveSwitch.hostA.app[0] packetReceived:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetReceived
+attr title "packets received"
+vector 42 ProactiveSwitch.hostA.app[0] throughput:vector ETV
+attr recordingmode vector
+attr source throughput(packetReceived)
+attr title throughput
+attr unit bps
+vector 43 ProactiveSwitch.hostA.app[0] packetSent:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetSent
+attr title "packets sent"
+vector 44 ProactiveSwitch.hostA.app[0] rcvdPkLifetime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source dataAge(packetReceived)
+attr title "received packet lifetime"
+attr unit s
+vector 45 ProactiveSwitch.hostA.app[0] rcvdPkSeqNo:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source appPkSeqNo(packetReceived)
+attr title "received packet sequence number"
+vector 46 ProactiveSwitch.r1.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 47 ProactiveSwitch.r1.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 48 ProactiveSwitch.r1.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 49 ProactiveSwitch.r1.lo[0].lo rcvdPkFromHl:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packets received from higher layer, packetBytes"
+vector 50 ProactiveSwitch.r1.lo[0].lo passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 51 ProactiveSwitch.r1.lo[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 52 ProactiveSwitch.r1.lo[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 53 ProactiveSwitch.r1.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 54 ProactiveSwitch.r1.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 55 ProactiveSwitch.r1.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 56 ProactiveSwitch.r1.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 57 ProactiveSwitch.r1.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 58 ProactiveSwitch.r1.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 59 ProactiveSwitch.r1.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 60 ProactiveSwitch.r1.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 61 ProactiveSwitch.r1.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 62 ProactiveSwitch.r1.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 63 ProactiveSwitch.r1.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 64 ProactiveSwitch.r1.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 65 ProactiveSwitch.r1.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 66 ProactiveSwitch.r1.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 67 ProactiveSwitch.r1.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 68 ProactiveSwitch.r1.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 69 ProactiveSwitch.r1.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 70 ProactiveSwitch.r1.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 71 ProactiveSwitch.r1.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 72 ProactiveSwitch.r1.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 73 ProactiveSwitch.r1.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 74 ProactiveSwitch.r1.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 75 ProactiveSwitch.r1.eth[1].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 76 ProactiveSwitch.r1.eth[1].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 77 ProactiveSwitch.r1.eth[1].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 78 ProactiveSwitch.r1.eth[1].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 79 ProactiveSwitch.r1.eth[1].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 80 ProactiveSwitch.r1.eth[1].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 81 ProactiveSwitch.r1.eth[1].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 82 ProactiveSwitch.r1.eth[1].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 83 ProactiveSwitch.r1.eth[1].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 84 ProactiveSwitch.r1.eth[1].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 85 ProactiveSwitch.r1.eth[1].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 86 ProactiveSwitch.r1.eth[1].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 87 ProactiveSwitch.r1.eth[1].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 88 ProactiveSwitch.r1.eth[1].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 89 ProactiveSwitch.r1.eth[1].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 90 ProactiveSwitch.r1.eth[1].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 91 ProactiveSwitch.r1.eth[1].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 92 ProactiveSwitch.r1.eth[1].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 93 ProactiveSwitch.r1.eth[1].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 94 ProactiveSwitch.r1.eth[1].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 95 ProactiveSwitch.r1.eth[1] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 96 ProactiveSwitch.r1.eth[1] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 97 ProactiveSwitch.r1.eth[2].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 98 ProactiveSwitch.r1.eth[2].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 99 ProactiveSwitch.r1.eth[2].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 100 ProactiveSwitch.r1.eth[2].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 101 ProactiveSwitch.r1.eth[2].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 102 ProactiveSwitch.r1.eth[2].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 103 ProactiveSwitch.r1.eth[2].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 104 ProactiveSwitch.r1.eth[2].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 105 ProactiveSwitch.r1.eth[2].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 106 ProactiveSwitch.r1.eth[2].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 107 ProactiveSwitch.r1.eth[2].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 108 ProactiveSwitch.r1.eth[2].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 109 ProactiveSwitch.r1.eth[2].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 110 ProactiveSwitch.r1.eth[2].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 111 ProactiveSwitch.r1.eth[2].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 112 ProactiveSwitch.r1.eth[2].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 113 ProactiveSwitch.r1.eth[2].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 114 ProactiveSwitch.r1.eth[2].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 115 ProactiveSwitch.r1.eth[2].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 116 ProactiveSwitch.r1.eth[2].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 117 ProactiveSwitch.r1.eth[2] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 118 ProactiveSwitch.r1.eth[2] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 119 ProactiveSwitch.r1.ipv4.ip packetDropAddressResolutionFailed:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsAddressResolutionFailed(packetDropped)
+attr title "packet drop: address resolution failed, packetBytes"
+vector 120 ProactiveSwitch.r1.ipv4.ip packetDropHopLimitReached:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsHopLimitReached(packetDropped)
+attr title "packet drop: hop limit reached, packetBytes"
+vector 121 ProactiveSwitch.r1.ipv4.ip packetDropForwardingDisabled:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsForwardingDisabled(packetDropped)
+attr title "packet drop: forwarding disabled, packetBytes"
+vector 122 ProactiveSwitch.r1.ipv4.ip packetDropNoInterfaceFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoInterfaceFound(packetDropped)
+attr title "packet drop: no interface found, packetBytes"
+vector 123 ProactiveSwitch.r1.ipv4.ip packetDropUndefined:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsUndefined(packetDropped)
+attr title "packet drop: undefined, packetBytes"
+vector 124 ProactiveSwitch.r1.ipv4.arp arpRequestSent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpRequestSent
+attr title "ARP request sent, packetBytes"
+vector 125 ProactiveSwitch.r1.ipv4.arp arpReplySent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpReplySent
+attr title "ARP replies sent, packetBytes"
+vector 126 ProactiveSwitch.r2.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 127 ProactiveSwitch.r2.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 128 ProactiveSwitch.r2.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 129 ProactiveSwitch.r2.lo[0].lo rcvdPkFromHl:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packets received from higher layer, packetBytes"
+vector 130 ProactiveSwitch.r2.lo[0].lo passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 131 ProactiveSwitch.r2.lo[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 132 ProactiveSwitch.r2.lo[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 133 ProactiveSwitch.r2.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 134 ProactiveSwitch.r2.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 135 ProactiveSwitch.r2.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 136 ProactiveSwitch.r2.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 137 ProactiveSwitch.r2.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 138 ProactiveSwitch.r2.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 139 ProactiveSwitch.r2.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 140 ProactiveSwitch.r2.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 141 ProactiveSwitch.r2.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 142 ProactiveSwitch.r2.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 143 ProactiveSwitch.r2.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 144 ProactiveSwitch.r2.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 145 ProactiveSwitch.r2.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 146 ProactiveSwitch.r2.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 147 ProactiveSwitch.r2.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 148 ProactiveSwitch.r2.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 149 ProactiveSwitch.r2.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 150 ProactiveSwitch.r2.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 151 ProactiveSwitch.r2.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 152 ProactiveSwitch.r2.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 153 ProactiveSwitch.r2.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 154 ProactiveSwitch.r2.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 155 ProactiveSwitch.r2.eth[1].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 156 ProactiveSwitch.r2.eth[1].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 157 ProactiveSwitch.r2.eth[1].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 158 ProactiveSwitch.r2.eth[1].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 159 ProactiveSwitch.r2.eth[1].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 160 ProactiveSwitch.r2.eth[1].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 161 ProactiveSwitch.r2.eth[1].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 162 ProactiveSwitch.r2.eth[1].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 163 ProactiveSwitch.r2.eth[1].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 164 ProactiveSwitch.r2.eth[1].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 165 ProactiveSwitch.r2.eth[1].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 166 ProactiveSwitch.r2.eth[1].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 167 ProactiveSwitch.r2.eth[1].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 168 ProactiveSwitch.r2.eth[1].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 169 ProactiveSwitch.r2.eth[1].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 170 ProactiveSwitch.r2.eth[1].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 171 ProactiveSwitch.r2.eth[1].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 172 ProactiveSwitch.r2.eth[1].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 173 ProactiveSwitch.r2.eth[1].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 174 ProactiveSwitch.r2.eth[1].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 175 ProactiveSwitch.r2.eth[1] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 176 ProactiveSwitch.r2.eth[1] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 177 ProactiveSwitch.r2.ipv4.ip packetDropAddressResolutionFailed:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsAddressResolutionFailed(packetDropped)
+attr title "packet drop: address resolution failed, packetBytes"
+vector 178 ProactiveSwitch.r2.ipv4.ip packetDropHopLimitReached:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsHopLimitReached(packetDropped)
+attr title "packet drop: hop limit reached, packetBytes"
+vector 179 ProactiveSwitch.r2.ipv4.ip packetDropForwardingDisabled:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsForwardingDisabled(packetDropped)
+attr title "packet drop: forwarding disabled, packetBytes"
+vector 180 ProactiveSwitch.r2.ipv4.ip packetDropNoInterfaceFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoInterfaceFound(packetDropped)
+attr title "packet drop: no interface found, packetBytes"
+vector 181 ProactiveSwitch.r2.ipv4.ip packetDropUndefined:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsUndefined(packetDropped)
+attr title "packet drop: undefined, packetBytes"
+vector 182 ProactiveSwitch.r2.ipv4.arp arpRequestSent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpRequestSent
+attr title "ARP request sent, packetBytes"
+vector 183 ProactiveSwitch.r2.ipv4.arp arpReplySent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpReplySent
+attr title "ARP replies sent, packetBytes"
+vector 184 ProactiveSwitch.r4.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 185 ProactiveSwitch.r4.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 186 ProactiveSwitch.r4.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 187 ProactiveSwitch.r4.lo[0].lo rcvdPkFromHl:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packets received from higher layer, packetBytes"
+vector 188 ProactiveSwitch.r4.lo[0].lo passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 189 ProactiveSwitch.r4.lo[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 190 ProactiveSwitch.r4.lo[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 191 ProactiveSwitch.r4.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 192 ProactiveSwitch.r4.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 193 ProactiveSwitch.r4.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 194 ProactiveSwitch.r4.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 195 ProactiveSwitch.r4.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 196 ProactiveSwitch.r4.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 197 ProactiveSwitch.r4.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 198 ProactiveSwitch.r4.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 199 ProactiveSwitch.r4.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 200 ProactiveSwitch.r4.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 201 ProactiveSwitch.r4.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 202 ProactiveSwitch.r4.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 203 ProactiveSwitch.r4.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 204 ProactiveSwitch.r4.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 205 ProactiveSwitch.r4.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 206 ProactiveSwitch.r4.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 207 ProactiveSwitch.r4.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 208 ProactiveSwitch.r4.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 209 ProactiveSwitch.r4.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 210 ProactiveSwitch.r4.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 211 ProactiveSwitch.r4.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 212 ProactiveSwitch.r4.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 213 ProactiveSwitch.r4.eth[1].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 214 ProactiveSwitch.r4.eth[1].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 215 ProactiveSwitch.r4.eth[1].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 216 ProactiveSwitch.r4.eth[1].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 217 ProactiveSwitch.r4.eth[1].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 218 ProactiveSwitch.r4.eth[1].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 219 ProactiveSwitch.r4.eth[1].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 220 ProactiveSwitch.r4.eth[1].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 221 ProactiveSwitch.r4.eth[1].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 222 ProactiveSwitch.r4.eth[1].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 223 ProactiveSwitch.r4.eth[1].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 224 ProactiveSwitch.r4.eth[1].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 225 ProactiveSwitch.r4.eth[1].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 226 ProactiveSwitch.r4.eth[1].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 227 ProactiveSwitch.r4.eth[1].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 228 ProactiveSwitch.r4.eth[1].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 229 ProactiveSwitch.r4.eth[1].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 230 ProactiveSwitch.r4.eth[1].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 231 ProactiveSwitch.r4.eth[1].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 232 ProactiveSwitch.r4.eth[1].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 233 ProactiveSwitch.r4.eth[1] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 234 ProactiveSwitch.r4.eth[1] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 235 ProactiveSwitch.r4.ipv4.ip packetDropAddressResolutionFailed:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsAddressResolutionFailed(packetDropped)
+attr title "packet drop: address resolution failed, packetBytes"
+vector 236 ProactiveSwitch.r4.ipv4.ip packetDropHopLimitReached:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsHopLimitReached(packetDropped)
+attr title "packet drop: hop limit reached, packetBytes"
+vector 237 ProactiveSwitch.r4.ipv4.ip packetDropForwardingDisabled:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsForwardingDisabled(packetDropped)
+attr title "packet drop: forwarding disabled, packetBytes"
+vector 238 ProactiveSwitch.r4.ipv4.ip packetDropNoInterfaceFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoInterfaceFound(packetDropped)
+attr title "packet drop: no interface found, packetBytes"
+vector 239 ProactiveSwitch.r4.ipv4.ip packetDropUndefined:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsUndefined(packetDropped)
+attr title "packet drop: undefined, packetBytes"
+vector 240 ProactiveSwitch.r4.ipv4.arp arpRequestSent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpRequestSent
+attr title "ARP request sent, packetBytes"
+vector 241 ProactiveSwitch.r4.ipv4.arp arpReplySent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpReplySent
+attr title "ARP replies sent, packetBytes"
+vector 242 ProactiveSwitch.r3.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 243 ProactiveSwitch.r3.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 244 ProactiveSwitch.r3.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 245 ProactiveSwitch.r3.lo[0].lo rcvdPkFromHl:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packets received from higher layer, packetBytes"
+vector 246 ProactiveSwitch.r3.lo[0].lo passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 247 ProactiveSwitch.r3.lo[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 248 ProactiveSwitch.r3.lo[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 249 ProactiveSwitch.r3.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 250 ProactiveSwitch.r3.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 251 ProactiveSwitch.r3.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 252 ProactiveSwitch.r3.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 253 ProactiveSwitch.r3.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 254 ProactiveSwitch.r3.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 255 ProactiveSwitch.r3.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 256 ProactiveSwitch.r3.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 257 ProactiveSwitch.r3.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 258 ProactiveSwitch.r3.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 259 ProactiveSwitch.r3.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 260 ProactiveSwitch.r3.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 261 ProactiveSwitch.r3.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 262 ProactiveSwitch.r3.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 263 ProactiveSwitch.r3.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 264 ProactiveSwitch.r3.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 265 ProactiveSwitch.r3.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 266 ProactiveSwitch.r3.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 267 ProactiveSwitch.r3.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 268 ProactiveSwitch.r3.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 269 ProactiveSwitch.r3.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 270 ProactiveSwitch.r3.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 271 ProactiveSwitch.r3.eth[1].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 272 ProactiveSwitch.r3.eth[1].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 273 ProactiveSwitch.r3.eth[1].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 274 ProactiveSwitch.r3.eth[1].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 275 ProactiveSwitch.r3.eth[1].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 276 ProactiveSwitch.r3.eth[1].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 277 ProactiveSwitch.r3.eth[1].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 278 ProactiveSwitch.r3.eth[1].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 279 ProactiveSwitch.r3.eth[1].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 280 ProactiveSwitch.r3.eth[1].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 281 ProactiveSwitch.r3.eth[1].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 282 ProactiveSwitch.r3.eth[1].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 283 ProactiveSwitch.r3.eth[1].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 284 ProactiveSwitch.r3.eth[1].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 285 ProactiveSwitch.r3.eth[1].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 286 ProactiveSwitch.r3.eth[1].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 287 ProactiveSwitch.r3.eth[1].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 288 ProactiveSwitch.r3.eth[1].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 289 ProactiveSwitch.r3.eth[1].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 290 ProactiveSwitch.r3.eth[1].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 291 ProactiveSwitch.r3.eth[1] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 292 ProactiveSwitch.r3.eth[1] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 293 ProactiveSwitch.r3.eth[2].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 294 ProactiveSwitch.r3.eth[2].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 295 ProactiveSwitch.r3.eth[2].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 296 ProactiveSwitch.r3.eth[2].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 297 ProactiveSwitch.r3.eth[2].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 298 ProactiveSwitch.r3.eth[2].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 299 ProactiveSwitch.r3.eth[2].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 300 ProactiveSwitch.r3.eth[2].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 301 ProactiveSwitch.r3.eth[2].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 302 ProactiveSwitch.r3.eth[2].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 303 ProactiveSwitch.r3.eth[2].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 304 ProactiveSwitch.r3.eth[2].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 305 ProactiveSwitch.r3.eth[2].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 306 ProactiveSwitch.r3.eth[2].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 307 ProactiveSwitch.r3.eth[2].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 308 ProactiveSwitch.r3.eth[2].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 309 ProactiveSwitch.r3.eth[2].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 310 ProactiveSwitch.r3.eth[2].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 311 ProactiveSwitch.r3.eth[2].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 312 ProactiveSwitch.r3.eth[2].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 313 ProactiveSwitch.r3.eth[2] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 314 ProactiveSwitch.r3.eth[2] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 315 ProactiveSwitch.r3.ipv4.ip packetDropAddressResolutionFailed:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsAddressResolutionFailed(packetDropped)
+attr title "packet drop: address resolution failed, packetBytes"
+vector 316 ProactiveSwitch.r3.ipv4.ip packetDropHopLimitReached:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsHopLimitReached(packetDropped)
+attr title "packet drop: hop limit reached, packetBytes"
+vector 317 ProactiveSwitch.r3.ipv4.ip packetDropForwardingDisabled:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsForwardingDisabled(packetDropped)
+attr title "packet drop: forwarding disabled, packetBytes"
+vector 318 ProactiveSwitch.r3.ipv4.ip packetDropNoInterfaceFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoInterfaceFound(packetDropped)
+attr title "packet drop: no interface found, packetBytes"
+vector 319 ProactiveSwitch.r3.ipv4.ip packetDropUndefined:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsUndefined(packetDropped)
+attr title "packet drop: undefined, packetBytes"
+vector 320 ProactiveSwitch.r3.ipv4.arp arpRequestSent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpRequestSent
+attr title "ARP request sent, packetBytes"
+vector 321 ProactiveSwitch.r3.ipv4.arp arpReplySent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpReplySent
+attr title "ARP replies sent, packetBytes"
+vector 322 ProactiveSwitch.hostB.ethernet encapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source encapPk
+attr title "packets encapsulated, packetBytes"
+vector 323 ProactiveSwitch.hostB.ethernet decapPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source decapPk
+attr title "packets decapsulated, packetBytes"
+vector 324 ProactiveSwitch.hostB.ethernet pauseSent:vector ETV
+attr recordingmode vector
+attr title "pause sent"
+vector 325 ProactiveSwitch.hostB.lo[0].lo rcvdPkFromHl:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packets received from higher layer, packetBytes"
+vector 326 ProactiveSwitch.hostB.lo[0].lo passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 327 ProactiveSwitch.hostB.lo[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 328 ProactiveSwitch.hostB.lo[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 329 ProactiveSwitch.hostB.eth[0].queue queueLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
+attr title "queue length"
+attr unit pk
+vector 330 ProactiveSwitch.hostB.eth[0].queue queueBitLength:vector ETV
+attr autoWarmupFilter false
+attr interpolationmode sample-hold
+attr recordingmode vector
+attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
+attr title "queue bit length"
+attr unit b
+vector 331 ProactiveSwitch.hostB.eth[0].queue queueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(packetPulled)
+attr title "queueing times"
+attr unit s
+vector 332 ProactiveSwitch.hostB.eth[0].queue incomingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPushStarted)
+attr title "incoming packet lengths"
+attr unit b
+vector 333 ProactiveSwitch.hostB.eth[0].queue incomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPushStarted)
+attr title "incoming datarate"
+attr unit bps
+vector 334 ProactiveSwitch.hostB.eth[0].queue outgoingPacketLengths:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetPulled)
+attr title "outgoing packet lengths"
+attr unit b
+vector 335 ProactiveSwitch.hostB.eth[0].queue outgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(packetPulled)
+attr title "outgoing datarate"
+attr unit bps
+vector 336 ProactiveSwitch.hostB.eth[0].queue droppedPacketLengthsQueueOverflow:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetLength(packetDropReasonIsQueueOverflow(packetDropped))
+attr title "dropped packet lengths: queue overflow"
+attr unit b
+vector 337 ProactiveSwitch.hostB.eth[0].queue flowQueueingTime:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source queueingTime(demuxFlow(packetPulled))
+attr title "flow queueing times"
+attr unit s
+vector 338 ProactiveSwitch.hostB.eth[0].queue flowIncomingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPushStarted)))
+attr title "flow specific incoming data rate"
+attr unit bps
+vector 339 ProactiveSwitch.hostB.eth[0].queue flowOutgoingDataRate:vector ETV
+attr interpolationmode linear
+attr recordingmode vector
+attr source throughput(flowPacketLength(demuxFlow(packetPulled)))
+attr title "flow specific outgoing data rate"
+attr unit bps
+vector 340 ProactiveSwitch.hostB.eth[0].mac txPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToLower
+attr title "packets transmitted, packetBytes"
+vector 341 ProactiveSwitch.hostB.eth[0].mac rxPkOk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source rxPkOk
+attr title "packets received OK, packetBytes"
+vector 342 ProactiveSwitch.hostB.eth[0].mac passedUpPk:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSentToUpper
+attr title "packets passed to higher layer, packetBytes"
+vector 343 ProactiveSwitch.hostB.eth[0].mac txPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units sent"
+vector 344 ProactiveSwitch.hostB.eth[0].mac rxPausePkUnits:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr title "pause units received"
+vector 345 ProactiveSwitch.hostB.eth[0].mac packetReceivedFromUpper:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceivedFromUpper
+attr title "packet bytes from higher layer, packetBytes"
+vector 346 ProactiveSwitch.hostB.eth[0].mac packetDropIncorrectlyReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packet drop: incorrectly received, packetBytes"
+vector 347 ProactiveSwitch.hostB.eth[0].mac packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drop: interface down, packetBytes"
+vector 348 ProactiveSwitch.hostB.eth[0].mac packetDropNotAddressedToUs:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNotAddressedToUs(packetDropped)
+attr title "packet drop: not addressed to us, packetBytes"
+vector 349 ProactiveSwitch.hostB.eth[0] packetDropInterfaceDown:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsInterfaceDown(packetDropped)
+attr title "packet drops: interface down, packetBytes"
+vector 350 ProactiveSwitch.hostB.eth[0] packetDropNoCarrier:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoCarrier(packetDropped)
+attr title "packet drops: no carrier, packetBytes"
+vector 351 ProactiveSwitch.hostB.ipv4.ip packetDropAddressResolutionFailed:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsAddressResolutionFailed(packetDropped)
+attr title "packet drop: address resolution failed, packetBytes"
+vector 352 ProactiveSwitch.hostB.ipv4.ip packetDropHopLimitReached:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsHopLimitReached(packetDropped)
+attr title "packet drop: hop limit reached, packetBytes"
+vector 353 ProactiveSwitch.hostB.ipv4.ip packetDropForwardingDisabled:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsForwardingDisabled(packetDropped)
+attr title "packet drop: forwarding disabled, packetBytes"
+vector 354 ProactiveSwitch.hostB.ipv4.ip packetDropNoInterfaceFound:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsNoInterfaceFound(packetDropped)
+attr title "packet drop: no interface found, packetBytes"
+vector 355 ProactiveSwitch.hostB.ipv4.ip packetDropUndefined:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetDropReasonIsUndefined(packetDropped)
+attr title "packet drop: undefined, packetBytes"
+vector 356 ProactiveSwitch.hostB.ipv4.arp arpRequestSent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpRequestSent
+attr title "ARP request sent, packetBytes"
+vector 357 ProactiveSwitch.hostB.ipv4.arp arpReplySent:vector(packetBytes) ETV
+attr recordingmode vector(packetBytes)
+attr source arpReplySent
+attr title "ARP replies sent, packetBytes"
+vector 358 ProactiveSwitch.hostB.udp packetSent:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetSent
+attr title "packets sent, packetBytes"
+vector 359 ProactiveSwitch.hostB.udp packetReceived:vector(packetBytes) ETV
+attr interpolationmode none
+attr recordingmode vector(packetBytes)
+attr source packetReceived
+attr title "packets received, packetBytes"
+vector 360 ProactiveSwitch.hostB.udp passedUpPk:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetSentToUpper
+attr title "packets passed up, count"
+vector 361 ProactiveSwitch.hostB.udp droppedPkWrongPort:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetDropReasonIsNoPortFound(packetDropped)
+attr title "packets dropped (wrong port), count"
+vector 362 ProactiveSwitch.hostB.udp droppedPkBadChecksum:vector(count) ETV
+attr interpolationmode none
+attr recordingmode vector(count)
+attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
+attr title "packets dropped (checksum error), count"
+vector 363 ProactiveSwitch.hostB.app[0] packetReceived:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source packetReceived
+attr title "packets received"
+vector 364 ProactiveSwitch.hostB.app[0] throughput:vector ETV
+attr recordingmode vector
+attr source throughput(packetReceived)
+attr title throughput
+attr unit bps
+vector 365 ProactiveSwitch.hostB.app[0] endToEndDelay:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source dataAge(packetReceived)
+attr title "end-to-end delay"
+attr unit s
+vector 366 ProactiveSwitch.hostB.app[0] rcvdPkSeqNo:vector ETV
+attr interpolationmode none
+attr recordingmode vector
+attr source appPkSeqNo(packetReceived)
+attr title "received packet sequence number"
+1	20	0.089477398282	64
+7	0	0	0
+7	0	0	0
+7	0	0	0
+7	0	0	0
+7	0	0	0
+8	0	0	0
+8	0	0	0
+8	0	0	0
+8	0	0	0
+8	0	0	0
+19	19	0.089477398282	82
+20	19	0.089477398282	82
+38	0	0	0
+39	0	0	0
+40	0	0	0
+46	16	0.089470098282	64
+46	182	0.10852570675	68
+46	199	0.10853966675	52
+46	217	0.10855234675	72
+46	239	0.10856982675	52
+46	240	0.10856982675	68
+46	256	0.10857734675	84
+46	298	0.10860426675	120
+46	327	0.108847807824	68
+46	344	0.108861767824	52
+46	362	0.108874447824	112
+46	384	0.108893527824	52
+46	385	0.108893527824	56
+46	403	0.108902967824	120
+46	404	0.108902967824	96
+46	405	0.108902967824	84
+46	427	0.108915327824	132
+46	428	0.108915327824	132
+46	429	0.108915327824	72
+46	732	5.096938575973	120
+46	775	5.096955255973	120
+46	799	5.096967895973	120
+46	826	5.096985695973	64
+46	843	5.10860426675	28
+46	856	5.10861598675	132
+46	912	5.108915327824	28
+46	925	5.108927047824	48
+46	944	5.108952287824	64
+46	975	6	84
+46	976	6	64
+47	10	0.089235722814	64
+47	176	0.107206167093	64
+47	195	0.10853966675	52
+47	213	0.10855234675	52
+47	234	0.10856982675	92
+47	252	0.10857734675	56
+47	287	0.10859450675	96
+47	294	0.10860426675	84
+47	321	0.10861690675	120
+47	340	0.108861767824	52
+47	358	0.108874447824	52
+47	379	0.108893527824	72
+47	397	0.108902967824	80
+47	421	0.108915327824	72
+47	478	0.108950367824	96
+47	728	5.096938575973	120
+47	771	5.096955255973	120
+47	795	5.096967895973	120
+47	822	5.096985695973	120
+47	837	5.096993855973	64
+47	854	5.10861598675	46
+47	906	5.10868054675	132
+47	923	5.108927047824	46
+47	940	5.108952287824	120
+47	1000	6.0000073	64
+47	1001	6.0000073	64
+53	0	0	0
+53	0	0	0
+53	0	0	0
+53	0	0	0
+53	0	0	0
+53	17	0.089470098282	0
+54	0	0	0
+54	0	0	0
+54	0	0	0
+54	0	0	0
+54	0	0	0
+54	17	0.089470098282	0
+55	17	0.089470098282	0
+56	17	0.089470098282	656
+58	17	0.089470098282	656
+64	18	0.089477298282	82
+69	17	0.089470098282	82
+75	0	0	0
+75	0	0	0
+75	0	0	0
+75	0	0	0
+75	0	0	0
+75	328	0.108847807824	0
+75	345	0.108861767824	0
+75	363	0.108874447824	0
+75	386	0.108893527824	0
+75	387	0.108893527824	1
+75	394	0.108900727824	0
+75	406	0.108902967824	1
+75	407	0.108902967824	2
+75	408	0.108902967824	3
+75	418	0.108908247824	2
+75	430	0.108915327824	3
+75	439	0.108920887824	2
+75	451	0.108931607824	1
+75	469	0.108941367824	0
+75	733	5.096938575973	0
+75	913	5.108915327824	0
+75	926	5.108927047824	0
+75	945	5.108952287824	0
+75	983	6	0
+76	0	0	0
+76	0	0	0
+76	0	0	0
+76	0	0	0
+76	0	0	0
+76	328	0.108847807824	0
+76	345	0.108861767824	0
+76	363	0.108874447824	0
+76	386	0.108893527824	0
+76	387	0.108893527824	592
+76	394	0.108900727824	0
+76	406	0.108902967824	1104
+76	407	0.108902967824	2016
+76	408	0.108902967824	2832
+76	418	0.108908247824	1728
+76	430	0.108915327824	2928
+76	439	0.108920887824	2016
+76	451	0.108931607824	1200
+76	469	0.108941367824	0
+76	733	5.096938575973	0
+76	913	5.108915327824	0
+76	926	5.108927047824	0
+76	945	5.108952287824	0
+76	983	6	0
+77	328	0.108847807824	0
+77	345	0.108861767824	0
+77	363	0.108874447824	0
+77	386	0.108893527824	0
+77	394	0.108900727824	7.2e-06
+77	418	0.108908247824	5.28e-06
+77	439	0.108920887824	1.792e-05
+77	451	0.108931607824	2.864e-05
+77	469	0.108941367824	2.604e-05
+77	733	5.096938575973	0
+77	913	5.108915327824	0
+77	926	5.108927047824	0
+77	945	5.108952287824	0
+77	983	6	0
+78	328	0.108847807824	688
+78	345	0.108861767824	560
+78	363	0.108874447824	1040
+78	386	0.108893527824	560
+78	387	0.108893527824	592
+78	406	0.108902967824	1104
+78	407	0.108902967824	912
+78	408	0.108902967824	816
+78	430	0.108915327824	1200
+78	733	5.096938575973	1104
+78	913	5.108915327824	368
+78	926	5.108927047824	528
+78	945	5.108952287824	656
+78	983	6	816
+79	328	0.1	0
+79	733	0.2	74720
+79	733	0.3	0
+79	733	0.4	0
+79	733	0.5	0
+79	733	0.6	0
+79	733	0.7	0
+79	733	0.8	0
+79	733	0.9	0
+79	733	1	0
+79	733	1.1	0
+79	733	1.2	0
+79	733	1.3	0
+79	733	1.4	0
+79	733	1.5	0
+79	733	1.6	0
+79	733	1.7	0
+79	733	1.8	0
+79	733	1.9	0
+79	733	2	0
+79	733	2.1	0
+79	733	2.2	0
+79	733	2.3	0
+79	733	2.4	0
+79	733	2.5	0
+79	733	2.6	0
+79	733	2.7	0
+79	733	2.8	0
+79	733	2.9	0
+79	733	3	0
+79	733	3.1	0
+79	733	3.2	0
+79	733	3.3	0
+79	733	3.4	0
+79	733	3.5	0
+79	733	3.6	0
+79	733	3.7	0
+79	733	3.8	0
+79	733	3.9	0
+79	733	4	0
+79	733	4.1	0
+79	733	4.2	0
+79	733	4.3	0
+79	733	4.4	0
+79	733	4.5	0
+79	733	4.6	0
+79	733	4.7	0
+79	733	4.8	0
+79	733	4.9	0
+79	733	5	0
+79	913	5.1	11040
+79	983	5.2	15520
+79	983	5.3	0
+79	983	5.4	0
+79	983	5.5	0
+79	983	5.6	0
+79	983	5.7	0
+79	983	5.8	0
+79	983	5.9	0
+79	983	6	0
+80	328	0.108847807824	688
+80	345	0.108861767824	560
+80	363	0.108874447824	1040
+80	386	0.108893527824	560
+80	394	0.108900727824	592
+80	418	0.108908247824	1104
+80	439	0.108920887824	912
+80	451	0.108931607824	816
+80	469	0.108941367824	1200
+80	733	5.096938575973	1104
+80	913	5.108915327824	368
+80	926	5.108927047824	528
+80	945	5.108952287824	656
+80	983	6	816
+81	328	0.1	0
+81	733	0.2	74720
+81	733	0.3	0
+81	733	0.4	0
+81	733	0.5	0
+81	733	0.6	0
+81	733	0.7	0
+81	733	0.8	0
+81	733	0.9	0
+81	733	1	0
+81	733	1.1	0
+81	733	1.2	0
+81	733	1.3	0
+81	733	1.4	0
+81	733	1.5	0
+81	733	1.6	0
+81	733	1.7	0
+81	733	1.8	0
+81	733	1.9	0
+81	733	2	0
+81	733	2.1	0
+81	733	2.2	0
+81	733	2.3	0
+81	733	2.4	0
+81	733	2.5	0
+81	733	2.6	0
+81	733	2.7	0
+81	733	2.8	0
+81	733	2.9	0
+81	733	3	0
+81	733	3.1	0
+81	733	3.2	0
+81	733	3.3	0
+81	733	3.4	0
+81	733	3.5	0
+81	733	3.6	0
+81	733	3.7	0
+81	733	3.8	0
+81	733	3.9	0
+81	733	4	0
+81	733	4.1	0
+81	733	4.2	0
+81	733	4.3	0
+81	733	4.4	0
+81	733	4.5	0
+81	733	4.6	0
+81	733	4.7	0
+81	733	4.8	0
+81	733	4.9	0
+81	733	5	0
+81	913	5.1	11040
+81	983	5.2	15520
+81	983	5.3	0
+81	983	5.4	0
+81	983	5.5	0
+81	983	5.6	0
+81	983	5.7	0
+81	983	5.8	0
+81	983	5.9	0
+81	983	6	0
+86	329	0.108855327824	86
+86	347	0.108868007824	70
+86	365	0.108885487824	130
+86	389	0.108899767824	70
+86	410	0.108907287824	74
+86	434	0.108919927824	138
+86	446	0.108930647824	114
+86	461	0.108940407824	102
+86	482	0.108954007824	150
+86	756	5.096950255973	138
+86	914	5.108921087824	64
+86	928	5.108932967824	66
+86	947	5.108959487824	82
+86	1015	6.0000088	102
+87	175	0.107206167093	82
+87	339	0.108861767824	70
+87	357	0.108874447824	70
+87	378	0.108893527824	90
+87	396	0.108902967824	98
+87	420	0.108915327824	90
+87	477	0.108950367824	114
+87	770	5.096955255973	138
+87	793	5.096967895973	138
+87	905	5.10868054675	150
+87	922	5.108927047824	64
+87	939	5.108952287824	138
+87	996	6.0000073	82
+88	175	0.107206167093	82
+88	339	0.108861767824	70
+88	357	0.108874447824	70
+88	378	0.108893527824	90
+88	396	0.108902967824	98
+88	420	0.108915327824	90
+88	477	0.108950367824	114
+88	770	5.096955255973	138
+88	793	5.096967895973	138
+88	905	5.10868054675	150
+88	922	5.108927047824	64
+88	939	5.108952287824	138
+88	996	6.0000073	82
+91	328	0.108847807824	86
+91	345	0.108861767824	70
+91	363	0.108874447824	130
+91	386	0.108893527824	70
+91	394	0.108900727824	74
+91	418	0.108908247824	138
+91	439	0.108920887824	114
+91	451	0.108931607824	102
+91	469	0.108941367824	150
+91	733	5.096938575973	138
+91	913	5.108915327824	46
+91	926	5.108927047824	66
+91	945	5.108952287824	82
+91	983	6	102
+97	0	0	0
+97	0	0	0
+97	0	0	0
+97	0	0	0
+97	0	0	0
+97	183	0.10852570675	0
+97	200	0.10853966675	0
+97	218	0.10855234675	0
+97	241	0.10856982675	0
+97	242	0.10856982675	1
+97	249	0.10857702675	0
+97	257	0.10857734675	1
+97	270	0.10858550675	0
+97	299	0.10860426675	0
+97	431	0.108915327824	0
+97	432	0.108915327824	1
+97	445	0.108928927824	0
+97	776	5.096955255973	0
+97	800	5.096967895973	0
+97	827	5.096985695973	0
+97	844	5.10860426675	0
+97	857	5.10861598675	0
+97	984	6	0
+98	0	0	0
+98	0	0	0
+98	0	0	0
+98	0	0	0
+98	0	0	0
+98	183	0.10852570675	0
+98	200	0.10853966675	0
+98	218	0.10855234675	0
+98	241	0.10856982675	0
+98	242	0.10856982675	688
+98	249	0.10857702675	0
+98	257	0.10857734675	816
+98	270	0.10858550675	0
+98	299	0.10860426675	0
+98	431	0.108915327824	0
+98	432	0.108915327824	720
+98	445	0.108928927824	0
+98	776	5.096955255973	0
+98	800	5.096967895973	0
+98	827	5.096985695973	0
+98	844	5.10860426675	0
+98	857	5.10861598675	0
+98	984	6	0
+99	183	0.10852570675	0
+99	200	0.10853966675	0
+99	218	0.10855234675	0
+99	241	0.10856982675	0
+99	249	0.10857702675	7.2e-06
+99	270	0.10858550675	8.16e-06
+99	299	0.10860426675	0
+99	431	0.108915327824	0
+99	445	0.108928927824	1.36e-05
+99	776	5.096955255973	0
+99	800	5.096967895973	0
+99	827	5.096985695973	0
+99	844	5.10860426675	0
+99	857	5.10861598675	0
+99	984	6	0
+100	183	0.10852570675	688
+100	200	0.10853966675	560
+100	218	0.10855234675	720
+100	241	0.10856982675	560
+100	242	0.10856982675	688
+100	257	0.10857734675	816
+100	299	0.10860426675	1104
+100	431	0.108915327824	1200
+100	432	0.108915327824	720
+100	776	5.096955255973	1104
+100	800	5.096967895973	1104
+100	827	5.096985695973	656
+100	844	5.10860426675	368
+100	857	5.10861598675	1200
+100	984	6	656
+101	183	0.1	0
+101	776	0.2	70560
+101	776	0.3	0
+101	776	0.4	0
+101	776	0.5	0
+101	776	0.6	0
+101	776	0.7	0
+101	776	0.8	0
+101	776	0.9	0
+101	776	1	0
+101	776	1.1	0
+101	776	1.2	0
+101	776	1.3	0
+101	776	1.4	0
+101	776	1.5	0
+101	776	1.6	0
+101	776	1.7	0
+101	776	1.8	0
+101	776	1.9	0
+101	776	2	0
+101	776	2.1	0
+101	776	2.2	0
+101	776	2.3	0
+101	776	2.4	0
+101	776	2.5	0
+101	776	2.6	0
+101	776	2.7	0
+101	776	2.8	0
+101	776	2.9	0
+101	776	3	0
+101	776	3.1	0
+101	776	3.2	0
+101	776	3.3	0
+101	776	3.4	0
+101	776	3.5	0
+101	776	3.6	0
+101	776	3.7	0
+101	776	3.8	0
+101	776	3.9	0
+101	776	4	0
+101	776	4.1	0
+101	776	4.2	0
+101	776	4.3	0
+101	776	4.4	0
+101	776	4.5	0
+101	776	4.6	0
+101	776	4.7	0
+101	776	4.8	0
+101	776	4.9	0
+101	776	5	0
+101	844	5.1	28640
+101	984	5.2	15680
+101	984	5.3	0
+101	984	5.4	0
+101	984	5.5	0
+101	984	5.6	0
+101	984	5.7	0
+101	984	5.8	0
+101	984	5.9	0
+101	984	6	0
+102	183	0.10852570675	688
+102	200	0.10853966675	560
+102	218	0.10855234675	720
+102	241	0.10856982675	560
+102	249	0.10857702675	688
+102	270	0.10858550675	816
+102	299	0.10860426675	1104
+102	431	0.108915327824	1200
+102	445	0.108928927824	720
+102	776	5.096955255973	1104
+102	800	5.096967895973	1104
+102	827	5.096985695973	656
+102	844	5.10860426675	368
+102	857	5.10861598675	1200
+102	984	6	656
+103	183	0.1	0
+103	776	0.2	70560
+103	776	0.3	0
+103	776	0.4	0
+103	776	0.5	0
+103	776	0.6	0
+103	776	0.7	0
+103	776	0.8	0
+103	776	0.9	0
+103	776	1	0
+103	776	1.1	0
+103	776	1.2	0
+103	776	1.3	0
+103	776	1.4	0
+103	776	1.5	0
+103	776	1.6	0
+103	776	1.7	0
+103	776	1.8	0
+103	776	1.9	0
+103	776	2	0
+103	776	2.1	0
+103	776	2.2	0
+103	776	2.3	0
+103	776	2.4	0
+103	776	2.5	0
+103	776	2.6	0
+103	776	2.7	0
+103	776	2.8	0
+103	776	2.9	0
+103	776	3	0
+103	776	3.1	0
+103	776	3.2	0
+103	776	3.3	0
+103	776	3.4	0
+103	776	3.5	0
+103	776	3.6	0
+103	776	3.7	0
+103	776	3.8	0
+103	776	3.9	0
+103	776	4	0
+103	776	4.1	0
+103	776	4.2	0
+103	776	4.3	0
+103	776	4.4	0
+103	776	4.5	0
+103	776	4.6	0
+103	776	4.7	0
+103	776	4.8	0
+103	776	4.9	0
+103	776	5	0
+103	844	5.1	28640
+103	984	5.2	15680
+103	984	5.3	0
+103	984	5.4	0
+103	984	5.5	0
+103	984	5.6	0
+103	984	5.7	0
+103	984	5.8	0
+103	984	5.9	0
+103	984	6	0
+108	184	0.10853322675	86
+108	202	0.10854590675	70
+108	220	0.10856018675	90
+108	244	0.10857606675	70
+108	259	0.10858454675	86
+108	271	0.10859430675	102
+108	308	0.10861594675	138
+108	440	0.108927967824	150
+108	452	0.108936767824	90
+108	787	5.096966935973	138
+108	811	5.096979575973	138
+108	829	5.096992895973	82
+108	845	5.10861002675	64
+108	859	5.10862862675	150
+108	991	6.0000072	82
+109	9	0.089235722814	82
+109	194	0.10853966675	70
+109	212	0.10855234675	70
+109	233	0.10856982675	110
+109	251	0.10857734675	74
+109	286	0.10859450675	114
+109	293	0.10860426675	102
+109	319	0.10861690675	138
+109	727	5.096938575973	138
+109	821	5.096985695973	138
+109	835	5.096993855973	82
+109	853	5.10861598675	64
+109	997	6.0000073	82
+110	9	0.089235722814	82
+110	194	0.10853966675	70
+110	212	0.10855234675	70
+110	233	0.10856982675	110
+110	251	0.10857734675	74
+110	286	0.10859450675	114
+110	293	0.10860426675	102
+110	319	0.10861690675	138
+110	727	5.096938575973	138
+110	821	5.096985695973	138
+110	835	5.096993855973	82
+110	853	5.10861598675	64
+110	997	6.0000073	82
+113	183	0.10852570675	86
+113	200	0.10853966675	70
+113	218	0.10855234675	90
+113	241	0.10856982675	70
+113	249	0.10857702675	86
+113	270	0.10858550675	102
+113	299	0.10860426675	138
+113	431	0.108915327824	150
+113	445	0.108928927824	90
+113	776	5.096955255973	138
+113	800	5.096967895973	138
+113	827	5.096985695973	82
+113	844	5.10860426675	46
+113	857	5.10861598675	150
+113	984	6	82
+124	842	5.10860426675	28
+124	911	5.108915327824	28
+126	34	0.092510047472	64
+126	172	0.107198867093	64
+126	335	0.108855427824	52
+126	353	0.108868107824	52
+126	372	0.108885587824	72
+126	373	0.108885587824	80
+126	416	0.108907387824	72
+126	467	0.108940507824	96
+126	498	0.119770908281	52
+126	516	0.119783588281	132
+126	538	0.119809068281	52
+126	539	0.119809068281	56
+126	557	0.119818508281	96
+126	558	0.119818508281	120
+126	559	0.119818508281	96
+126	748	5.096943475973	120
+126	763	5.096950355973	120
+126	764	5.096950355973	120
+126	901	5.10866780675	132
+126	918	5.108921187824	28
+126	936	5.108940507824	120
+126	977	6	64
+126	978	6	84
+127	331	0.108855427824	68
+127	349	0.108868107824	52
+127	367	0.108885587824	112
+127	391	0.108899867824	52
+127	412	0.108907387824	56
+127	436	0.108920027824	120
+127	448	0.108930747824	96
+127	463	0.108940507824	84
+127	484	0.108954107824	132
+127	494	0.119770908281	68
+127	512	0.119783588281	52
+127	533	0.119809068281	132
+127	551	0.119818508281	80
+127	581	0.119834708281	120
+127	744	5.096943475973	120
+127	758	5.096950355973	120
+127	887	5.10865420675	132
+127	897	5.10866780675	132
+127	916	5.108921187824	46
+127	930	5.108933067824	48
+127	949	5.108959587824	64
+127	1002	6.0000073	64
+127	1023	6.0000089	84
+133	0	0	0
+133	0	0	0
+133	0	0	0
+133	0	0	0
+133	0	0	0
+133	173	0.107198867093	0
+133	336	0.108855427824	0
+133	354	0.108868107824	0
+133	374	0.108885587824	0
+133	375	0.108885587824	1
+133	388	0.108894387824	0
+133	417	0.108907387824	0
+133	468	0.108940507824	0
+133	749	5.096943475973	0
+133	765	5.096950355973	1
+133	777	5.096956115973	0
+133	902	5.10866780675	0
+133	919	5.108921187824	0
+133	937	5.108940507824	0
+133	985	6	0
+134	0	0	0
+134	0	0	0
+134	0	0	0
+134	0	0	0
+134	0	0	0
+134	173	0.107198867093	0
+134	336	0.108855427824	0
+134	354	0.108868107824	0
+134	374	0.108885587824	0
+134	375	0.108885587824	784
+134	388	0.108894387824	0
+134	417	0.108907387824	0
+134	468	0.108940507824	0
+134	749	5.096943475973	0
+134	765	5.096950355973	1104
+134	777	5.096956115973	0
+134	902	5.10866780675	0
+134	919	5.108921187824	0
+134	937	5.108940507824	0
+134	985	6	0
+135	173	0.107198867093	0
+135	336	0.108855427824	0
+135	354	0.108868107824	0
+135	374	0.108885587824	0
+135	388	0.108894387824	8.8e-06
+135	417	0.108907387824	0
+135	468	0.108940507824	0
+135	749	5.096943475973	0
+135	777	5.096956115973	5.76e-06
+135	902	5.10866780675	0
+135	919	5.108921187824	0
+135	937	5.108940507824	0
+135	985	6	0
+136	173	0.107198867093	656
+136	336	0.108855427824	560
+136	354	0.108868107824	560
+136	374	0.108885587824	720
+136	375	0.108885587824	784
+136	417	0.108907387824	720
+136	468	0.108940507824	912
+136	749	5.096943475973	1104
+136	765	5.096950355973	1104
+136	902	5.10866780675	1200
+136	919	5.108921187824	368
+136	937	5.108940507824	1104
+136	985	6	656
+137	173	0.1	0
+137	749	0.2	49120
+137	749	0.3	0
+137	749	0.4	0
+137	749	0.5	0
+137	749	0.6	0
+137	749	0.7	0
+137	749	0.8	0
+137	749	0.9	0
+137	749	1	0
+137	749	1.1	0
+137	749	1.2	0
+137	749	1.3	0
+137	749	1.4	0
+137	749	1.5	0
+137	749	1.6	0
+137	749	1.7	0
+137	749	1.8	0
+137	749	1.9	0
+137	749	2	0
+137	749	2.1	0
+137	749	2.2	0
+137	749	2.3	0
+137	749	2.4	0
+137	749	2.5	0
+137	749	2.6	0
+137	749	2.7	0
+137	749	2.8	0
+137	749	2.9	0
+137	749	3	0
+137	749	3.1	0
+137	749	3.2	0
+137	749	3.3	0
+137	749	3.4	0
+137	749	3.5	0
+137	749	3.6	0
+137	749	3.7	0
+137	749	3.8	0
+137	749	3.9	0
+137	749	4	0
+137	749	4.1	0
+137	749	4.2	0
+137	749	4.3	0
+137	749	4.4	0
+137	749	4.5	0
+137	749	4.6	0
+137	749	4.7	0
+137	749	4.8	0
+137	749	4.9	0
+137	749	5	0
+137	902	5.1	22080
+137	985	5.2	26720
+137	985	5.3	0
+137	985	5.4	0
+137	985	5.5	0
+137	985	5.6	0
+137	985	5.7	0
+137	985	5.8	0
+137	985	5.9	0
+137	985	6	0
+138	173	0.107198867093	656
+138	336	0.108855427824	560
+138	354	0.108868107824	560
+138	374	0.108885587824	720
+138	388	0.108894387824	784
+138	417	0.108907387824	720
+138	468	0.108940507824	912
+138	749	5.096943475973	1104
+138	777	5.096956115973	1104
+138	902	5.10866780675	1200
+138	919	5.108921187824	368
+138	937	5.108940507824	1104
+138	985	6	656
+139	173	0.1	0
+139	749	0.2	49120
+139	749	0.3	0
+139	749	0.4	0
+139	749	0.5	0
+139	749	0.6	0
+139	749	0.7	0
+139	749	0.8	0
+139	749	0.9	0
+139	749	1	0
+139	749	1.1	0
+139	749	1.2	0
+139	749	1.3	0
+139	749	1.4	0
+139	749	1.5	0
+139	749	1.6	0
+139	749	1.7	0
+139	749	1.8	0
+139	749	1.9	0
+139	749	2	0
+139	749	2.1	0
+139	749	2.2	0
+139	749	2.3	0
+139	749	2.4	0
+139	749	2.5	0
+139	749	2.6	0
+139	749	2.7	0
+139	749	2.8	0
+139	749	2.9	0
+139	749	3	0
+139	749	3.1	0
+139	749	3.2	0
+139	749	3.3	0
+139	749	3.4	0
+139	749	3.5	0
+139	749	3.6	0
+139	749	3.7	0
+139	749	3.8	0
+139	749	3.9	0
+139	749	4	0
+139	749	4.1	0
+139	749	4.2	0
+139	749	4.3	0
+139	749	4.4	0
+139	749	4.5	0
+139	749	4.6	0
+139	749	4.7	0
+139	749	4.8	0
+139	749	4.9	0
+139	749	5	0
+139	902	5.1	22080
+139	985	5.2	26720
+139	985	5.3	0
+139	985	5.4	0
+139	985	5.5	0
+139	985	5.6	0
+139	985	5.7	0
+139	985	5.8	0
+139	985	5.9	0
+139	985	6	0
+144	174	0.107206067093	82
+144	338	0.108861667824	70
+144	356	0.108874347824	70
+144	377	0.108893427824	90
+144	395	0.108902867824	98
+144	419	0.108915227824	90
+144	476	0.108950267824	114
+144	769	5.096955155973	138
+144	792	5.096967795973	138
+144	904	5.10868044675	150
+144	921	5.108926947824	64
+144	938	5.108952187824	138
+144	992	6.0000072	82
+145	330	0.108855427824	86
+145	348	0.108868107824	70
+145	366	0.108885587824	130
+145	390	0.108899867824	70
+145	411	0.108907387824	74
+145	435	0.108920027824	138
+145	447	0.108930747824	114
+145	462	0.108940507824	102
+145	483	0.108954107824	150
+145	757	5.096950355973	138
+145	915	5.108921187824	64
+145	929	5.108933067824	66
+145	948	5.108959587824	82
+145	1019	6.0000089	102
+146	330	0.108855427824	86
+146	348	0.108868107824	70
+146	366	0.108885587824	130
+146	390	0.108899867824	70
+146	411	0.108907387824	74
+146	435	0.108920027824	138
+146	447	0.108930747824	114
+146	462	0.108940507824	102
+146	483	0.108954107824	150
+146	757	5.096950355973	138
+146	915	5.108921187824	64
+146	929	5.108933067824	66
+146	948	5.108959587824	82
+146	1019	6.0000089	102
+149	173	0.107198867093	82
+149	336	0.108855427824	70
+149	354	0.108868107824	70
+149	374	0.108885587824	90
+149	388	0.108894387824	98
+149	417	0.108907387824	90
+149	468	0.108940507824	114
+149	749	5.096943475973	138
+149	777	5.096956115973	138
+149	902	5.10866780675	150
+149	919	5.108921187824	46
+149	937	5.108940507824	138
+149	985	6	82
+155	0	0	0
+155	0	0	0
+155	0	0	0
+155	0	0	0
+155	0	0	0
+155	35	0.092510047472	0
+155	499	0.119770908281	0
+155	517	0.119783588281	0
+155	540	0.119809068281	0
+155	541	0.119809068281	1
+155	548	0.119816268281	0
+155	560	0.119818508281	1
+155	561	0.119818508281	2
+155	562	0.119818508281	3
+155	572	0.119823788281	2
+155	578	0.119834508281	1
+155	590	0.119847148281	0
+155	766	5.096950355973	0
+155	986	6	0
+156	0	0	0
+156	0	0	0
+156	0	0	0
+156	0	0	0
+156	0	0	0
+156	35	0.092510047472	0
+156	499	0.119770908281	0
+156	517	0.119783588281	0
+156	540	0.119809068281	0
+156	541	0.119809068281	592
+156	548	0.119816268281	0
+156	560	0.119818508281	912
+156	561	0.119818508281	2016
+156	562	0.119818508281	2928
+156	572	0.119823788281	2016
+156	578	0.119834508281	912
+156	590	0.119847148281	0
+156	766	5.096950355973	0
+156	986	6	0
+157	35	0.092510047472	0
+157	499	0.119770908281	0
+157	517	0.119783588281	0
+157	540	0.119809068281	0
+157	548	0.119816268281	7.2e-06
+157	572	0.119823788281	5.28e-06
+157	578	0.119834508281	1.6e-05
+157	590	0.119847148281	2.864e-05
+157	766	5.096950355973	0
+157	986	6	0
+158	35	0.092510047472	656
+158	499	0.119770908281	560
+158	517	0.119783588281	1200
+158	540	0.119809068281	560
+158	541	0.119809068281	592
+158	560	0.119818508281	912
+158	561	0.119818508281	1104
+158	562	0.119818508281	912
+158	766	5.096950355973	1104
+158	986	6	816
+159	499	0.1	6560
+159	766	0.2	58400
+159	766	0.3	0
+159	766	0.4	0
+159	766	0.5	0
+159	766	0.6	0
+159	766	0.7	0
+159	766	0.8	0
+159	766	0.9	0
+159	766	1	0
+159	766	1.1	0
+159	766	1.2	0
+159	766	1.3	0
+159	766	1.4	0
+159	766	1.5	0
+159	766	1.6	0
+159	766	1.7	0
+159	766	1.8	0
+159	766	1.9	0
+159	766	2	0
+159	766	2.1	0
+159	766	2.2	0
+159	766	2.3	0
+159	766	2.4	0
+159	766	2.5	0
+159	766	2.6	0
+159	766	2.7	0
+159	766	2.8	0
+159	766	2.9	0
+159	766	3	0
+159	766	3.1	0
+159	766	3.2	0
+159	766	3.3	0
+159	766	3.4	0
+159	766	3.5	0
+159	766	3.6	0
+159	766	3.7	0
+159	766	3.8	0
+159	766	3.9	0
+159	766	4	0
+159	766	4.1	0
+159	766	4.2	0
+159	766	4.3	0
+159	766	4.4	0
+159	766	4.5	0
+159	766	4.6	0
+159	766	4.7	0
+159	766	4.8	0
+159	766	4.9	0
+159	766	5	0
+159	986	5.1	11040
+159	986	5.2	0
+159	986	5.3	0
+159	986	5.4	0
+159	986	5.5	0
+159	986	5.6	0
+159	986	5.7	0
+159	986	5.8	0
+159	986	5.9	0
+159	986	6	0
+160	35	0.092510047472	656
+160	499	0.119770908281	560
+160	517	0.119783588281	1200
+160	540	0.119809068281	560
+160	548	0.119816268281	592
+160	572	0.119823788281	912
+160	578	0.119834508281	1104
+160	590	0.119847148281	912
+160	766	5.096950355973	1104
+160	986	6	816
+161	499	0.1	6560
+161	766	0.2	58400
+161	766	0.3	0
+161	766	0.4	0
+161	766	0.5	0
+161	766	0.6	0
+161	766	0.7	0
+161	766	0.8	0
+161	766	0.9	0
+161	766	1	0
+161	766	1.1	0
+161	766	1.2	0
+161	766	1.3	0
+161	766	1.4	0
+161	766	1.5	0
+161	766	1.6	0
+161	766	1.7	0
+161	766	1.8	0
+161	766	1.9	0
+161	766	2	0
+161	766	2.1	0
+161	766	2.2	0
+161	766	2.3	0
+161	766	2.4	0
+161	766	2.5	0
+161	766	2.6	0
+161	766	2.7	0
+161	766	2.8	0
+161	766	2.9	0
+161	766	3	0
+161	766	3.1	0
+161	766	3.2	0
+161	766	3.3	0
+161	766	3.4	0
+161	766	3.5	0
+161	766	3.6	0
+161	766	3.7	0
+161	766	3.8	0
+161	766	3.9	0
+161	766	4	0
+161	766	4.1	0
+161	766	4.2	0
+161	766	4.3	0
+161	766	4.4	0
+161	766	4.5	0
+161	766	4.6	0
+161	766	4.7	0
+161	766	4.8	0
+161	766	4.9	0
+161	766	5	0
+161	986	5.1	11040
+161	986	5.2	0
+161	986	5.3	0
+161	986	5.4	0
+161	986	5.5	0
+161	986	5.6	0
+161	986	5.7	0
+161	986	5.8	0
+161	986	5.9	0
+161	986	6	0
+166	36	0.092517247472	82
+166	501	0.119777148281	70
+166	519	0.119796228281	150
+166	543	0.119815308281	70
+166	564	0.119822828281	74
+166	573	0.119833548281	114
+166	585	0.119846188281	138
+166	591	0.119856908281	114
+166	778	5.096962035973	138
+166	1016	6.0000088	102
+167	493	0.119770908281	86
+167	511	0.119783588281	70
+167	532	0.119809068281	150
+167	550	0.119818508281	98
+167	580	0.119834708281	138
+167	743	5.096943475973	138
+167	885	5.10865420675	150
+167	896	5.10866780675	150
+167	998	6.0000073	82
+168	493	0.119770908281	86
+168	511	0.119783588281	70
+168	532	0.119809068281	150
+168	550	0.119818508281	98
+168	580	0.119834708281	138
+168	743	5.096943475973	138
+168	885	5.10865420675	150
+168	896	5.10866780675	150
+168	998	6.0000073	82
+171	35	0.092510047472	82
+171	499	0.119770908281	70
+171	517	0.119783588281	150
+171	540	0.119809068281	70
+171	548	0.119816268281	74
+171	572	0.119823788281	114
+171	578	0.119834508281	138
+171	590	0.119847148281	114
+171	766	5.096950355973	138
+171	986	6	102
+183	917	5.108921187824	28
+184	6	0.089228422814	64
+184	54	0.096843115973	68
+184	71	0.096857075973	52
+184	89	0.096869755973	72
+184	111	0.096885635973	52
+184	112	0.096885635973	56
+184	128	0.096893155973	72
+184	154	0.096908395973	96
+184	190	0.10853332675	52
+184	208	0.10854600675	52
+184	227	0.10856028675	92
+184	228	0.10856028675	56
+184	266	0.10858464675	96
+184	267	0.10858464675	84
+184	280	0.10859440675	120
+184	281	0.10859440675	120
+184	282	0.10859440675	84
+184	458	0.108936867824	72
+184	673	5.096908395973	28
+184	680	5.096914155973	180
+184	681	5.096914155973	28
+184	699	5.096926795973	120
+184	808	5.096973915973	120
+184	817	5.096979675973	64
+184	849	5.10861012675	28
+184	865	5.10862872675	132
+184	979	6	64
+184	980	6	84
+185	48	0.096354280613	64
+185	67	0.096857075973	52
+185	85	0.096869755973	52
+185	106	0.096885635973	72
+185	124	0.096893155973	56
+185	150	0.096908395973	84
+185	166	0.096921035973	120
+185	186	0.10853332675	68
+185	204	0.10854600675	52
+185	222	0.10856028675	72
+185	246	0.10857616675	52
+185	261	0.10858464675	68
+185	274	0.10859440675	84
+185	314	0.10861604675	120
+185	442	0.108928067824	132
+185	454	0.108936867824	72
+185	678	5.096914155973	46
+185	695	5.096926795973	120
+185	719	5.096933515973	46
+185	738	5.096941675973	64
+185	753	5.096949835973	64
+185	789	5.096967035973	120
+185	804	5.096973915973	120
+185	813	5.096979675973	120
+185	831	5.096992995973	64
+185	847	5.10861012675	46
+185	861	5.10862872675	132
+185	888	5.10865420675	132
+185	999	6.0000073	64
+185	1026	6.0000089	84
+191	0	0	0
+191	0	0	0
+191	0	0	0
+191	0	0	0
+191	0	0	0
+191	7	0.089228422814	0
+191	191	0.10853332675	0
+191	209	0.10854600675	0
+191	229	0.10856028675	0
+191	230	0.10856028675	1
+191	243	0.10857068675	0
+191	268	0.10858464675	0
+191	269	0.10858464675	1
+191	283	0.10859440675	2
+191	291	0.10859536675	1
+191	300	0.10860512675	0
+191	700	5.096926795973	0
+191	809	5.096973915973	0
+191	818	5.096979675973	1
+191	828	5.096986555973	0
+191	850	5.10861012675	0
+191	987	6	0
+192	0	0	0
+192	0	0	0
+192	0	0	0
+192	0	0	0
+192	0	0	0
+192	7	0.089228422814	0
+192	191	0.10853332675	0
+192	209	0.10854600675	0
+192	229	0.10856028675	0
+192	230	0.10856028675	592
+192	243	0.10857068675	0
+192	268	0.10858464675	0
+192	269	0.10858464675	816
+192	283	0.10859440675	1920
+192	291	0.10859536675	1104
+192	300	0.10860512675	0
+192	700	5.096926795973	0
+192	809	5.096973915973	0
+192	818	5.096979675973	656
+192	828	5.096986555973	0
+192	850	5.10861012675	0
+192	987	6	0
+193	7	0.089228422814	0
+193	191	0.10853332675	0
+193	209	0.10854600675	0
+193	229	0.10856028675	0
+193	243	0.10857068675	1.04e-05
+193	268	0.10858464675	0
+193	291	0.10859536675	1.072e-05
+193	300	0.10860512675	1.072e-05
+193	700	5.096926795973	0
+193	809	5.096973915973	0
+193	828	5.096986555973	6.88e-06
+193	850	5.10861012675	0
+193	987	6	0
+194	7	0.089228422814	656
+194	191	0.10853332675	560
+194	209	0.10854600675	560
+194	229	0.10856028675	880
+194	230	0.10856028675	592
+194	268	0.10858464675	912
+194	269	0.10858464675	816
+194	283	0.10859440675	1104
+194	700	5.096926795973	1104
+194	809	5.096973915973	1104
+194	818	5.096979675973	656
+194	850	5.10861012675	368
+194	987	6	656
+195	191	0.1	6560
+195	700	0.2	54240
+195	700	0.3	0
+195	700	0.4	0
+195	700	0.5	0
+195	700	0.6	0
+195	700	0.7	0
+195	700	0.8	0
+195	700	0.9	0
+195	700	1	0
+195	700	1.1	0
+195	700	1.2	0
+195	700	1.3	0
+195	700	1.4	0
+195	700	1.5	0
+195	700	1.6	0
+195	700	1.7	0
+195	700	1.8	0
+195	700	1.9	0
+195	700	2	0
+195	700	2.1	0
+195	700	2.2	0
+195	700	2.3	0
+195	700	2.4	0
+195	700	2.5	0
+195	700	2.6	0
+195	700	2.7	0
+195	700	2.8	0
+195	700	2.9	0
+195	700	3	0
+195	700	3.1	0
+195	700	3.2	0
+195	700	3.3	0
+195	700	3.4	0
+195	700	3.5	0
+195	700	3.6	0
+195	700	3.7	0
+195	700	3.8	0
+195	700	3.9	0
+195	700	4	0
+195	700	4.1	0
+195	700	4.2	0
+195	700	4.3	0
+195	700	4.4	0
+195	700	4.5	0
+195	700	4.6	0
+195	700	4.7	0
+195	700	4.8	0
+195	700	4.9	0
+195	700	5	0
+195	850	5.1	28640
+195	987	5.2	3680
+195	987	5.3	0
+195	987	5.4	0
+195	987	5.5	0
+195	987	5.6	0
+195	987	5.7	0
+195	987	5.8	0
+195	987	5.9	0
+195	987	6	0
+196	7	0.089228422814	656
+196	191	0.10853332675	560
+196	209	0.10854600675	560
+196	229	0.10856028675	880
+196	243	0.10857068675	592
+196	268	0.10858464675	912
+196	291	0.10859536675	816
+196	300	0.10860512675	1104
+196	700	5.096926795973	1104
+196	809	5.096973915973	1104
+196	828	5.096986555973	656
+196	850	5.10861012675	368
+196	987	6	656
+197	191	0.1	6560
+197	700	0.2	54240
+197	700	0.3	0
+197	700	0.4	0
+197	700	0.5	0
+197	700	0.6	0
+197	700	0.7	0
+197	700	0.8	0
+197	700	0.9	0
+197	700	1	0
+197	700	1.1	0
+197	700	1.2	0
+197	700	1.3	0
+197	700	1.4	0
+197	700	1.5	0
+197	700	1.6	0
+197	700	1.7	0
+197	700	1.8	0
+197	700	1.9	0
+197	700	2	0
+197	700	2.1	0
+197	700	2.2	0
+197	700	2.3	0
+197	700	2.4	0
+197	700	2.5	0
+197	700	2.6	0
+197	700	2.7	0
+197	700	2.8	0
+197	700	2.9	0
+197	700	3	0
+197	700	3.1	0
+197	700	3.2	0
+197	700	3.3	0
+197	700	3.4	0
+197	700	3.5	0
+197	700	3.6	0
+197	700	3.7	0
+197	700	3.8	0
+197	700	3.9	0
+197	700	4	0
+197	700	4.1	0
+197	700	4.2	0
+197	700	4.3	0
+197	700	4.4	0
+197	700	4.5	0
+197	700	4.6	0
+197	700	4.7	0
+197	700	4.8	0
+197	700	4.9	0
+197	700	5	0
+197	850	5.1	28640
+197	987	5.2	3680
+197	987	5.3	0
+197	987	5.4	0
+197	987	5.5	0
+197	987	5.6	0
+197	987	5.7	0
+197	987	5.8	0
+197	987	5.9	0
+197	987	6	0
+202	8	0.089235622814	82
+202	193	0.10853956675	70
+202	211	0.10855224675	70
+202	232	0.10856972675	110
+202	250	0.10857724675	74
+202	272	0.10859440675	114
+202	292	0.10860416675	102
+202	317	0.10861680675	138
+202	726	5.096938475973	138
+202	820	5.096985595973	138
+202	834	5.096993755973	82
+202	852	5.10861588675	64
+202	993	6.0000072	82
+203	185	0.10853332675	86
+203	203	0.10854600675	70
+203	221	0.10856028675	90
+203	245	0.10857616675	70
+203	260	0.10858464675	86
+203	273	0.10859440675	102
+203	313	0.10861604675	138
+203	441	0.108928067824	150
+203	453	0.108936867824	90
+203	788	5.096967035973	138
+203	812	5.096979675973	138
+203	830	5.096992995973	82
+203	846	5.10861012675	64
+203	860	5.10862872675	150
+203	995	6.0000073	82
+204	185	0.10853332675	86
+204	203	0.10854600675	70
+204	221	0.10856028675	90
+204	245	0.10857616675	70
+204	260	0.10858464675	86
+204	273	0.10859440675	102
+204	313	0.10861604675	138
+204	441	0.108928067824	150
+204	453	0.108936867824	90
+204	788	5.096967035973	138
+204	812	5.096979675973	138
+204	830	5.096992995973	82
+204	846	5.10861012675	64
+204	860	5.10862872675	150
+204	995	6.0000073	82
+207	7	0.089228422814	82
+207	191	0.10853332675	70
+207	209	0.10854600675	70
+207	229	0.10856028675	110
+207	243	0.10857068675	74
+207	268	0.10858464675	114
+207	291	0.10859536675	102
+207	300	0.10860512675	138
+207	700	5.096926795973	138
+207	809	5.096973915973	138
+207	828	5.096986555973	82
+207	850	5.10861012675	46
+207	987	6	82
+213	0	0	0
+213	0	0	0
+213	0	0	0
+213	0	0	0
+213	0	0	0
+213	55	0.096843115973	0
+213	72	0.096857075973	0
+213	90	0.096869755973	0
+213	113	0.096885635973	0
+213	114	0.096885635973	1
+213	121	0.096892835973	0
+213	129	0.096893155973	1
+213	139	0.096900355973	0
+213	155	0.096908395973	1
+213	156	0.096909155973	0
+213	284	0.10859440675	0
+213	285	0.10859440675	1
+213	306	0.10860704675	0
+213	459	0.108936867824	0
+213	674	5.096908395973	0
+213	682	5.096914155973	1
+213	683	5.096914155973	2
+213	692	5.096915115973	1
+213	716	5.096932555973	0
+213	866	5.10862872675	0
+213	988	6	0
+214	0	0	0
+214	0	0	0
+214	0	0	0
+214	0	0	0
+214	0	0	0
+214	55	0.096843115973	0
+214	72	0.096857075973	0
+214	90	0.096869755973	0
+214	113	0.096885635973	0
+214	114	0.096885635973	592
+214	121	0.096892835973	0
+214	129	0.096893155973	720
+214	139	0.096900355973	0
+214	155	0.096908395973	912
+214	156	0.096909155973	0
+214	284	0.10859440675	0
+214	285	0.10859440675	816
+214	306	0.10860704675	0
+214	459	0.108936867824	0
+214	674	5.096908395973	0
+214	682	5.096914155973	1584
+214	683	5.096914155973	1952
+214	692	5.096915115973	368
+214	716	5.096932555973	0
+214	866	5.10862872675	0
+214	988	6	0
+215	55	0.096843115973	0
+215	72	0.096857075973	0
+215	90	0.096869755973	0
+215	113	0.096885635973	0
+215	121	0.096892835973	7.2e-06
+215	139	0.096900355973	7.2e-06
+215	156	0.096909155973	7.6e-07
+215	284	0.10859440675	0
+215	306	0.10860704675	1.264e-05
+215	459	0.108936867824	0
+215	674	5.096908395973	0
+215	692	5.096915115973	9.6e-07
+215	716	5.096932555973	1.84e-05
+215	866	5.10862872675	0
+215	988	6	0
+216	55	0.096843115973	688
+216	72	0.096857075973	560
+216	90	0.096869755973	720
+216	113	0.096885635973	560
+216	114	0.096885635973	592
+216	129	0.096893155973	720
+216	155	0.096908395973	912
+216	284	0.10859440675	1104
+216	285	0.10859440675	816
+216	459	0.108936867824	720
+216	674	5.096908395973	368
+216	682	5.096914155973	1584
+216	683	5.096914155973	368
+216	866	5.10862872675	1200
+216	988	6	816
+217	284	0.1	47520
+217	674	0.2	26400
+217	674	0.3	0
+217	674	0.4	0
+217	674	0.5	0
+217	674	0.6	0
+217	674	0.7	0
+217	674	0.8	0
+217	674	0.9	0
+217	674	1	0
+217	674	1.1	0
+217	674	1.2	0
+217	674	1.3	0
+217	674	1.4	0
+217	674	1.5	0
+217	674	1.6	0
+217	674	1.7	0
+217	674	1.8	0
+217	674	1.9	0
+217	674	2	0
+217	674	2.1	0
+217	674	2.2	0
+217	674	2.3	0
+217	674	2.4	0
+217	674	2.5	0
+217	674	2.6	0
+217	674	2.7	0
+217	674	2.8	0
+217	674	2.9	0
+217	674	3	0
+217	674	3.1	0
+217	674	3.2	0
+217	674	3.3	0
+217	674	3.4	0
+217	674	3.5	0
+217	674	3.6	0
+217	674	3.7	0
+217	674	3.8	0
+217	674	3.9	0
+217	674	4	0
+217	674	4.1	0
+217	674	4.2	0
+217	674	4.3	0
+217	674	4.4	0
+217	674	4.5	0
+217	674	4.6	0
+217	674	4.7	0
+217	674	4.8	0
+217	674	4.9	0
+217	674	5	0
+217	866	5.1	23200
+217	988	5.2	12000
+217	988	5.3	0
+217	988	5.4	0
+217	988	5.5	0
+217	988	5.6	0
+217	988	5.7	0
+217	988	5.8	0
+217	988	5.9	0
+217	988	6	0
+218	55	0.096843115973	688
+218	72	0.096857075973	560
+218	90	0.096869755973	720
+218	113	0.096885635973	560
+218	121	0.096892835973	592
+218	139	0.096900355973	720
+218	156	0.096909155973	912
+218	284	0.10859440675	1104
+218	306	0.10860704675	816
+218	459	0.108936867824	720
+218	674	5.096908395973	368
+218	692	5.096915115973	1584
+218	716	5.096932555973	368
+218	866	5.10862872675	1200
+218	988	6	816
+219	284	0.1	47520
+219	674	0.2	26400
+219	674	0.3	0
+219	674	0.4	0
+219	674	0.5	0
+219	674	0.6	0
+219	674	0.7	0
+219	674	0.8	0
+219	674	0.9	0
+219	674	1	0
+219	674	1.1	0
+219	674	1.2	0
+219	674	1.3	0
+219	674	1.4	0
+219	674	1.5	0
+219	674	1.6	0
+219	674	1.7	0
+219	674	1.8	0
+219	674	1.9	0
+219	674	2	0
+219	674	2.1	0
+219	674	2.2	0
+219	674	2.3	0
+219	674	2.4	0
+219	674	2.5	0
+219	674	2.6	0
+219	674	2.7	0
+219	674	2.8	0
+219	674	2.9	0
+219	674	3	0
+219	674	3.1	0
+219	674	3.2	0
+219	674	3.3	0
+219	674	3.4	0
+219	674	3.5	0
+219	674	3.6	0
+219	674	3.7	0
+219	674	3.8	0
+219	674	3.9	0
+219	674	4	0
+219	674	4.1	0
+219	674	4.2	0
+219	674	4.3	0
+219	674	4.4	0
+219	674	4.5	0
+219	674	4.6	0
+219	674	4.7	0
+219	674	4.8	0
+219	674	4.9	0
+219	674	5	0
+219	866	5.1	23200
+219	988	5.2	12000
+219	988	5.3	0
+219	988	5.4	0
+219	988	5.5	0
+219	988	5.6	0
+219	988	5.7	0
+219	988	5.8	0
+219	988	5.9	0
+219	988	6	0
+224	56	0.096850635973	86
+224	74	0.096863315973	70
+224	92	0.096877595973	90
+224	116	0.096891875973	70
+224	131	0.096899395973	74
+224	140	0.096908195973	90
+224	158	0.096918915973	114
+224	301	0.10860608675	138
+224	307	0.10861584675	102
+224	470	0.108944707824	90
+224	677	5.096914155973	64
+224	702	5.096931595973	198
+224	722	5.096938315973	64
+224	868	5.10864136675	150
+224	1017	6.0000088	102
+225	47	0.096354280613	82
+225	66	0.096857075973	70
+225	84	0.096869755973	70
+225	105	0.096885635973	90
+225	123	0.096893155973	74
+225	149	0.096908395973	102
+225	165	0.096921035973	138
+225	676	5.096914155973	64
+225	694	5.096926795973	138
+225	718	5.096933515973	64
+225	737	5.096941675973	82
+225	752	5.096949835973	82
+225	803	5.096973915973	138
+225	886	5.10865420675	150
+225	1022	6.0000089	102
+226	47	0.096354280613	82
+226	66	0.096857075973	70
+226	84	0.096869755973	70
+226	105	0.096885635973	90
+226	123	0.096893155973	74
+226	149	0.096908395973	102
+226	165	0.096921035973	138
+226	676	5.096914155973	64
+226	694	5.096926795973	138
+226	718	5.096933515973	64
+226	737	5.096941675973	82
+226	752	5.096949835973	82
+226	803	5.096973915973	138
+226	886	5.10865420675	150
+226	1022	6.0000089	102
+229	55	0.096843115973	86
+229	72	0.096857075973	70
+229	90	0.096869755973	90
+229	113	0.096885635973	70
+229	121	0.096892835973	74
+229	139	0.096900355973	90
+229	156	0.096909155973	114
+229	284	0.10859440675	138
+229	306	0.10860704675	102
+229	459	0.108936867824	90
+229	674	5.096908395973	46
+229	692	5.096915115973	198
+229	716	5.096932555973	46
+229	866	5.10862872675	150
+229	988	6	102
+240	672	5.096908395973	28
+241	679	5.096914155973	28
+241	848	5.10861012675	28
+242	25	0.090262027451	64
+242	44	0.096346980613	64
+242	62	0.096850735973	52
+242	80	0.096863415973	52
+242	99	0.096877695973	72
+242	100	0.096877695973	56
+242	137	0.096899495973	84
+242	147	0.096908295973	120
+242	490	0.119763288281	68
+242	507	0.119777248281	52
+242	526	0.119796328281	132
+242	527	0.119796328281	80
+242	570	0.119822928281	120
+242	669	5.096908295973	28
+242	687	5.096914255973	120
+242	688	5.096914255973	28
+242	710	5.096931695973	120
+242	711	5.096931695973	64
+242	712	5.096931695973	64
+242	784	5.096962135973	120
+242	876	5.10864146675	132
+242	877	5.10864146675	132
+242	878	5.10864146675	132
+242	981	6	64
+242	982	6	84
+243	38	0.092517347472	64
+243	58	0.096850735973	68
+243	76	0.096863415973	52
+243	94	0.096877695973	72
+243	118	0.096891975973	52
+243	133	0.096899495973	56
+243	143	0.096908295973	72
+243	160	0.096919015973	96
+243	303	0.10860618675	120
+243	310	0.10861594675	84
+243	472	0.108944807824	72
+243	503	0.119777248281	52
+243	521	0.119796328281	132
+243	545	0.119815408281	52
+243	566	0.119822928281	56
+243	575	0.119833648281	96
+243	587	0.119846288281	120
+243	593	0.119857008281	96
+243	685	5.096914255973	46
+243	704	5.096931695973	180
+243	724	5.096938415973	46
+243	780	5.096962135973	120
+243	870	5.10864146675	132
+243	1024	6.0000089	84
+243	1025	6.0000089	84
+249	0	0	0
+249	0	0	0
+249	0	0	0
+249	0	0	0
+249	0	0	0
+249	491	0.119763288281	0
+249	508	0.119777248281	0
+249	528	0.119796328281	0
+249	529	0.119796328281	1
+249	542	0.119809928281	0
+249	571	0.119822928281	0
+249	713	5.096931695973	0
+249	879	5.10864146675	0
+249	881	5.10864146675	1
+249	893	5.10865506675	0
+249	989	6	0
+250	0	0	0
+250	0	0	0
+250	0	0	0
+250	0	0	0
+250	0	0	0
+250	491	0.119763288281	0
+250	508	0.119777248281	0
+250	528	0.119796328281	0
+250	529	0.119796328281	784
+250	542	0.119809928281	0
+250	571	0.119822928281	0
+250	713	5.096931695973	0
+250	879	5.10864146675	0
+250	881	5.10864146675	1200
+250	893	5.10865506675	0
+250	989	6	0
+251	491	0.119763288281	0
+251	508	0.119777248281	0
+251	528	0.119796328281	0
+251	542	0.119809928281	1.36e-05
+251	571	0.119822928281	0
+251	713	5.096931695973	0
+251	879	5.10864146675	0
+251	893	5.10865506675	1.36e-05
+251	989	6	0
+252	491	0.119763288281	688
+252	508	0.119777248281	560
+252	528	0.119796328281	1200
+252	529	0.119796328281	784
+252	571	0.119822928281	1104
+252	713	5.096931695973	1104
+252	879	5.10864146675	1200
+252	881	5.10864146675	1200
+252	989	6	656
+253	491	0.1	0
+253	713	0.2	43360
+253	713	0.3	0
+253	713	0.4	0
+253	713	0.5	0
+253	713	0.6	0
+253	713	0.7	0
+253	713	0.8	0
+253	713	0.9	0
+253	713	1	0
+253	713	1.1	0
+253	713	1.2	0
+253	713	1.3	0
+253	713	1.4	0
+253	713	1.5	0
+253	713	1.6	0
+253	713	1.7	0
+253	713	1.8	0
+253	713	1.9	0
+253	713	2	0
+253	713	2.1	0
+253	713	2.2	0
+253	713	2.3	0
+253	713	2.4	0
+253	713	2.5	0
+253	713	2.6	0
+253	713	2.7	0
+253	713	2.8	0
+253	713	2.9	0
+253	713	3	0
+253	713	3.1	0
+253	713	3.2	0
+253	713	3.3	0
+253	713	3.4	0
+253	713	3.5	0
+253	713	3.6	0
+253	713	3.7	0
+253	713	3.8	0
+253	713	3.9	0
+253	713	4	0
+253	713	4.1	0
+253	713	4.2	0
+253	713	4.3	0
+253	713	4.4	0
+253	713	4.5	0
+253	713	4.6	0
+253	713	4.7	0
+253	713	4.8	0
+253	713	4.9	0
+253	713	5	0
+253	879	5.1	11040
+253	989	5.2	24000
+253	989	5.3	0
+253	989	5.4	0
+253	989	5.5	0
+253	989	5.6	0
+253	989	5.7	0
+253	989	5.8	0
+253	989	5.9	0
+253	989	6	0
+254	491	0.119763288281	688
+254	508	0.119777248281	560
+254	528	0.119796328281	1200
+254	542	0.119809928281	784
+254	571	0.119822928281	1104
+254	713	5.096931695973	1104
+254	879	5.10864146675	1200
+254	893	5.10865506675	1200
+254	989	6	656
+255	491	0.1	0
+255	713	0.2	43360
+255	713	0.3	0
+255	713	0.4	0
+255	713	0.5	0
+255	713	0.6	0
+255	713	0.7	0
+255	713	0.8	0
+255	713	0.9	0
+255	713	1	0
+255	713	1.1	0
+255	713	1.2	0
+255	713	1.3	0
+255	713	1.4	0
+255	713	1.5	0
+255	713	1.6	0
+255	713	1.7	0
+255	713	1.8	0
+255	713	1.9	0
+255	713	2	0
+255	713	2.1	0
+255	713	2.2	0
+255	713	2.3	0
+255	713	2.4	0
+255	713	2.5	0
+255	713	2.6	0
+255	713	2.7	0
+255	713	2.8	0
+255	713	2.9	0
+255	713	3	0
+255	713	3.1	0
+255	713	3.2	0
+255	713	3.3	0
+255	713	3.4	0
+255	713	3.5	0
+255	713	3.6	0
+255	713	3.7	0
+255	713	3.8	0
+255	713	3.9	0
+255	713	4	0
+255	713	4.1	0
+255	713	4.2	0
+255	713	4.3	0
+255	713	4.4	0
+255	713	4.5	0
+255	713	4.6	0
+255	713	4.7	0
+255	713	4.8	0
+255	713	4.9	0
+255	713	5	0
+255	879	5.1	11040
+255	989	5.2	24000
+255	989	5.3	0
+255	989	5.4	0
+255	989	5.5	0
+255	989	5.6	0
+255	989	5.7	0
+255	989	5.8	0
+255	989	5.9	0
+255	989	6	0
+260	492	0.119770808281	86
+260	510	0.119783488281	70
+260	531	0.119808968281	150
+260	549	0.119818408281	98
+260	579	0.119834608281	138
+260	742	5.096943375973	138
+260	883	5.10865410675	150
+260	895	5.10866770675	150
+260	994	6.0000072	82
+261	37	0.092517347472	82
+261	502	0.119777248281	70
+261	520	0.119796328281	150
+261	544	0.119815408281	70
+261	565	0.119822928281	74
+261	574	0.119833648281	114
+261	586	0.119846288281	138
+261	592	0.119857008281	114
+261	779	5.096962135973	138
+261	1020	6.0000089	102
+262	37	0.092517347472	82
+262	502	0.119777248281	70
+262	520	0.119796328281	150
+262	544	0.119815408281	70
+262	565	0.119822928281	74
+262	574	0.119833648281	114
+262	586	0.119846288281	138
+262	592	0.119857008281	114
+262	779	5.096962135973	138
+262	1020	6.0000089	102
+265	491	0.119763288281	86
+265	508	0.119777248281	70
+265	528	0.119796328281	150
+265	542	0.119809928281	98
+265	571	0.119822928281	138
+265	713	5.096931695973	138
+265	879	5.10864146675	150
+265	893	5.10865506675	150
+265	989	6	82
+271	0	0	0
+271	0	0	0
+271	0	0	0
+271	0	0	0
+271	0	0	0
+271	45	0.096346980613	0
+271	63	0.096850735973	0
+271	81	0.096863415973	0
+271	101	0.096877695973	0
+271	102	0.096877695973	1
+271	115	0.096886495973	0
+271	138	0.096899495973	0
+271	148	0.096908295973	1
+271	157	0.096909255973	0
+271	670	5.096908295973	0
+271	689	5.096914255973	1
+271	690	5.096914255973	2
+271	691	5.096915015973	1
+271	701	5.096927655973	0
+271	714	5.096931695973	1
+271	715	5.096931695973	2
+271	721	5.096934375973	1
+271	741	5.096942535973	0
+271	785	5.096962135973	0
+271	880	5.10864146675	0
+271	990	6	0
+272	0	0	0
+272	0	0	0
+272	0	0	0
+272	0	0	0
+272	0	0	0
+272	45	0.096346980613	0
+272	63	0.096850735973	0
+272	81	0.096863415973	0
+272	101	0.096877695973	0
+272	102	0.096877695973	592
+272	115	0.096886495973	0
+272	138	0.096899495973	0
+272	148	0.096908295973	1104
+272	157	0.096909255973	0
+272	670	5.096908295973	0
+272	689	5.096914255973	1104
+272	690	5.096914255973	1472
+272	691	5.096915015973	368
+272	701	5.096927655973	0
+272	714	5.096931695973	656
+272	715	5.096931695973	1312
+272	721	5.096934375973	656
+272	741	5.096942535973	0
+272	785	5.096962135973	0
+272	880	5.10864146675	0
+272	990	6	0
+273	45	0.096346980613	0
+273	63	0.096850735973	0
+273	81	0.096863415973	0
+273	101	0.096877695973	0
+273	115	0.096886495973	8.8e-06
+273	138	0.096899495973	0
+273	157	0.096909255973	9.6e-07
+273	670	5.096908295973	0
+273	691	5.096915015973	7.6e-07
+273	701	5.096927655973	1.34e-05
+273	721	5.096934375973	2.68e-06
+273	741	5.096942535973	1.084e-05
+273	785	5.096962135973	0
+273	880	5.10864146675	0
+273	990	6	0
+274	45	0.096346980613	656
+274	63	0.096850735973	560
+274	81	0.096863415973	560
+274	101	0.096877695973	720
+274	102	0.096877695973	592
+274	138	0.096899495973	816
+274	148	0.096908295973	1104
+274	670	5.096908295973	368
+274	689	5.096914255973	1104
+274	690	5.096914255973	368
+274	714	5.096931695973	656
+274	715	5.096931695973	656
+274	785	5.096962135973	1104
+274	880	5.10864146675	1200
+274	990	6	816
+275	670	0.1	50080
+275	670	0.2	0
+275	670	0.3	0
+275	670	0.4	0
+275	670	0.5	0
+275	670	0.6	0
+275	670	0.7	0
+275	670	0.8	0
+275	670	0.9	0
+275	670	1	0
+275	670	1.1	0
+275	670	1.2	0
+275	670	1.3	0
+275	670	1.4	0
+275	670	1.5	0
+275	670	1.6	0
+275	670	1.7	0
+275	670	1.8	0
+275	670	1.9	0
+275	670	2	0
+275	670	2.1	0
+275	670	2.2	0
+275	670	2.3	0
+275	670	2.4	0
+275	670	2.5	0
+275	670	2.6	0
+275	670	2.7	0
+275	670	2.8	0
+275	670	2.9	0
+275	670	3	0
+275	670	3.1	0
+275	670	3.2	0
+275	670	3.3	0
+275	670	3.4	0
+275	670	3.5	0
+275	670	3.6	0
+275	670	3.7	0
+275	670	3.8	0
+275	670	3.9	0
+275	670	4	0
+275	670	4.1	0
+275	670	4.2	0
+275	670	4.3	0
+275	670	4.4	0
+275	670	4.5	0
+275	670	4.6	0
+275	670	4.7	0
+275	670	4.8	0
+275	670	4.9	0
+275	670	5	0
+275	880	5.1	42560
+275	990	5.2	12000
+275	990	5.3	0
+275	990	5.4	0
+275	990	5.5	0
+275	990	5.6	0
+275	990	5.7	0
+275	990	5.8	0
+275	990	5.9	0
+275	990	6	0
+276	45	0.096346980613	656
+276	63	0.096850735973	560
+276	81	0.096863415973	560
+276	101	0.096877695973	720
+276	115	0.096886495973	592
+276	138	0.096899495973	816
+276	157	0.096909255973	1104
+276	670	5.096908295973	368
+276	691	5.096915015973	1104
+276	701	5.096927655973	368
+276	721	5.096934375973	656
+276	741	5.096942535973	656
+276	785	5.096962135973	1104
+276	880	5.10864146675	1200
+276	990	6	816
+277	670	0.1	50080
+277	670	0.2	0
+277	670	0.3	0
+277	670	0.4	0
+277	670	0.5	0
+277	670	0.6	0
+277	670	0.7	0
+277	670	0.8	0
+277	670	0.9	0
+277	670	1	0
+277	670	1.1	0
+277	670	1.2	0
+277	670	1.3	0
+277	670	1.4	0
+277	670	1.5	0
+277	670	1.6	0
+277	670	1.7	0
+277	670	1.8	0
+277	670	1.9	0
+277	670	2	0
+277	670	2.1	0
+277	670	2.2	0
+277	670	2.3	0
+277	670	2.4	0
+277	670	2.5	0
+277	670	2.6	0
+277	670	2.7	0
+277	670	2.8	0
+277	670	2.9	0
+277	670	3	0
+277	670	3.1	0
+277	670	3.2	0
+277	670	3.3	0
+277	670	3.4	0
+277	670	3.5	0
+277	670	3.6	0
+277	670	3.7	0
+277	670	3.8	0
+277	670	3.9	0
+277	670	4	0
+277	670	4.1	0
+277	670	4.2	0
+277	670	4.3	0
+277	670	4.4	0
+277	670	4.5	0
+277	670	4.6	0
+277	670	4.7	0
+277	670	4.8	0
+277	670	4.9	0
+277	670	5	0
+277	880	5.1	42560
+277	990	5.2	12000
+277	990	5.3	0
+277	990	5.4	0
+277	990	5.5	0
+277	990	5.6	0
+277	990	5.7	0
+277	990	5.8	0
+277	990	5.9	0
+277	990	6	0
+282	46	0.096354180613	82
+282	65	0.096856975973	70
+282	83	0.096869655973	70
+282	104	0.096885535973	90
+282	122	0.096893055973	74
+282	141	0.096908295973	102
+282	164	0.096920935973	138
+282	675	5.096914055973	64
+282	693	5.096926695973	138
+282	717	5.096933415973	64
+282	736	5.096941575973	82
+282	751	5.096949735973	82
+282	802	5.096973815973	138
+282	884	5.10865410675	150
+282	1018	6.0000088	102
+283	57	0.096850735973	86
+283	75	0.096863415973	70
+283	93	0.096877695973	90
+283	117	0.096891975973	70
+283	132	0.096899495973	74
+283	142	0.096908295973	90
+283	159	0.096919015973	114
+283	302	0.10860618675	138
+283	309	0.10861594675	102
+283	471	0.108944807824	90
+283	684	5.096914255973	64
+283	703	5.096931695973	198
+283	723	5.096938415973	64
+283	869	5.10864146675	150
+283	1021	6.0000089	102
+284	57	0.096850735973	86
+284	75	0.096863415973	70
+284	93	0.096877695973	90
+284	117	0.096891975973	70
+284	132	0.096899495973	74
+284	142	0.096908295973	90
+284	159	0.096919015973	114
+284	302	0.10860618675	138
+284	309	0.10861594675	102
+284	471	0.108944807824	90
+284	684	5.096914255973	64
+284	703	5.096931695973	198
+284	723	5.096938415973	64
+284	869	5.10864146675	150
+284	1021	6.0000089	102
+287	45	0.096346980613	82
+287	63	0.096850735973	70
+287	81	0.096863415973	70
+287	101	0.096877695973	90
+287	115	0.096886495973	74
+287	138	0.096899495973	102
+287	157	0.096909255973	138
+287	670	5.096908295973	46
+287	691	5.096915015973	138
+287	701	5.096927655973	46
+287	721	5.096934375973	82
+287	741	5.096942535973	82
+287	785	5.096962135973	138
+287	880	5.10864146675	150
+287	990	6	102
+293	0	0	0
+293	0	0	0
+293	0	0	0
+293	0	0	0
+293	0	0	0
+293	26	0.090262027451	0
+294	0	0	0
+294	0	0	0
+294	0	0	0
+294	0	0	0
+294	0	0	0
+294	26	0.090262027451	0
+295	26	0.090262027451	0
+296	26	0.090262027451	656
+298	26	0.090262027451	656
+304	27	0.090269227451	82
+309	26	0.090262027451	82
+320	668	5.096908295973	28
+321	686	5.096914255973	28
+323	29	0.090269327451	64
+329	0	0	0
+329	0	0	0
+329	0	0	0
+329	0	0	0
+329	0	0	0
+330	0	0	0
+330	0	0	0
+330	0	0	0
+330	0	0	0
+330	0	0	0
+341	28	0.090269327451	82
+342	28	0.090269327451	82
+360	0	0	0
+361	0	0	0
+362	0	0	0
+

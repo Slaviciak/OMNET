@@ -1,0 +1,16 @@
+ReactiveFailure
+===============
+
+Topology
+- Baseline path: hostA -> r1 -> r2 -> r3 -> hostB
+- Backup branch: r1 -> r4 -> r3
+
+Failure
+- At simulation time 20s, the primary link between r2 and r3 is disconnected by ScenarioManager.
+
+Expected behavior
+- Before 20s, traffic should use the preferred primary path via r1-r2-r3.
+- After the link failure and OSPF reconvergence, traffic should continue over the backup path via r1-r4-r3.
+
+Goal
+- Provide the first reactive rerouting experiment for the dissertation using only built-in INET 4.5 mechanisms.
