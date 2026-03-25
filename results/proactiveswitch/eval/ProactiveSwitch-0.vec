@@ -1,8 +1,8 @@
 version 3
-run ProactiveSwitch-0-20260325-12:52:36-21652
+run ProactiveSwitch-0-20260325-14:59:13-32792
 attr configname ProactiveSwitch
-attr datetime 20260325-12:52:36
-attr datetimef 20260325-125236
+attr datetime 20260325-14:59:13
+attr datetimef 20260325-145913
 attr experiment ProactiveSwitch
 attr inifile omnetpp.ini
 attr iterationvars ""
@@ -10,14 +10,14 @@ attr iterationvarsd ""
 attr iterationvarsf ""
 attr measurement ""
 attr network dissertationsim.simulations.proactiveswitch.ProactiveSwitch
-attr processid 21652
+attr processid 32792
 attr repetition 0
 attr replication #0
 attr resultdir results
 attr runnumber 0
 attr seedset 0
 config image-path ../../../inet4.5/images
-config description "Prototype proactive switch at 18s, followed by hard failure of the same primary link at 20s"
+config description "Administrative withdrawal of the primary r2-r3 path at 18s, followed by physical disconnect at 20s"
 config network dissertationsim.simulations.proactiveswitch.ProactiveSwitch
 config sim-time-limit 60s
 config output-scalar-file ../../results/proactiveswitch/eval/ProactiveSwitch-0.sca
@@ -35,7 +35,7 @@ config **.hostA.app[0].sendInterval 1s
 config **.hostA.app[0].startTime 10s
 config **.hostB.app[0].typename UdpSink
 config **.hostB.app[0].localPort 5000
-config **.scenarioManager.script "xml(         \"<script>\\n\" +         \"<at t='18s'><disconnect src-module='r2' src-gate='ethg$o[1]'/></at>\\n\" +         \"<at t='18s'><disconnect src-module='r3' src-gate='ethg$o[0]'/></at>\\n\" +         \"<at t='20s'><disconnect src-module='r2' src-gate='ethg$o[1]'/></at>\\n\" +         \"<at t='20s'><disconnect src-module='r3' src-gate='ethg$o[0]'/></at>\\n\" +         \"</script>\")"
+config **.scenarioManager.script "xml(         \"<script>\\n\" +         \"<at t='20s'><disconnect src-module='r2' src-gate='ethg$o[1]'/></at>\\n\" +         \"<at t='20s'><disconnect src-module='r3' src-gate='ethg$o[0]'/></at>\\n\" +         \"</script>\")"
 config **.app[0].packetSent.result-recording-modes count,vector
 config **.app[0].packetReceived.result-recording-modes count,vector
 config **.ipv4.ip.packetDropNoRouteFound.result-recording-modes count
