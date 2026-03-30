@@ -1,0 +1,26 @@
+LinkDegradation
+===============
+
+Overview
+- This scenario is dedicated to gradual pre-failure data generation on the primary r2-r3 link.
+- It keeps the same dual-path topology and OSPF structure as the existing dissertation scenarios.
+- It now supports multiple degradation profiles through omnetpp.ini configs.
+
+Topology
+- Primary path: hostA -> r1 -> r2 -> r3 -> hostB
+- Backup path: hostA -> r1 -> r4 -> r3 -> hostB
+
+Timeline
+- UDP flow 1 starts at 10s.
+- UDP flow 2 starts at 12s.
+- The LinkDegradationController gradually increases delay and packet error rate on the r2-r3 link from 20s to 40s.
+- The primary link is physically disconnected at 45s by ScenarioManager.
+
+Configs
+- MildLinear: moderate linear degradation.
+- StrongLinear: stronger linear degradation with higher target delay and PER.
+- UnstableLinear: upward overall trend with small deterministic oscillations during the ramp.
+
+Purpose
+- Provide a clean scenario for collecting time-series data before hard failure.
+- Keep the degradation mechanism simple, reproducible, and suitable for later dataset generation.

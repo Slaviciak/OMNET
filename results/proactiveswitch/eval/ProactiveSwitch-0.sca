@@ -1,8 +1,8 @@
 version 3
-run ProactiveSwitch-0-20260330-10:24:43-32416
+run ProactiveSwitch-0-20260330-12:50:31-26604
 attr configname ProactiveSwitch
-attr datetime 20260330-10:24:43
-attr datetimef 20260330-102443
+attr datetime 20260330-12:50:31
+attr datetimef 20260330-125031
 attr experiment ProactiveSwitch
 attr inifile omnetpp.ini
 attr iterationvars ""
@@ -10,7 +10,7 @@ attr iterationvarsd ""
 attr iterationvarsf ""
 attr measurement ""
 attr network dissertationsim.simulations.proactiveswitch.ProactiveSwitch
-attr processid 32416
+attr processid 26604
 attr repetition 0
 attr replication #0
 attr resultdir results
@@ -38,6 +38,8 @@ config **.hostB.app[0].localPort 5000
 config **.scenarioManager.script "xml(         \"<script>\\n\" +         \"<at t='20s'><disconnect src-module='r2' src-gate='ethg$o[1]'/></at>\\n\" +         \"<at t='20s'><disconnect src-module='r3' src-gate='ethg$o[0]'/></at>\\n\" +         \"</script>\")"
 config **.app[0].packetSent.result-recording-modes count
 config **.app[0].packetReceived.result-recording-modes count
+config **.hostB.app[0].throughput.result-recording-modes vector
+config **.hostB.app[0].rcvdPkSeqNo.result-recording-modes vector
 config **.ipv4.ip.packetDropNoRouteFound.result-recording-modes count
 config **.ipv4.ip.packetDropInterfaceDown.result-recording-modes count
 
