@@ -1,51 +1,62 @@
 version 3
-run LinkDegradation-0-20260330-15:25:31-13764
-attr configname LinkDegradation
-attr datetime 20260330-15:25:31
-attr datetimef 20260330-152531
-attr experiment LinkDegradation
+run MildLinear-0-20260331-14:42:59-21856
+attr configname MildLinear
+attr datetime 20260331-14:42:59
+attr datetimef 20260331-144259
+attr experiment MildLinear
 attr inifile omnetpp.ini
 attr iterationvars ""
 attr iterationvarsd ""
 attr iterationvarsf ""
 attr measurement ""
 attr network dissertationsim.simulations.linkdegradation.LinkDegradation
-attr processid 13764
+attr processid 21856
 attr repetition 0
 attr replication #0
 attr resultdir results
 attr runnumber 0
 attr seedset 0
 config image-path ../../../inet4.5/images
-config description "Gradual delay and packet error rate increase on r2-r3 from 20s to 40s, followed by hard failure at 45s"
+config description "Moderate linear delay and PER increase on r2-r3 from 20s to 40s, followed by hard failure at 45s"
 config network dissertationsim.simulations.linkdegradation.LinkDegradation
 config sim-time-limit 60s
-config output-scalar-file ../../results/linkdegradation/eval/LinkDegradation-0.sca
-config output-vector-file ../../results/linkdegradation/eval/LinkDegradation-0.vec
-config eventlog-file ../../results/linkdegradation/debug/LinkDegradation-0.elog
+config output-scalar-file ../../results/linkdegradation/eval/MildLinear-0.sca
+config output-vector-file ../../results/linkdegradation/eval/MildLinear-0.vec
+config eventlog-file ../../results/linkdegradation/debug/MildLinear-0.elog
 config record-eventlog false
 config **.ospf.ospfConfig "xmldoc(\"ASConfig.xml\")"
-config **.hostA.numApps 1
-config **.hostB.numApps 1
+config **.hostA.numApps 2
+config **.hostB.numApps 2
 config **.hostA.app[0].typename UdpBasicApp
 config **.hostA.app[0].destAddresses "\"hostB\""
 config **.hostA.app[0].destPort 5000
 config **.hostA.app[0].messageLength 512B
 config **.hostA.app[0].sendInterval 1s
 config **.hostA.app[0].startTime 10s
+config **.hostA.app[1].typename UdpBasicApp
+config **.hostA.app[1].destAddresses "\"hostB\""
+config **.hostA.app[1].destPort 5001
+config **.hostA.app[1].messageLength 128B
+config **.hostA.app[1].sendInterval 250ms
+config **.hostA.app[1].startTime 12s
 config **.hostB.app[0].typename UdpSink
 config **.hostB.app[0].localPort 5000
+config **.hostB.app[1].typename UdpSink
+config **.hostB.app[1].localPort 5001
 config **.degradationController.firstInterfaceModule "\"^.r2.eth[1]\""
 config **.degradationController.secondInterfaceModule "\"^.r3.eth[0]\""
 config **.degradationController.startTime 20s
 config **.degradationController.endTime 40s
 config **.degradationController.updateInterval 0.5s
+config **.degradationController.profile "\"mildLinear\""
 config **.degradationController.targetDelay 15ms
 config **.degradationController.targetPacketErrorRate 0.03
 config **.scenarioManager.script "xml(         \"<script>\\n\" +         \"<at t='45s'><disconnect src-module='r2' src-gate='ethg$o[1]'/></at>\\n\" +         \"<at t='45s'><disconnect src-module='r3' src-gate='ethg$o[0]'/></at>\\n\" +         \"</script>\")"
-config **.app[0].packetSent.result-recording-modes count
-config **.app[0].packetReceived.result-recording-modes count
-config **.hostB.app[0].throughput.result-recording-modes vector
+config **.hostA.app[*].packetSent.result-recording-modes count
+config **.hostB.app[*].packetReceived.result-recording-modes count
+config **.hostB.app[*].throughput.result-recording-modes vector
+config **.hostB.app[*].endToEndDelay.result-recording-modes vector
+config **.hostB.app[*].rcvdPkSeqNo.result-recording-modes vector
 config **.ipv4.ip.packetDropNoRouteFound.result-recording-modes count
 config **.ipv4.ip.packetDropInterfaceDown.result-recording-modes count
 
@@ -230,12 +241,12 @@ attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source decapPk
 attr title "packets decapsulated, sum(packetBytes)"
-scalar LinkDegradation.hostA.ethernet encapPk:count 52
+scalar LinkDegradation.hostA.ethernet encapPk:count 245
 attr interpolationmode none
 attr recordingmode count
 attr source encapPk
 attr title "packets encapsulated, count"
-scalar LinkDegradation.hostA.ethernet encapPk:sum(packetBytes) 27568
+scalar LinkDegradation.hostA.ethernet encapPk:sum(packetBytes) 57676
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source encapPk
@@ -313,42 +324,42 @@ attr unit b
 par LinkDegradation.hostA.eth[0].queue dropperClass "\"inet::queueing::PacketAtCollectionEndDropper\""
 par LinkDegradation.hostA.eth[0].queue comparatorClass "\"inet::EthernetFrameTypeComparator\""
 par LinkDegradation.hostA.eth[0].queue bufferModule "\"\""
-scalar LinkDegradation.hostA.eth[0].queue queueLength:last 0
+scalar LinkDegradation.hostA.eth[0].queue queueLength:last 1
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode last
 attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
 attr title "queue length, last"
 attr unit pk
-scalar LinkDegradation.hostA.eth[0].queue queueLength:max 0
+scalar LinkDegradation.hostA.eth[0].queue queueLength:max 1
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
 attr title "queue length, max"
 attr unit pk
-scalar LinkDegradation.hostA.eth[0].queue queueLength:timeavg 0
+scalar LinkDegradation.hostA.eth[0].queue queueLength:timeavg 3.648e-05
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
 attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
 attr title "queue length, timeavg"
 attr unit pk
-scalar LinkDegradation.hostA.eth[0].queue queueBitLength:last 0
+scalar LinkDegradation.hostA.eth[0].queue queueBitLength:last 1392
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode last
 attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
 attr title "queue bit length, last"
 attr unit b
-scalar LinkDegradation.hostA.eth[0].queue queueBitLength:max 0
+scalar LinkDegradation.hostA.eth[0].queue queueBitLength:max 4464
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
 attr title "queue bit length, max"
 attr unit b
-scalar LinkDegradation.hostA.eth[0].queue queueBitLength:timeavg 0
+scalar LinkDegradation.hostA.eth[0].queue queueBitLength:timeavg 0.051574784
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -356,89 +367,97 @@ attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetP
 attr title "queue bit length, timeavg"
 attr unit b
 statistic LinkDegradation.hostA.eth[0].queue queueingTime:histogram
-field count 52
-field mean 0
-field stddev 0
+field count 244
+field mean 8.9704918032787e-06
+field stddev 1.8268541530009e-05
 field min 0
-field max 0
-field sum 0
-field sqrsum 0
+field max 4.624e-05
+field sum 0.0021888
+field sqrsum 1.007333376e-07
 attr interpolationmode none
 attr recordingmode histogram
 attr source queueingTime(packetPulled)
 attr title "queueing times"
 attr unit s
 bin	-inf	0
-bin	-0.5	0
-bin	-0.48	0
-bin	-0.46	0
-bin	-0.44	0
-bin	-0.42	0
-bin	-0.4	0
-bin	-0.38	0
-bin	-0.36	0
-bin	-0.34	0
-bin	-0.32	0
-bin	-0.3	0
-bin	-0.28	0
-bin	-0.26	0
-bin	-0.24	0
-bin	-0.22	0
-bin	-0.2	0
-bin	-0.18	0
-bin	-0.16	0
-bin	-0.14	0
-bin	-0.12	0
-bin	-0.1	0
-bin	-0.08	0
-bin	-0.06	0
-bin	-0.04	0
-bin	-0.02	0
-bin	0	52
-bin	0.02	0
-bin	0.04	0
-bin	0.06	0
-bin	0.08	0
-bin	0.1	0
-bin	0.12	0
-bin	0.14	0
-bin	0.16	0
-bin	0.18	0
-bin	0.2	0
-bin	0.22	0
-bin	0.24	0
-bin	0.26	0
-bin	0.28	0
-bin	0.3	0
-bin	0.32	0
-bin	0.34	0
-bin	0.36	0
-bin	0.38	0
-bin	0.4	0
-bin	0.42	0
-bin	0.44	0
-bin	0.46	0
-bin	0.48	0
-bin	0.5	0
-scalar LinkDegradation.hostA.eth[0].queue outgoingPackets:count 52
+bin	0	196
+bin	1e-06	0
+bin	2e-06	0
+bin	3e-06	0
+bin	4e-06	0
+bin	5e-06	0
+bin	6e-06	0
+bin	7e-06	0
+bin	8e-06	0
+bin	9e-06	0
+bin	1e-05	0
+bin	1.1e-05	0
+bin	1.2e-05	0
+bin	1.3e-05	0
+bin	1.4e-05	0
+bin	1.5e-05	1
+bin	1.6e-05	0
+bin	1.7e-05	0
+bin	1.8e-05	0
+bin	1.9e-05	0
+bin	2e-05	0
+bin	2.1e-05	0
+bin	2.2e-05	0
+bin	2.3e-05	0
+bin	2.4e-05	0
+bin	2.5e-05	0
+bin	2.6e-05	0
+bin	2.7e-05	0
+bin	2.8e-05	0
+bin	2.9e-05	0
+bin	3e-05	0
+bin	3.1e-05	0
+bin	3.2e-05	0
+bin	3.3e-05	0
+bin	3.4e-05	0
+bin	3.5e-05	0
+bin	3.6e-05	0
+bin	3.7e-05	0
+bin	3.8e-05	0
+bin	3.9e-05	0
+bin	4e-05	0
+bin	4.1e-05	0
+bin	4.2e-05	0
+bin	4.3e-05	0
+bin	4.4e-05	0
+bin	4.5e-05	0
+bin	4.6e-05	47
+bin	4.7e-05	0
+bin	4.8e-05	0
+bin	4.9e-05	0
+bin	5e-05	0
+bin	5.1e-05	0
+bin	5.2e-05	0
+bin	5.3e-05	0
+bin	5.4e-05	0
+bin	5.5e-05	0
+bin	5.6e-05	0
+bin	5.7e-05	0
+bin	5.8e-05	0
+scalar LinkDegradation.hostA.eth[0].queue outgoingPackets:count 244
 attr recordingmode count
 attr source packetPulled
 attr title "outgoing packets, count"
 attr unit pk
-scalar LinkDegradation.hostA.eth[0].queue outgoingPacketLengths:sum 228032
+scalar LinkDegradation.hostA.eth[0].queue outgoingPacketLengths:sum 495296
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPulled)
 attr title "outgoing packet lengths, sum"
 attr unit b
 statistic LinkDegradation.hostA.eth[0].queue outgoingPacketLengths:histogram
-field count 52
-field mean 4385.2307692308
-field stddev 568.01300093464
+field count 244
+field mean 2029.9016393443
+field stddev 1255.5339979128
 field min 368
 field max 4464
-field sum 228032
-field sqrsum 1016427520
+field sum 495296
+field sqrsum 1388459008
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPulled)
@@ -458,7 +477,7 @@ bin	900	0
 bin	1000	0
 bin	1100	0
 bin	1200	0
-bin	1300	0
+bin	1300	192
 bin	1400	0
 bin	1500	0
 bin	1600	0
@@ -517,25 +536,25 @@ attr unit s
 bin	-inf	0
 bin	0	0
 bin	1	0
-scalar LinkDegradation.hostA.eth[0].queue incomingPackets:count 52
+scalar LinkDegradation.hostA.eth[0].queue incomingPackets:count 245
 attr recordingmode count
 attr source packetPushStarted
 attr title "incoming packets, count"
 attr unit pk
-scalar LinkDegradation.hostA.eth[0].queue incomingPacketLengths:sum 228032
+scalar LinkDegradation.hostA.eth[0].queue incomingPacketLengths:sum 496688
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPushStarted)
 attr title "incoming packet lengths, sum"
 attr unit b
 statistic LinkDegradation.hostA.eth[0].queue incomingPacketLengths:histogram
-field count 52
-field mean 4385.2307692308
-field stddev 568.01300093464
+field count 245
+field mean 2027.2979591837
+field stddev 1253.6211536673
 field min 368
 field max 4464
-field sum 228032
-field sqrsum 1016427520
+field sum 496688
+field sqrsum 1390396672
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPushStarted)
@@ -555,7 +574,7 @@ bin	900	0
 bin	1000	0
 bin	1100	0
 bin	1200	0
-bin	1300	0
+bin	1300	193
 bin	1400	0
 bin	1500	0
 bin	1600	0
@@ -626,28 +645,28 @@ par LinkDegradation.hostA.eth[0].mac stopOperationTimeout 2s
 attr unit s
 scalar LinkDegradation.hostA.eth[0].mac "simulated time" 60
 scalar LinkDegradation.hostA.eth[0].mac full-duplex 1
-scalar LinkDegradation.hostA.eth[0].mac "frames/sec sent" 0.85
+scalar LinkDegradation.hostA.eth[0].mac "frames/sec sent" 4.05
 scalar LinkDegradation.hostA.eth[0].mac "frames/sec rcvd" 0.11666666666667
-scalar LinkDegradation.hostA.eth[0].mac "bits/sec sent" 3728.5333333333
+scalar LinkDegradation.hostA.eth[0].mac "bits/sec sent" 8182.9333333333
 scalar LinkDegradation.hostA.eth[0].mac "bits/sec rcvd" 74.133333333333
 scalar LinkDegradation.hostA.eth[0].mac "rx channel idle (%)" 99.9999184
 scalar LinkDegradation.hostA.eth[0].mac "rx channel utilization (%)" 8.16e-05
-scalar LinkDegradation.hostA.eth[0].mac txPk:count 51
+scalar LinkDegradation.hostA.eth[0].mac txPk:count 243
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToLower
 attr title "packets transmitted, count"
-scalar LinkDegradation.hostA.eth[0].mac txPk:sum(packetBytes) 27964
+scalar LinkDegradation.hostA.eth[0].mac txPk:sum(packetBytes) 61372
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToLower
 attr title "packets transmitted, sum(packetBytes)"
-scalar LinkDegradation.hostA.eth[0].mac packetReceivedFromUpper:count 52
+scalar LinkDegradation.hostA.eth[0].mac packetReceivedFromUpper:count 244
 attr interpolationmode none
 attr recordingmode count
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, count"
-scalar LinkDegradation.hostA.eth[0].mac packetReceivedFromUpper:sum(packetBytes) 28504
+scalar LinkDegradation.hostA.eth[0].mac packetReceivedFromUpper:sum(packetBytes) 61912
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
@@ -944,12 +963,12 @@ attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceived
 attr title "packets received, sum(packetBytes)"
-scalar LinkDegradation.hostA.udp packetSent:count 51
+scalar LinkDegradation.hostA.udp packetSent:count 244
 attr interpolationmode none
 attr recordingmode count
 attr source packetSent
 attr title "packets sent, count"
-scalar LinkDegradation.hostA.udp packetSent:sum(packetBytes) 26520
+scalar LinkDegradation.hostA.udp packetSent:sum(packetBytes) 52768
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSent
@@ -1032,6 +1051,11 @@ attr interpolationmode none
 attr recordingmode count
 attr source packetReceived
 attr title "packets received, count"
+scalar LinkDegradation.hostA.app[0] packetReceived:sum(packetBytes) 0
+attr interpolationmode none
+attr recordingmode sum(packetBytes)
+attr source packetReceived
+attr title "packets received, sum(packetBytes)"
 statistic LinkDegradation.hostA.app[0] rcvdPkLifetime:stats
 field count 0
 field mean -nan(ind)
@@ -1046,6 +1070,63 @@ attr source dataAge(packetReceived)
 attr title "received packet lifetime"
 attr unit s
 scalar LinkDegradation.hostA.app[0] packetSent:count 51
+attr interpolationmode none
+attr recordingmode count
+attr source packetSent
+attr title "packets sent, count"
+par LinkDegradation.hostA.app[1] typename "\"inet.applications.udpapp.UdpBasicApp\""
+par LinkDegradation.hostA.app[1] interfaceTableModule "\"LinkDegradation.hostA.interfaceTable\""
+par LinkDegradation.hostA.app[1] clockModule "\"\""
+par LinkDegradation.hostA.app[1] localPort -1
+par LinkDegradation.hostA.app[1] destAddresses "\"hostB\""
+par LinkDegradation.hostA.app[1] localAddress "\"\""
+par LinkDegradation.hostA.app[1] packetName "\"UdpBasicAppData\""
+par LinkDegradation.hostA.app[1] destPort 5001
+par LinkDegradation.hostA.app[1] messageLength 128B
+attr unit B
+par LinkDegradation.hostA.app[1] startTime 12s
+attr unit s
+par LinkDegradation.hostA.app[1] stopTime -1s
+attr unit s
+par LinkDegradation.hostA.app[1] sendInterval 0.25s
+attr unit s
+par LinkDegradation.hostA.app[1] timeToLive -1
+par LinkDegradation.hostA.app[1] dontFragment false
+par LinkDegradation.hostA.app[1] dscp -1
+par LinkDegradation.hostA.app[1] tos -1
+par LinkDegradation.hostA.app[1] multicastInterface "\"\""
+par LinkDegradation.hostA.app[1] receiveBroadcast false
+par LinkDegradation.hostA.app[1] joinLocalMulticastGroups false
+par LinkDegradation.hostA.app[1] stopOperationExtraTime -1s
+attr unit s
+par LinkDegradation.hostA.app[1] stopOperationTimeout 2s
+attr unit s
+scalar LinkDegradation.hostA.app[1] "packets sent" 193
+scalar LinkDegradation.hostA.app[1] "packets received" 0
+scalar LinkDegradation.hostA.app[1] packetReceived:count 0
+attr interpolationmode none
+attr recordingmode count
+attr source packetReceived
+attr title "packets received, count"
+scalar LinkDegradation.hostA.app[1] packetReceived:sum(packetBytes) 0
+attr interpolationmode none
+attr recordingmode sum(packetBytes)
+attr source packetReceived
+attr title "packets received, sum(packetBytes)"
+statistic LinkDegradation.hostA.app[1] rcvdPkLifetime:stats
+field count 0
+field mean -nan(ind)
+field stddev nan
+field min nan
+field max nan
+field sum 0
+field sqrsum 0
+attr interpolationmode none
+attr recordingmode stats
+attr source dataAge(packetReceived)
+attr title "received packet lifetime"
+attr unit s
+scalar LinkDegradation.hostA.app[1] packetSent:count 193
 attr interpolationmode none
 attr recordingmode count
 attr source packetSent
@@ -1078,7 +1159,7 @@ par LinkDegradation.hostA multicastForwarding false
 par LinkDegradation.hostA hasUdp true
 par LinkDegradation.hostA hasTcp true
 par LinkDegradation.hostA hasSctp false
-par LinkDegradation.hostA numApps 1
+par LinkDegradation.hostA numApps 2
 par LinkDegradation.r1.ethg$i[0].channel typename "\"ned.IdealChannel\""
 par LinkDegradation.r1.eth[0].phys$o.channel typename "\"ned.IdealChannel\""
 par LinkDegradation.r1.ethg$i[1].channel typename "\"ned.IdealChannel\""
@@ -1104,22 +1185,22 @@ par LinkDegradation.r1.ethernet stopOperationExtraTime -1s
 attr unit s
 par LinkDegradation.r1.ethernet stopOperationTimeout 2s
 attr unit s
-scalar LinkDegradation.r1.ethernet decapPk:count 101
+scalar LinkDegradation.r1.ethernet decapPk:count 293
 attr interpolationmode none
 attr recordingmode count
 attr source decapPk
 attr title "packets decapsulated, count"
-scalar LinkDegradation.r1.ethernet decapPk:sum(packetBytes) 31106
+scalar LinkDegradation.r1.ethernet decapPk:sum(packetBytes) 61058
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source decapPk
 attr title "packets decapsulated, sum(packetBytes)"
-scalar LinkDegradation.r1.ethernet encapPk:count 110
+scalar LinkDegradation.r1.ethernet encapPk:count 302
 attr interpolationmode none
 attr recordingmode count
 attr source encapPk
 attr title "packets encapsulated, count"
-scalar LinkDegradation.r1.ethernet encapPk:sum(packetBytes) 31800
+scalar LinkDegradation.r1.ethernet encapPk:sum(packetBytes) 61752
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source encapPk
@@ -1575,11 +1656,11 @@ attr unit s
 scalar LinkDegradation.r1.eth[0].mac "simulated time" 60
 scalar LinkDegradation.r1.eth[0].mac full-duplex 1
 scalar LinkDegradation.r1.eth[0].mac "frames/sec sent" 0.11666666666667
-scalar LinkDegradation.r1.eth[0].mac "frames/sec rcvd" 0.85
+scalar LinkDegradation.r1.eth[0].mac "frames/sec rcvd" 4.05
 scalar LinkDegradation.r1.eth[0].mac "bits/sec sent" 74.133333333333
-scalar LinkDegradation.r1.eth[0].mac "bits/sec rcvd" 3728.5333333333
-scalar LinkDegradation.r1.eth[0].mac "rx channel idle (%)" 99.996217066667
-scalar LinkDegradation.r1.eth[0].mac "rx channel utilization (%)" 0.0037829333333333
+scalar LinkDegradation.r1.eth[0].mac "bits/sec rcvd" 8182.9333333333
+scalar LinkDegradation.r1.eth[0].mac "rx channel idle (%)" 99.991557866667
+scalar LinkDegradation.r1.eth[0].mac "rx channel utilization (%)" 0.0084421333333333
 scalar LinkDegradation.r1.eth[0].mac txPk:count 7
 attr interpolationmode none
 attr recordingmode count
@@ -1600,12 +1681,12 @@ attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, sum(packetBytes)"
-scalar LinkDegradation.r1.eth[0].mac passedUpPk:count 51
+scalar LinkDegradation.r1.eth[0].mac passedUpPk:count 243
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToUpper
 attr title "packets passed to higher layer, count"
-scalar LinkDegradation.r1.eth[0].mac passedUpPk:sum(packetBytes) 27964
+scalar LinkDegradation.r1.eth[0].mac passedUpPk:sum(packetBytes) 61372
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToUpper
@@ -1656,12 +1737,12 @@ scalar LinkDegradation.r1.eth[0].mac txPausePkUnits:sum 0
 attr interpolationmode none
 attr recordingmode sum
 attr title "pause units sent, sum"
-scalar LinkDegradation.r1.eth[0].mac rxPkOk:count 51
+scalar LinkDegradation.r1.eth[0].mac rxPkOk:count 243
 attr interpolationmode none
 attr recordingmode count
 attr source rxPkOk
 attr title "packets received OK, count"
-scalar LinkDegradation.r1.eth[0].mac rxPkOk:sum(packetBytes) 27964
+scalar LinkDegradation.r1.eth[0].mac rxPkOk:sum(packetBytes) 61372
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source rxPkOk
@@ -1726,7 +1807,7 @@ attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
 attr title "queue length, max"
 attr unit pk
-scalar LinkDegradation.r1.eth[1].queue queueLength:timeavg 1.418e-06
+scalar LinkDegradation.r1.eth[1].queue queueLength:timeavg 1.7802e-05
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -1747,7 +1828,7 @@ attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
 attr title "queue bit length, max"
 attr unit b
-scalar LinkDegradation.r1.eth[1].queue queueBitLength:timeavg 0.00135088
+scalar LinkDegradation.r1.eth[1].queue queueBitLength:timeavg 0.024157408
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -1755,20 +1836,20 @@ attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetP
 attr title "queue bit length, timeavg"
 attr unit b
 statistic LinkDegradation.r1.eth[1].queue queueingTime:histogram
-field count 60
-field mean 1.418e-06
-field stddev 5.4904116112562e-06
+field count 192
+field mean 5.563125e-06
+field stddev 1.1702257294443e-05
 field min 0
-field max 2.864e-05
-field sum 8.508e-05
-field sqrsum 1.899176e-09
+field max 3.072e-05
+field sum 0.00106812
+field sqrsum 3.20981648e-08
 attr interpolationmode none
 attr recordingmode histogram
 attr source queueingTime(packetPulled)
 attr title "queueing times"
 attr unit s
 bin	-inf	0
-bin	0	55
+bin	0	155
 bin	5e-07	0
 bin	1e-06	0
 bin	1.5e-06	0
@@ -1829,7 +1910,7 @@ bin	2.85e-05	1
 bin	2.9e-05	0
 bin	2.95e-05	0
 bin	3e-05	0
-bin	3.05e-05	0
+bin	3.05e-05	32
 bin	3.1e-05	0
 bin	3.15e-05	0
 bin	3.2e-05	0
@@ -1841,25 +1922,30 @@ bin	3.45e-05	0
 bin	3.5e-05	0
 bin	3.55e-05	0
 bin	3.6e-05	0
-scalar LinkDegradation.r1.eth[1].queue outgoingPackets:count 60
+bin	3.65e-05	0
+bin	3.7e-05	0
+bin	3.75e-05	0
+bin	3.8e-05	0
+bin	3.85e-05	0
+scalar LinkDegradation.r1.eth[1].queue outgoingPackets:count 192
 attr recordingmode count
 attr source packetPulled
 attr title "outgoing packets, count"
 attr unit pk
-scalar LinkDegradation.r1.eth[1].queue outgoingPacketLengths:sum 173184
+scalar LinkDegradation.r1.eth[1].queue outgoingPacketLengths:sum 356928
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPulled)
 attr title "outgoing packet lengths, sum"
 attr unit b
 statistic LinkDegradation.r1.eth[1].queue outgoingPacketLengths:histogram
-field count 60
-field mean 2886.4
-field stddev 1826.5939331472
+field count 192
+field mean 1859
+field stddev 1230.0152640265
 field min 368
 field max 4464
-field sum 173184
-field sqrsum 696728576
+field sum 356928
+field sqrsum 952500224
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPulled)
@@ -1879,7 +1965,7 @@ bin	900	1
 bin	1000	2
 bin	1100	3
 bin	1200	4
-bin	1300	0
+bin	1300	132
 bin	1400	0
 bin	1500	0
 bin	1600	0
@@ -1938,25 +2024,25 @@ attr unit s
 bin	-inf	0
 bin	0	0
 bin	1	0
-scalar LinkDegradation.r1.eth[1].queue incomingPackets:count 60
+scalar LinkDegradation.r1.eth[1].queue incomingPackets:count 192
 attr recordingmode count
 attr source packetPushStarted
 attr title "incoming packets, count"
 attr unit pk
-scalar LinkDegradation.r1.eth[1].queue incomingPacketLengths:sum 173184
+scalar LinkDegradation.r1.eth[1].queue incomingPacketLengths:sum 356928
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPushStarted)
 attr title "incoming packet lengths, sum"
 attr unit b
 statistic LinkDegradation.r1.eth[1].queue incomingPacketLengths:histogram
-field count 60
-field mean 2886.4
-field stddev 1826.5939331472
+field count 192
+field mean 1859
+field stddev 1230.0152640265
 field min 368
 field max 4464
-field sum 173184
-field sqrsum 696728576
+field sum 356928
+field sqrsum 952500224
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPushStarted)
@@ -1976,7 +2062,7 @@ bin	900	1
 bin	1000	2
 bin	1100	3
 bin	1200	4
-bin	1300	0
+bin	1300	132
 bin	1400	0
 bin	1500	0
 bin	1600	0
@@ -2047,28 +2133,28 @@ par LinkDegradation.r1.eth[1].mac stopOperationTimeout 2s
 attr unit s
 scalar LinkDegradation.r1.eth[1].mac "simulated time" 60
 scalar LinkDegradation.r1.eth[1].mac full-duplex 1
-scalar LinkDegradation.r1.eth[1].mac "frames/sec sent" 1
+scalar LinkDegradation.r1.eth[1].mac "frames/sec sent" 3.2
 scalar LinkDegradation.r1.eth[1].mac "frames/sec rcvd" 0.41666666666667
-scalar LinkDegradation.r1.eth[1].mac "bits/sec sent" 2888.8
+scalar LinkDegradation.r1.eth[1].mac "bits/sec sent" 5951.2
 scalar LinkDegradation.r1.eth[1].mac "bits/sec rcvd" 327.46666666667
 scalar LinkDegradation.r1.eth[1].mac "rx channel idle (%)" 99.999645866667
 scalar LinkDegradation.r1.eth[1].mac "rx channel utilization (%)" 0.00035413333333333
-scalar LinkDegradation.r1.eth[1].mac txPk:count 60
+scalar LinkDegradation.r1.eth[1].mac txPk:count 192
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToLower
 attr title "packets transmitted, count"
-scalar LinkDegradation.r1.eth[1].mac txPk:sum(packetBytes) 21666
+scalar LinkDegradation.r1.eth[1].mac txPk:sum(packetBytes) 44634
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToLower
 attr title "packets transmitted, sum(packetBytes)"
-scalar LinkDegradation.r1.eth[1].mac packetReceivedFromUpper:count 60
+scalar LinkDegradation.r1.eth[1].mac packetReceivedFromUpper:count 192
 attr interpolationmode none
 attr recordingmode count
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, count"
-scalar LinkDegradation.r1.eth[1].mac packetReceivedFromUpper:sum(packetBytes) 21648
+scalar LinkDegradation.r1.eth[1].mac packetReceivedFromUpper:sum(packetBytes) 44616
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
@@ -2199,7 +2285,7 @@ attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
 attr title "queue length, max"
 attr unit pk
-scalar LinkDegradation.r1.eth[2].queue queueLength:timeavg 4.8266666666667e-07
+scalar LinkDegradation.r1.eth[2].queue queueLength:timeavg 8.1626666666667e-06
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -2213,14 +2299,14 @@ attr recordingmode last
 attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
 attr title "queue bit length, last"
 attr unit b
-scalar LinkDegradation.r1.eth[2].queue queueBitLength:max 816
+scalar LinkDegradation.r1.eth[2].queue queueBitLength:max 1392
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
 attr title "queue bit length, max"
 attr unit b
-scalar LinkDegradation.r1.eth[2].queue queueBitLength:timeavg 0.000356736
+scalar LinkDegradation.r1.eth[2].queue queueBitLength:timeavg 0.011047296
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -2228,124 +2314,116 @@ attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetP
 attr title "queue bit length, timeavg"
 attr unit b
 statistic LinkDegradation.r1.eth[2].queue queueingTime:histogram
-field count 43
-field mean 6.7348837209302e-07
-field stddev 2.5998231475758e-06
+field count 103
+field mean 4.7549514563107e-06
+field stddev 1.0905285898904e-05
 field min 0
-field max 1.36e-05
-field sum 2.896e-05
-field sqrsum 3.033856e-10
+field max 3.072e-05
+field sum 0.00048976
+field sqrsum 1.44591616e-08
 attr interpolationmode none
 attr recordingmode histogram
 attr source queueingTime(packetPulled)
 attr title "queueing times"
 attr unit s
 bin	-inf	0
-bin	0	40
-bin	2e-07	0
-bin	4e-07	0
-bin	6e-07	0
-bin	8e-07	0
+bin	0	85
+bin	5e-07	0
 bin	1e-06	0
-bin	1.2e-06	0
-bin	1.4e-06	0
-bin	1.6e-06	0
-bin	1.8e-06	0
+bin	1.5e-06	0
 bin	2e-06	0
-bin	2.2e-06	0
-bin	2.4e-06	0
-bin	2.6e-06	0
-bin	2.8e-06	0
+bin	2.5e-06	0
 bin	3e-06	0
-bin	3.2e-06	0
-bin	3.4e-06	0
-bin	3.6e-06	0
-bin	3.8e-06	0
+bin	3.5e-06	0
 bin	4e-06	0
-bin	4.2e-06	0
-bin	4.4e-06	0
-bin	4.6e-06	0
-bin	4.8e-06	0
+bin	4.5e-06	0
 bin	5e-06	0
-bin	5.2e-06	0
-bin	5.4e-06	0
-bin	5.6e-06	0
-bin	5.8e-06	0
+bin	5.5e-06	0
 bin	6e-06	0
-bin	6.2e-06	0
-bin	6.4e-06	0
-bin	6.6e-06	0
-bin	6.8e-06	0
+bin	6.5e-06	0
 bin	7e-06	1
-bin	7.2e-06	0
-bin	7.4e-06	0
-bin	7.6e-06	0
-bin	7.8e-06	0
+bin	7.5e-06	0
 bin	8e-06	1
-bin	8.2e-06	0
-bin	8.4e-06	0
-bin	8.6e-06	0
-bin	8.8e-06	0
+bin	8.5e-06	0
 bin	9e-06	0
-bin	9.2e-06	0
-bin	9.4e-06	0
-bin	9.6e-06	0
-bin	9.8e-06	0
+bin	9.5e-06	0
 bin	1e-05	0
-bin	1.02e-05	0
-bin	1.04e-05	0
-bin	1.06e-05	0
-bin	1.08e-05	0
+bin	1.05e-05	0
 bin	1.1e-05	0
-bin	1.12e-05	0
-bin	1.14e-05	0
-bin	1.16e-05	0
-bin	1.18e-05	0
+bin	1.15e-05	0
 bin	1.2e-05	0
-bin	1.22e-05	0
-bin	1.24e-05	0
-bin	1.26e-05	0
-bin	1.28e-05	0
+bin	1.25e-05	0
 bin	1.3e-05	0
-bin	1.32e-05	0
-bin	1.34e-05	1
-bin	1.36e-05	0
-bin	1.38e-05	0
+bin	1.35e-05	1
 bin	1.4e-05	0
-bin	1.42e-05	0
-bin	1.44e-05	0
-bin	1.46e-05	0
-bin	1.48e-05	0
+bin	1.45e-05	0
 bin	1.5e-05	0
-bin	1.52e-05	0
-bin	1.54e-05	0
-bin	1.56e-05	0
-bin	1.58e-05	0
+bin	1.55e-05	0
 bin	1.6e-05	0
-bin	1.62e-05	0
-bin	1.64e-05	0
-bin	1.66e-05	0
-bin	1.68e-05	0
+bin	1.65e-05	0
 bin	1.7e-05	0
-scalar LinkDegradation.r1.eth[2].queue outgoingPackets:count 43
+bin	1.75e-05	0
+bin	1.8e-05	0
+bin	1.85e-05	0
+bin	1.9e-05	0
+bin	1.95e-05	0
+bin	2e-05	0
+bin	2.05e-05	0
+bin	2.1e-05	0
+bin	2.15e-05	0
+bin	2.2e-05	0
+bin	2.25e-05	0
+bin	2.3e-05	0
+bin	2.35e-05	0
+bin	2.4e-05	0
+bin	2.45e-05	0
+bin	2.5e-05	0
+bin	2.55e-05	0
+bin	2.6e-05	0
+bin	2.65e-05	0
+bin	2.7e-05	0
+bin	2.75e-05	0
+bin	2.8e-05	0
+bin	2.85e-05	0
+bin	2.9e-05	0
+bin	2.95e-05	0
+bin	3e-05	0
+bin	3.05e-05	15
+bin	3.1e-05	0
+bin	3.15e-05	0
+bin	3.2e-05	0
+bin	3.25e-05	0
+bin	3.3e-05	0
+bin	3.35e-05	0
+bin	3.4e-05	0
+bin	3.45e-05	0
+bin	3.5e-05	0
+bin	3.55e-05	0
+bin	3.6e-05	0
+bin	3.65e-05	0
+bin	3.7e-05	0
+bin	3.75e-05	0
+bin	3.8e-05	0
+bin	3.85e-05	0
+scalar LinkDegradation.r1.eth[2].queue outgoingPackets:count 103
 attr recordingmode count
 attr source packetPulled
 attr title "outgoing packets, count"
 attr unit pk
-scalar LinkDegradation.r1.eth[2].queue outgoingPacketLengths:sum 92752
+scalar LinkDegradation.r1.eth[2].queue outgoingPacketLengths:sum 176272
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPulled)
 attr title "outgoing packet lengths, sum"
 attr unit b
 statistic LinkDegradation.r1.eth[2].queue outgoingPacketLengths:histogram
-field count 43
-field mean 2157.023255814
-field stddev 1805.7677102152
+field count 103
+field mean 1711.3786407767
+field stddev 1219.1824656865
 field min 368
 field max 4464
-field sum 92752
-field sqrsum 337021696
+field sum 176272
+field sqrsum 453281536
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPulled)
@@ -2365,7 +2443,7 @@ bin	900	1
 bin	1000	1
 bin	1100	3
 bin	1200	3
-bin	1300	0
+bin	1300	60
 bin	1400	0
 bin	1500	0
 bin	1600	0
@@ -2424,25 +2502,25 @@ attr unit s
 bin	-inf	0
 bin	0	0
 bin	1	0
-scalar LinkDegradation.r1.eth[2].queue incomingPackets:count 43
+scalar LinkDegradation.r1.eth[2].queue incomingPackets:count 103
 attr recordingmode count
 attr source packetPushStarted
 attr title "incoming packets, count"
 attr unit pk
-scalar LinkDegradation.r1.eth[2].queue incomingPacketLengths:sum 92752
+scalar LinkDegradation.r1.eth[2].queue incomingPacketLengths:sum 176272
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPushStarted)
 attr title "incoming packet lengths, sum"
 attr unit b
 statistic LinkDegradation.r1.eth[2].queue incomingPacketLengths:histogram
-field count 43
-field mean 2157.023255814
-field stddev 1805.7677102152
+field count 103
+field mean 1711.3786407767
+field stddev 1219.1824656865
 field min 368
 field max 4464
-field sum 92752
-field sqrsum 337021696
+field sum 176272
+field sqrsum 453281536
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPushStarted)
@@ -2462,7 +2540,7 @@ bin	900	1
 bin	1000	1
 bin	1100	3
 bin	1200	3
-bin	1300	0
+bin	1300	60
 bin	1400	0
 bin	1500	0
 bin	1600	0
@@ -2533,28 +2611,28 @@ par LinkDegradation.r1.eth[2].mac stopOperationTimeout 2s
 attr unit s
 scalar LinkDegradation.r1.eth[2].mac "simulated time" 60
 scalar LinkDegradation.r1.eth[2].mac full-duplex 1
-scalar LinkDegradation.r1.eth[2].mac "frames/sec sent" 0.71666666666667
+scalar LinkDegradation.r1.eth[2].mac "frames/sec sent" 1.7166666666667
 scalar LinkDegradation.r1.eth[2].mac "frames/sec rcvd" 0.41666666666667
-scalar LinkDegradation.r1.eth[2].mac "bits/sec sent" 1548.2666666667
+scalar LinkDegradation.r1.eth[2].mac "bits/sec sent" 2940.2666666667
 scalar LinkDegradation.r1.eth[2].mac "bits/sec rcvd" 333.86666666667
 scalar LinkDegradation.r1.eth[2].mac "rx channel idle (%)" 99.999639466667
 scalar LinkDegradation.r1.eth[2].mac "rx channel utilization (%)" 0.00036053333333333
-scalar LinkDegradation.r1.eth[2].mac txPk:count 43
+scalar LinkDegradation.r1.eth[2].mac txPk:count 103
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToLower
 attr title "packets transmitted, count"
-scalar LinkDegradation.r1.eth[2].mac txPk:sum(packetBytes) 11612
+scalar LinkDegradation.r1.eth[2].mac txPk:sum(packetBytes) 22052
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToLower
 attr title "packets transmitted, sum(packetBytes)"
-scalar LinkDegradation.r1.eth[2].mac packetReceivedFromUpper:count 43
+scalar LinkDegradation.r1.eth[2].mac packetReceivedFromUpper:count 103
 attr interpolationmode none
 attr recordingmode count
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, count"
-scalar LinkDegradation.r1.eth[2].mac packetReceivedFromUpper:sum(packetBytes) 11594
+scalar LinkDegradation.r1.eth[2].mac packetReceivedFromUpper:sum(packetBytes) 22034
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
@@ -2930,22 +3008,22 @@ par LinkDegradation.r2.ethernet stopOperationExtraTime -1s
 attr unit s
 par LinkDegradation.r2.ethernet stopOperationTimeout 2s
 attr unit s
-scalar LinkDegradation.r2.ethernet decapPk:count 78
+scalar LinkDegradation.r2.ethernet decapPk:count 210
 attr interpolationmode none
 attr recordingmode count
 attr source decapPk
 attr title "packets decapsulated, count"
-scalar LinkDegradation.r2.ethernet decapPk:sum(packetBytes) 22264
+scalar LinkDegradation.r2.ethernet decapPk:sum(packetBytes) 42856
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source decapPk
 attr title "packets decapsulated, sum(packetBytes)"
-scalar LinkDegradation.r2.ethernet encapPk:count 85
+scalar LinkDegradation.r2.ethernet encapPk:count 217
 attr interpolationmode none
 attr recordingmode count
 attr source encapPk
 attr title "packets encapsulated, count"
-scalar LinkDegradation.r2.ethernet encapPk:sum(packetBytes) 22348
+scalar LinkDegradation.r2.ethernet encapPk:sum(packetBytes) 42940
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source encapPk
@@ -3376,11 +3454,11 @@ attr unit s
 scalar LinkDegradation.r2.eth[0].mac "simulated time" 60
 scalar LinkDegradation.r2.eth[0].mac full-duplex 1
 scalar LinkDegradation.r2.eth[0].mac "frames/sec sent" 0.41666666666667
-scalar LinkDegradation.r2.eth[0].mac "frames/sec rcvd" 1
+scalar LinkDegradation.r2.eth[0].mac "frames/sec rcvd" 3.2
 scalar LinkDegradation.r2.eth[0].mac "bits/sec sent" 327.46666666667
-scalar LinkDegradation.r2.eth[0].mac "bits/sec rcvd" 2888.8
-scalar LinkDegradation.r2.eth[0].mac "rx channel idle (%)" 99.9970472
-scalar LinkDegradation.r2.eth[0].mac "rx channel utilization (%)" 0.0029528
+scalar LinkDegradation.r2.eth[0].mac "bits/sec rcvd" 5951.2
+scalar LinkDegradation.r2.eth[0].mac "rx channel idle (%)" 99.993844
+scalar LinkDegradation.r2.eth[0].mac "rx channel utilization (%)" 0.006156
 scalar LinkDegradation.r2.eth[0].mac txPk:count 25
 attr interpolationmode none
 attr recordingmode count
@@ -3401,12 +3479,12 @@ attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, sum(packetBytes)"
-scalar LinkDegradation.r2.eth[0].mac passedUpPk:count 60
+scalar LinkDegradation.r2.eth[0].mac passedUpPk:count 192
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToUpper
 attr title "packets passed to higher layer, count"
-scalar LinkDegradation.r2.eth[0].mac passedUpPk:sum(packetBytes) 21666
+scalar LinkDegradation.r2.eth[0].mac passedUpPk:sum(packetBytes) 44634
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToUpper
@@ -3457,12 +3535,12 @@ scalar LinkDegradation.r2.eth[0].mac txPausePkUnits:sum 0
 attr interpolationmode none
 attr recordingmode sum
 attr title "pause units sent, sum"
-scalar LinkDegradation.r2.eth[0].mac rxPkOk:count 60
+scalar LinkDegradation.r2.eth[0].mac rxPkOk:count 192
 attr interpolationmode none
 attr recordingmode count
 attr source rxPkOk
 attr title "packets received OK, count"
-scalar LinkDegradation.r2.eth[0].mac rxPkOk:sum(packetBytes) 21666
+scalar LinkDegradation.r2.eth[0].mac rxPkOk:sum(packetBytes) 44634
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source rxPkOk
@@ -3527,7 +3605,7 @@ attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
 attr title "queue length, max"
 attr unit pk
-scalar LinkDegradation.r2.eth[1].queue queueLength:timeavg 1.018e-06
+scalar LinkDegradation.r2.eth[1].queue queueLength:timeavg 1.7402e-05
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -3548,7 +3626,7 @@ attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
 attr title "queue bit length, max"
 attr unit b
-scalar LinkDegradation.r2.eth[1].queue queueBitLength:timeavg 0.00092432
+scalar LinkDegradation.r2.eth[1].queue queueBitLength:timeavg 0.023730848
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -3556,20 +3634,20 @@ attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetP
 attr title "queue bit length, timeavg"
 attr unit b
 statistic LinkDegradation.r2.eth[1].queue queueingTime:histogram
-field count 60
-field mean 1.018e-06
-field stddev 4.3364246774331e-06
+field count 192
+field mean 5.438125e-06
+field stddev 1.1598109460719e-05
 field min 0
-field max 2.864e-05
-field sum 6.108e-05
-field sqrsum 1.1716496e-09
+field max 3.072e-05
+field sum 0.00104412
+field sqrsum 3.13706384e-08
 attr interpolationmode none
 attr recordingmode histogram
 attr source queueingTime(packetPulled)
 attr title "queueing times"
 attr unit s
 bin	-inf	0
-bin	0	55
+bin	0	155
 bin	5e-07	0
 bin	1e-06	0
 bin	1.5e-06	0
@@ -3630,7 +3708,7 @@ bin	2.85e-05	1
 bin	2.9e-05	0
 bin	2.95e-05	0
 bin	3e-05	0
-bin	3.05e-05	0
+bin	3.05e-05	32
 bin	3.1e-05	0
 bin	3.15e-05	0
 bin	3.2e-05	0
@@ -3642,25 +3720,30 @@ bin	3.45e-05	0
 bin	3.5e-05	0
 bin	3.55e-05	0
 bin	3.6e-05	0
-scalar LinkDegradation.r2.eth[1].queue outgoingPackets:count 60
+bin	3.65e-05	0
+bin	3.7e-05	0
+bin	3.75e-05	0
+bin	3.8e-05	0
+bin	3.85e-05	0
+scalar LinkDegradation.r2.eth[1].queue outgoingPackets:count 192
 attr recordingmode count
 attr source packetPulled
 attr title "outgoing packets, count"
 attr unit pk
-scalar LinkDegradation.r2.eth[1].queue outgoingPacketLengths:sum 171520
+scalar LinkDegradation.r2.eth[1].queue outgoingPacketLengths:sum 355264
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPulled)
 attr title "outgoing packet lengths, sum"
 attr unit b
 statistic LinkDegradation.r2.eth[1].queue outgoingPacketLengths:histogram
-field count 60
-field mean 2858.6666666667
-field stddev 1858.8234903728
+field count 192
+field mean 1850.3333333333
+field stddev 1237.6967180186
 field min 368
 field max 4464
-field sum 171520
-field sqrsum 694176768
+field sum 355264
+field sqrsum 949948416
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPulled)
@@ -3680,7 +3763,7 @@ bin	900	2
 bin	1000	0
 bin	1100	2
 bin	1200	4
-bin	1300	0
+bin	1300	132
 bin	1400	0
 bin	1500	0
 bin	1600	0
@@ -3739,25 +3822,25 @@ attr unit s
 bin	-inf	0
 bin	0	0
 bin	1	0
-scalar LinkDegradation.r2.eth[1].queue incomingPackets:count 60
+scalar LinkDegradation.r2.eth[1].queue incomingPackets:count 192
 attr recordingmode count
 attr source packetPushStarted
 attr title "incoming packets, count"
 attr unit pk
-scalar LinkDegradation.r2.eth[1].queue incomingPacketLengths:sum 171520
+scalar LinkDegradation.r2.eth[1].queue incomingPacketLengths:sum 355264
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPushStarted)
 attr title "incoming packet lengths, sum"
 attr unit b
 statistic LinkDegradation.r2.eth[1].queue incomingPacketLengths:histogram
-field count 60
-field mean 2858.6666666667
-field stddev 1858.8234903728
+field count 192
+field mean 1850.3333333333
+field stddev 1237.6967180186
 field min 368
 field max 4464
-field sum 171520
-field sqrsum 694176768
+field sum 355264
+field sqrsum 949948416
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPushStarted)
@@ -3777,7 +3860,7 @@ bin	900	2
 bin	1000	0
 bin	1100	2
 bin	1200	4
-bin	1300	0
+bin	1300	132
 bin	1400	0
 bin	1500	0
 bin	1600	0
@@ -3848,28 +3931,28 @@ par LinkDegradation.r2.eth[1].mac stopOperationTimeout 2s
 attr unit s
 scalar LinkDegradation.r2.eth[1].mac "simulated time" 60
 scalar LinkDegradation.r2.eth[1].mac full-duplex 1
-scalar LinkDegradation.r2.eth[1].mac "frames/sec sent" 1
+scalar LinkDegradation.r2.eth[1].mac "frames/sec sent" 3.2
 scalar LinkDegradation.r2.eth[1].mac "frames/sec rcvd" 0.3
-scalar LinkDegradation.r2.eth[1].mac "bits/sec sent" 2861.0666666667
+scalar LinkDegradation.r2.eth[1].mac "bits/sec sent" 5923.4666666667
 scalar LinkDegradation.r2.eth[1].mac "bits/sec rcvd" 266.93333333333
 scalar LinkDegradation.r2.eth[1].mac "rx channel idle (%)" 99.999713866667
 scalar LinkDegradation.r2.eth[1].mac "rx channel utilization (%)" 0.00028613333333333
-scalar LinkDegradation.r2.eth[1].mac txPk:count 60
+scalar LinkDegradation.r2.eth[1].mac txPk:count 192
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToLower
 attr title "packets transmitted, count"
-scalar LinkDegradation.r2.eth[1].mac txPk:sum(packetBytes) 21458
+scalar LinkDegradation.r2.eth[1].mac txPk:sum(packetBytes) 44426
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToLower
 attr title "packets transmitted, sum(packetBytes)"
-scalar LinkDegradation.r2.eth[1].mac packetReceivedFromUpper:count 60
+scalar LinkDegradation.r2.eth[1].mac packetReceivedFromUpper:count 192
 attr interpolationmode none
 attr recordingmode count
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, count"
-scalar LinkDegradation.r2.eth[1].mac packetReceivedFromUpper:sum(packetBytes) 21440
+scalar LinkDegradation.r2.eth[1].mac packetReceivedFromUpper:sum(packetBytes) 44408
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
@@ -4245,22 +4328,22 @@ par LinkDegradation.r4.ethernet stopOperationExtraTime -1s
 attr unit s
 par LinkDegradation.r4.ethernet stopOperationTimeout 2s
 attr unit s
-scalar LinkDegradation.r4.ethernet decapPk:count 71
+scalar LinkDegradation.r4.ethernet decapPk:count 131
 attr interpolationmode none
 attr recordingmode count
 attr source decapPk
 attr title "packets decapsulated, count"
-scalar LinkDegradation.r4.ethernet decapPk:sum(packetBytes) 13146
+scalar LinkDegradation.r4.ethernet decapPk:sum(packetBytes) 22506
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source decapPk
 attr title "packets decapsulated, sum(packetBytes)"
-scalar LinkDegradation.r4.ethernet encapPk:count 68
+scalar LinkDegradation.r4.ethernet encapPk:count 128
 attr interpolationmode none
 attr recordingmode count
 attr source encapPk
 attr title "packets encapsulated, count"
-scalar LinkDegradation.r4.ethernet encapPk:sum(packetBytes) 12804
+scalar LinkDegradation.r4.ethernet encapPk:sum(packetBytes) 22164
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source encapPk
@@ -4685,11 +4768,11 @@ attr unit s
 scalar LinkDegradation.r4.eth[0].mac "simulated time" 60
 scalar LinkDegradation.r4.eth[0].mac full-duplex 1
 scalar LinkDegradation.r4.eth[0].mac "frames/sec sent" 0.41666666666667
-scalar LinkDegradation.r4.eth[0].mac "frames/sec rcvd" 0.71666666666667
+scalar LinkDegradation.r4.eth[0].mac "frames/sec rcvd" 1.7166666666667
 scalar LinkDegradation.r4.eth[0].mac "bits/sec sent" 333.86666666667
-scalar LinkDegradation.r4.eth[0].mac "bits/sec rcvd" 1548.2666666667
-scalar LinkDegradation.r4.eth[0].mac "rx channel idle (%)" 99.998405866667
-scalar LinkDegradation.r4.eth[0].mac "rx channel utilization (%)" 0.0015941333333333
+scalar LinkDegradation.r4.eth[0].mac "bits/sec rcvd" 2940.2666666667
+scalar LinkDegradation.r4.eth[0].mac "rx channel idle (%)" 99.996949866667
+scalar LinkDegradation.r4.eth[0].mac "rx channel utilization (%)" 0.0030501333333333
 scalar LinkDegradation.r4.eth[0].mac txPk:count 25
 attr interpolationmode none
 attr recordingmode count
@@ -4710,12 +4793,12 @@ attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, sum(packetBytes)"
-scalar LinkDegradation.r4.eth[0].mac passedUpPk:count 43
+scalar LinkDegradation.r4.eth[0].mac passedUpPk:count 103
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToUpper
 attr title "packets passed to higher layer, count"
-scalar LinkDegradation.r4.eth[0].mac passedUpPk:sum(packetBytes) 11612
+scalar LinkDegradation.r4.eth[0].mac passedUpPk:sum(packetBytes) 22052
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToUpper
@@ -4766,12 +4849,12 @@ scalar LinkDegradation.r4.eth[0].mac txPausePkUnits:sum 0
 attr interpolationmode none
 attr recordingmode sum
 attr title "pause units sent, sum"
-scalar LinkDegradation.r4.eth[0].mac rxPkOk:count 43
+scalar LinkDegradation.r4.eth[0].mac rxPkOk:count 103
 attr interpolationmode none
 attr recordingmode count
 attr source rxPkOk
 attr title "packets received OK, count"
-scalar LinkDegradation.r4.eth[0].mac rxPkOk:sum(packetBytes) 11612
+scalar LinkDegradation.r4.eth[0].mac rxPkOk:sum(packetBytes) 22052
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source rxPkOk
@@ -4836,7 +4919,7 @@ attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
 attr title "queue length, max"
 attr unit pk
-scalar LinkDegradation.r4.eth[1].queue queueLength:timeavg 7.86e-07
+scalar LinkDegradation.r4.eth[1].queue queueLength:timeavg 8.466e-06
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -4857,7 +4940,7 @@ attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
 attr title "queue bit length, max"
 attr unit b
-scalar LinkDegradation.r4.eth[1].queue queueBitLength:timeavg 0.00047909333333333
+scalar LinkDegradation.r4.eth[1].queue queueBitLength:timeavg 0.011169653333333
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -4865,20 +4948,20 @@ attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetP
 attr title "queue bit length, timeavg"
 attr unit b
 statistic LinkDegradation.r4.eth[1].queue queueingTime:histogram
-field count 43
-field mean 1.0967441860465e-06
-field stddev 3.6246061992536e-06
+field count 103
+field mean 4.9316504854369e-06
+field stddev 1.0960805224561e-05
 field min 0
-field max 1.84e-05
-field sum 4.716e-05
-field sqrsum 6.035088e-10
+field max 3.072e-05
+field sum 0.00050796
+field sqrsum 1.47592848e-08
 attr interpolationmode none
 attr recordingmode histogram
 attr source queueingTime(packetPulled)
 attr title "queueing times"
 attr unit s
 bin	-inf	0
-bin	0	37
+bin	0	82
 bin	5e-07	2
 bin	1e-06	0
 bin	1.5e-06	0
@@ -4925,25 +5008,56 @@ bin	2.15e-05	0
 bin	2.2e-05	0
 bin	2.25e-05	0
 bin	2.3e-05	0
-scalar LinkDegradation.r4.eth[1].queue outgoingPackets:count 43
+bin	2.35e-05	0
+bin	2.4e-05	0
+bin	2.45e-05	0
+bin	2.5e-05	0
+bin	2.55e-05	0
+bin	2.6e-05	0
+bin	2.65e-05	0
+bin	2.7e-05	0
+bin	2.75e-05	0
+bin	2.8e-05	0
+bin	2.85e-05	0
+bin	2.9e-05	0
+bin	2.95e-05	0
+bin	3e-05	0
+bin	3.05e-05	15
+bin	3.1e-05	0
+bin	3.15e-05	0
+bin	3.2e-05	0
+bin	3.25e-05	0
+bin	3.3e-05	0
+bin	3.35e-05	0
+bin	3.4e-05	0
+bin	3.45e-05	0
+bin	3.5e-05	0
+bin	3.55e-05	0
+bin	3.6e-05	0
+bin	3.65e-05	0
+bin	3.7e-05	0
+bin	3.75e-05	0
+bin	3.8e-05	0
+bin	3.85e-05	0
+scalar LinkDegradation.r4.eth[1].queue outgoingPackets:count 103
 attr recordingmode count
 attr source packetPulled
 attr title "outgoing packets, count"
 attr unit pk
-scalar LinkDegradation.r4.eth[1].queue outgoingPacketLengths:sum 92336
+scalar LinkDegradation.r4.eth[1].queue outgoingPacketLengths:sum 175856
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPulled)
 attr title "outgoing packet lengths, sum"
 attr unit b
 statistic LinkDegradation.r4.eth[1].queue outgoingPacketLengths:histogram
-field count 43
-field mean 2147.3488372093
-field stddev 1816.2191875762
+field count 103
+field mean 1707.3398058252
+field stddev 1224.0838234898
 field min 368
 field max 4464
-field sum 92336
-field sqrsum 336820992
+field sum 175856
+field sqrsum 453080832
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPulled)
@@ -4963,7 +5077,7 @@ bin	900	2
 bin	1000	1
 bin	1100	1
 bin	1200	2
-bin	1300	0
+bin	1300	60
 bin	1400	0
 bin	1500	1
 bin	1600	0
@@ -5022,25 +5136,25 @@ attr unit s
 bin	-inf	0
 bin	0	0
 bin	1	0
-scalar LinkDegradation.r4.eth[1].queue incomingPackets:count 43
+scalar LinkDegradation.r4.eth[1].queue incomingPackets:count 103
 attr recordingmode count
 attr source packetPushStarted
 attr title "incoming packets, count"
 attr unit pk
-scalar LinkDegradation.r4.eth[1].queue incomingPacketLengths:sum 92336
+scalar LinkDegradation.r4.eth[1].queue incomingPacketLengths:sum 175856
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPushStarted)
 attr title "incoming packet lengths, sum"
 attr unit b
 statistic LinkDegradation.r4.eth[1].queue incomingPacketLengths:histogram
-field count 43
-field mean 2147.3488372093
-field stddev 1816.2191875762
+field count 103
+field mean 1707.3398058252
+field stddev 1224.0838234898
 field min 368
 field max 4464
-field sum 92336
-field sqrsum 336820992
+field sum 175856
+field sqrsum 453080832
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPushStarted)
@@ -5060,7 +5174,7 @@ bin	900	2
 bin	1000	1
 bin	1100	1
 bin	1200	2
-bin	1300	0
+bin	1300	60
 bin	1400	0
 bin	1500	1
 bin	1600	0
@@ -5131,28 +5245,28 @@ par LinkDegradation.r4.eth[1].mac stopOperationTimeout 2s
 attr unit s
 scalar LinkDegradation.r4.eth[1].mac "simulated time" 60
 scalar LinkDegradation.r4.eth[1].mac full-duplex 1
-scalar LinkDegradation.r4.eth[1].mac "frames/sec sent" 0.71666666666667
+scalar LinkDegradation.r4.eth[1].mac "frames/sec sent" 1.7166666666667
 scalar LinkDegradation.r4.eth[1].mac "frames/sec rcvd" 0.46666666666667
-scalar LinkDegradation.r4.eth[1].mac "bits/sec sent" 1543.7333333333
+scalar LinkDegradation.r4.eth[1].mac "bits/sec sent" 2935.7333333333
 scalar LinkDegradation.r4.eth[1].mac "bits/sec rcvd" 374.93333333333
 scalar LinkDegradation.r4.eth[1].mac "rx channel idle (%)" 99.9995952
 scalar LinkDegradation.r4.eth[1].mac "rx channel utilization (%)" 0.0004048
-scalar LinkDegradation.r4.eth[1].mac txPk:count 43
+scalar LinkDegradation.r4.eth[1].mac txPk:count 103
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToLower
 attr title "packets transmitted, count"
-scalar LinkDegradation.r4.eth[1].mac txPk:sum(packetBytes) 11578
+scalar LinkDegradation.r4.eth[1].mac txPk:sum(packetBytes) 22018
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToLower
 attr title "packets transmitted, sum(packetBytes)"
-scalar LinkDegradation.r4.eth[1].mac packetReceivedFromUpper:count 43
+scalar LinkDegradation.r4.eth[1].mac packetReceivedFromUpper:count 103
 attr interpolationmode none
 attr recordingmode count
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, count"
-scalar LinkDegradation.r4.eth[1].mac packetReceivedFromUpper:sum(packetBytes) 11542
+scalar LinkDegradation.r4.eth[1].mac packetReceivedFromUpper:sum(packetBytes) 21982
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
@@ -5530,22 +5644,22 @@ par LinkDegradation.r3.ethernet stopOperationExtraTime -1s
 attr unit s
 par LinkDegradation.r3.ethernet stopOperationTimeout 2s
 attr unit s
-scalar LinkDegradation.r3.ethernet decapPk:count 104
+scalar LinkDegradation.r3.ethernet decapPk:count 295
 attr interpolationmode none
 attr recordingmode count
 attr source decapPk
 attr title "packets decapsulated, count"
-scalar LinkDegradation.r3.ethernet decapPk:sum(packetBytes) 31228
+scalar LinkDegradation.r3.ethernet decapPk:sum(packetBytes) 61024
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source decapPk
 attr title "packets decapsulated, sum(packetBytes)"
-scalar LinkDegradation.r3.ethernet encapPk:count 103
+scalar LinkDegradation.r3.ethernet encapPk:count 294
 attr interpolationmode none
 attr recordingmode count
 attr source encapPk
 attr title "packets encapsulated, count"
-scalar LinkDegradation.r3.ethernet encapPk:sum(packetBytes) 31344
+scalar LinkDegradation.r3.ethernet encapPk:sum(packetBytes) 61140
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source encapPk
@@ -5988,11 +6102,11 @@ attr unit s
 scalar LinkDegradation.r3.eth[0].mac "simulated time" 60
 scalar LinkDegradation.r3.eth[0].mac full-duplex 1
 scalar LinkDegradation.r3.eth[0].mac "frames/sec sent" 0.3
-scalar LinkDegradation.r3.eth[0].mac "frames/sec rcvd" 1
+scalar LinkDegradation.r3.eth[0].mac "frames/sec rcvd" 3.1833333333333
 scalar LinkDegradation.r3.eth[0].mac "bits/sec sent" 266.93333333333
-scalar LinkDegradation.r3.eth[0].mac "bits/sec rcvd" 2861.0666666667
-scalar LinkDegradation.r3.eth[0].mac "rx channel idle (%)" 99.997074933333
-scalar LinkDegradation.r3.eth[0].mac "rx channel utilization (%)" 0.0029250666666667
+scalar LinkDegradation.r3.eth[0].mac "bits/sec rcvd" 5900.2666666667
+scalar LinkDegradation.r3.eth[0].mac "rx channel idle (%)" 99.993871733333
+scalar LinkDegradation.r3.eth[0].mac "rx channel utilization (%)" 0.0061282666666667
 scalar LinkDegradation.r3.eth[0].mac txPk:count 18
 attr interpolationmode none
 attr recordingmode count
@@ -6013,22 +6127,22 @@ attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, sum(packetBytes)"
-scalar LinkDegradation.r3.eth[0].mac passedUpPk:count 60
+scalar LinkDegradation.r3.eth[0].mac passedUpPk:count 191
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToUpper
 attr title "packets passed to higher layer, count"
-scalar LinkDegradation.r3.eth[0].mac passedUpPk:sum(packetBytes) 21458
+scalar LinkDegradation.r3.eth[0].mac passedUpPk:sum(packetBytes) 44252
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToUpper
 attr title "packets passed to higher layer, sum(packetBytes)"
-scalar LinkDegradation.r3.eth[0].mac packetDropIncorrectlyReceived:count 0
+scalar LinkDegradation.r3.eth[0].mac packetDropIncorrectlyReceived:count 1
 attr interpolationmode none
 attr recordingmode count
 attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
 attr title "packet drop: incorrectly received, count"
-scalar LinkDegradation.r3.eth[0].mac packetDropIncorrectlyReceived:sum(packetBytes) 0
+scalar LinkDegradation.r3.eth[0].mac packetDropIncorrectlyReceived:sum(packetBytes) 174
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetDropReasonIsIncorrectlyReceived(packetDropped)
@@ -6069,12 +6183,12 @@ scalar LinkDegradation.r3.eth[0].mac txPausePkUnits:sum 0
 attr interpolationmode none
 attr recordingmode sum
 attr title "pause units sent, sum"
-scalar LinkDegradation.r3.eth[0].mac rxPkOk:count 60
+scalar LinkDegradation.r3.eth[0].mac rxPkOk:count 191
 attr interpolationmode none
 attr recordingmode count
 attr source rxPkOk
 attr title "packets received OK, count"
-scalar LinkDegradation.r3.eth[0].mac rxPkOk:sum(packetBytes) 21458
+scalar LinkDegradation.r3.eth[0].mac rxPkOk:sum(packetBytes) 44252
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source rxPkOk
@@ -6489,11 +6603,11 @@ attr unit s
 scalar LinkDegradation.r3.eth[1].mac "simulated time" 60
 scalar LinkDegradation.r3.eth[1].mac full-duplex 1
 scalar LinkDegradation.r3.eth[1].mac "frames/sec sent" 0.46666666666667
-scalar LinkDegradation.r3.eth[1].mac "frames/sec rcvd" 0.71666666666667
+scalar LinkDegradation.r3.eth[1].mac "frames/sec rcvd" 1.7166666666667
 scalar LinkDegradation.r3.eth[1].mac "bits/sec sent" 374.93333333333
-scalar LinkDegradation.r3.eth[1].mac "bits/sec rcvd" 1543.7333333333
-scalar LinkDegradation.r3.eth[1].mac "rx channel idle (%)" 99.9984104
-scalar LinkDegradation.r3.eth[1].mac "rx channel utilization (%)" 0.0015896
+scalar LinkDegradation.r3.eth[1].mac "bits/sec rcvd" 2935.7333333333
+scalar LinkDegradation.r3.eth[1].mac "rx channel idle (%)" 99.9969544
+scalar LinkDegradation.r3.eth[1].mac "rx channel utilization (%)" 0.0030456
 scalar LinkDegradation.r3.eth[1].mac txPk:count 28
 attr interpolationmode none
 attr recordingmode count
@@ -6514,12 +6628,12 @@ attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, sum(packetBytes)"
-scalar LinkDegradation.r3.eth[1].mac passedUpPk:count 43
+scalar LinkDegradation.r3.eth[1].mac passedUpPk:count 103
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToUpper
 attr title "packets passed to higher layer, count"
-scalar LinkDegradation.r3.eth[1].mac passedUpPk:sum(packetBytes) 11578
+scalar LinkDegradation.r3.eth[1].mac passedUpPk:sum(packetBytes) 22018
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToUpper
@@ -6570,12 +6684,12 @@ scalar LinkDegradation.r3.eth[1].mac txPausePkUnits:sum 0
 attr interpolationmode none
 attr recordingmode sum
 attr title "pause units sent, sum"
-scalar LinkDegradation.r3.eth[1].mac rxPkOk:count 43
+scalar LinkDegradation.r3.eth[1].mac rxPkOk:count 103
 attr interpolationmode none
 attr recordingmode count
 attr source rxPkOk
 attr title "packets received OK, count"
-scalar LinkDegradation.r3.eth[1].mac rxPkOk:sum(packetBytes) 11578
+scalar LinkDegradation.r3.eth[1].mac rxPkOk:sum(packetBytes) 22018
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source rxPkOk
@@ -6633,14 +6747,14 @@ attr recordingmode last
 attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
 attr title "queue length, last"
 attr unit pk
-scalar LinkDegradation.r3.eth[2].queue queueLength:max 0
+scalar LinkDegradation.r3.eth[2].queue queueLength:max 1
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + count(packetPushStarted) - count(packetPulled) - count(packetRemoved) - count(packetDropped)))"
 attr title "queue length, max"
 attr unit pk
-scalar LinkDegradation.r3.eth[2].queue queueLength:timeavg 0
+scalar LinkDegradation.r3.eth[2].queue queueLength:timeavg 2.4064e-05
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -6654,14 +6768,14 @@ attr recordingmode last
 attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
 attr title "queue bit length, last"
 attr unit b
-scalar LinkDegradation.r3.eth[2].queue queueBitLength:max 0
+scalar LinkDegradation.r3.eth[2].queue queueBitLength:max 1392
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode max
 attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetPushStarted)) - sum(packetLength(packetPulled)) - sum(packetLength(packetRemoved)) - sum(packetLength(packetDropped))))"
 attr title "queue bit length, max"
 attr unit b
-scalar LinkDegradation.r3.eth[2].queue queueBitLength:timeavg 0
+scalar LinkDegradation.r3.eth[2].queue queueBitLength:timeavg 0.033497088
 attr autoWarmupFilter false
 attr interpolationmode sample-hold
 attr recordingmode timeavg
@@ -6669,89 +6783,116 @@ attr source "warmup(atomic(constant0(packetPushEnded) + sum(packetLength(packetP
 attr title "queue bit length, timeavg"
 attr unit b
 statistic LinkDegradation.r3.eth[2].queue queueingTime:histogram
-field count 57
-field mean 0
-field stddev 0
+field count 248
+field mean 5.821935483871e-06
+field stddev 1.2064070098099e-05
 field min 0
-field max 0
-field sum 0
-field sqrsum 0
+field max 3.072e-05
+field sum 0.00144384
+field sqrsum 4.43547648e-08
 attr interpolationmode none
 attr recordingmode histogram
 attr source queueingTime(packetPulled)
 attr title "queueing times"
 attr unit s
 bin	-inf	0
-bin	-0.5	0
-bin	-0.48	0
-bin	-0.46	0
-bin	-0.44	0
-bin	-0.42	0
-bin	-0.4	0
-bin	-0.38	0
-bin	-0.36	0
-bin	-0.34	0
-bin	-0.32	0
-bin	-0.3	0
-bin	-0.28	0
-bin	-0.26	0
-bin	-0.24	0
-bin	-0.22	0
-bin	-0.2	0
-bin	-0.18	0
-bin	-0.16	0
-bin	-0.14	0
-bin	-0.12	0
-bin	-0.1	0
-bin	-0.08	0
-bin	-0.06	0
-bin	-0.04	0
-bin	-0.02	0
-bin	0	57
-bin	0.02	0
-bin	0.04	0
-bin	0.06	0
-bin	0.08	0
-bin	0.1	0
-bin	0.12	0
-bin	0.14	0
-bin	0.16	0
-bin	0.18	0
-bin	0.2	0
-bin	0.22	0
-bin	0.24	0
-bin	0.26	0
-bin	0.28	0
-bin	0.3	0
-bin	0.32	0
-bin	0.34	0
-bin	0.36	0
-bin	0.38	0
-bin	0.4	0
-bin	0.42	0
-bin	0.44	0
-bin	0.46	0
-bin	0.48	0
-bin	0.5	0
-scalar LinkDegradation.r3.eth[2].queue outgoingPackets:count 57
+bin	0	201
+bin	5e-07	0
+bin	1e-06	0
+bin	1.5e-06	0
+bin	2e-06	0
+bin	2.5e-06	0
+bin	3e-06	0
+bin	3.5e-06	0
+bin	4e-06	0
+bin	4.5e-06	0
+bin	5e-06	0
+bin	5.5e-06	0
+bin	6e-06	0
+bin	6.5e-06	0
+bin	7e-06	0
+bin	7.5e-06	0
+bin	8e-06	0
+bin	8.5e-06	0
+bin	9e-06	0
+bin	9.5e-06	0
+bin	1e-05	0
+bin	1.05e-05	0
+bin	1.1e-05	0
+bin	1.15e-05	0
+bin	1.2e-05	0
+bin	1.25e-05	0
+bin	1.3e-05	0
+bin	1.35e-05	0
+bin	1.4e-05	0
+bin	1.45e-05	0
+bin	1.5e-05	0
+bin	1.55e-05	0
+bin	1.6e-05	0
+bin	1.65e-05	0
+bin	1.7e-05	0
+bin	1.75e-05	0
+bin	1.8e-05	0
+bin	1.85e-05	0
+bin	1.9e-05	0
+bin	1.95e-05	0
+bin	2e-05	0
+bin	2.05e-05	0
+bin	2.1e-05	0
+bin	2.15e-05	0
+bin	2.2e-05	0
+bin	2.25e-05	0
+bin	2.3e-05	0
+bin	2.35e-05	0
+bin	2.4e-05	0
+bin	2.45e-05	0
+bin	2.5e-05	0
+bin	2.55e-05	0
+bin	2.6e-05	0
+bin	2.65e-05	0
+bin	2.7e-05	0
+bin	2.75e-05	0
+bin	2.8e-05	0
+bin	2.85e-05	0
+bin	2.9e-05	0
+bin	2.95e-05	0
+bin	3e-05	0
+bin	3.05e-05	47
+bin	3.1e-05	0
+bin	3.15e-05	0
+bin	3.2e-05	0
+bin	3.25e-05	0
+bin	3.3e-05	0
+bin	3.35e-05	0
+bin	3.4e-05	0
+bin	3.45e-05	0
+bin	3.5e-05	0
+bin	3.55e-05	0
+bin	3.6e-05	0
+bin	3.65e-05	0
+bin	3.7e-05	0
+bin	3.75e-05	0
+bin	3.8e-05	0
+bin	3.85e-05	0
+scalar LinkDegradation.r3.eth[2].queue outgoingPackets:count 248
 attr recordingmode count
 attr source packetPulled
 attr title "outgoing packets, count"
 attr unit pk
-scalar LinkDegradation.r3.eth[2].queue outgoingPacketLengths:sum 227504
+scalar LinkDegradation.r3.eth[2].queue outgoingPacketLengths:sum 493376
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPulled)
 attr title "outgoing packet lengths, sum"
 attr unit b
 statistic LinkDegradation.r3.eth[2].queue outgoingPacketLengths:histogram
-field count 57
-field mean 3991.298245614
-field stddev 1275.0764958133
+field count 248
+field mean 1989.4193548387
+field stddev 1252.7609999616
 field min 368
 field max 4464
-field sum 227504
-field sqrsum 999082240
+field sum 493376
+field sqrsum 1369176064
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPulled)
@@ -6771,7 +6912,7 @@ bin	900	0
 bin	1000	0
 bin	1100	0
 bin	1200	0
-bin	1300	0
+bin	1300	191
 bin	1400	0
 bin	1500	0
 bin	1600	0
@@ -6830,25 +6971,25 @@ attr unit s
 bin	-inf	0
 bin	0	0
 bin	1	0
-scalar LinkDegradation.r3.eth[2].queue incomingPackets:count 57
+scalar LinkDegradation.r3.eth[2].queue incomingPackets:count 248
 attr recordingmode count
 attr source packetPushStarted
 attr title "incoming packets, count"
 attr unit pk
-scalar LinkDegradation.r3.eth[2].queue incomingPacketLengths:sum 227504
+scalar LinkDegradation.r3.eth[2].queue incomingPacketLengths:sum 493376
 attr interpolationmode none
 attr recordingmode sum
 attr source packetLength(packetPushStarted)
 attr title "incoming packet lengths, sum"
 attr unit b
 statistic LinkDegradation.r3.eth[2].queue incomingPacketLengths:histogram
-field count 57
-field mean 3991.298245614
-field stddev 1275.0764958133
+field count 248
+field mean 1989.4193548387
+field stddev 1252.7609999616
 field min 368
 field max 4464
-field sum 227504
-field sqrsum 999082240
+field sum 493376
+field sqrsum 1369176064
 attr interpolationmode none
 attr recordingmode histogram
 attr source packetLength(packetPushStarted)
@@ -6868,7 +7009,7 @@ bin	900	0
 bin	1000	0
 bin	1100	0
 bin	1200	0
-bin	1300	0
+bin	1300	191
 bin	1400	0
 bin	1500	0
 bin	1600	0
@@ -6939,28 +7080,28 @@ par LinkDegradation.r3.eth[2].mac stopOperationTimeout 2s
 attr unit s
 scalar LinkDegradation.r3.eth[2].mac "simulated time" 60
 scalar LinkDegradation.r3.eth[2].mac full-duplex 1
-scalar LinkDegradation.r3.eth[2].mac "frames/sec sent" 0.95
+scalar LinkDegradation.r3.eth[2].mac "frames/sec sent" 4.1333333333333
 scalar LinkDegradation.r3.eth[2].mac "frames/sec rcvd" 0.016666666666667
-scalar LinkDegradation.r3.eth[2].mac "bits/sec sent" 3794.1333333333
+scalar LinkDegradation.r3.eth[2].mac "bits/sec sent" 8225.3333333333
 scalar LinkDegradation.r3.eth[2].mac "bits/sec rcvd" 8.5333333333333
 scalar LinkDegradation.r3.eth[2].mac "rx channel idle (%)" 99.9999904
 scalar LinkDegradation.r3.eth[2].mac "rx channel utilization (%)" 9.6e-06
-scalar LinkDegradation.r3.eth[2].mac txPk:count 57
+scalar LinkDegradation.r3.eth[2].mac txPk:count 248
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToLower
 attr title "packets transmitted, count"
-scalar LinkDegradation.r3.eth[2].mac txPk:sum(packetBytes) 28456
+scalar LinkDegradation.r3.eth[2].mac txPk:sum(packetBytes) 61690
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToLower
 attr title "packets transmitted, sum(packetBytes)"
-scalar LinkDegradation.r3.eth[2].mac packetReceivedFromUpper:count 57
+scalar LinkDegradation.r3.eth[2].mac packetReceivedFromUpper:count 248
 attr interpolationmode none
 attr recordingmode count
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, count"
-scalar LinkDegradation.r3.eth[2].mac packetReceivedFromUpper:sum(packetBytes) 28438
+scalar LinkDegradation.r3.eth[2].mac packetReceivedFromUpper:sum(packetBytes) 61672
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
@@ -7334,12 +7475,12 @@ par LinkDegradation.hostB.ethernet stopOperationExtraTime -1s
 attr unit s
 par LinkDegradation.hostB.ethernet stopOperationTimeout 2s
 attr unit s
-scalar LinkDegradation.hostB.ethernet decapPk:count 57
+scalar LinkDegradation.hostB.ethernet decapPk:count 248
 attr interpolationmode none
 attr recordingmode count
 attr source decapPk
 attr title "packets decapsulated, count"
-scalar LinkDegradation.hostB.ethernet decapPk:sum(packetBytes) 27430
+scalar LinkDegradation.hostB.ethernet decapPk:sum(packetBytes) 57226
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source decapPk
@@ -7635,11 +7776,11 @@ attr unit s
 scalar LinkDegradation.hostB.eth[0].mac "simulated time" 60
 scalar LinkDegradation.hostB.eth[0].mac full-duplex 1
 scalar LinkDegradation.hostB.eth[0].mac "frames/sec sent" 0.016666666666667
-scalar LinkDegradation.hostB.eth[0].mac "frames/sec rcvd" 0.95
+scalar LinkDegradation.hostB.eth[0].mac "frames/sec rcvd" 4.1333333333333
 scalar LinkDegradation.hostB.eth[0].mac "bits/sec sent" 8.5333333333333
-scalar LinkDegradation.hostB.eth[0].mac "bits/sec rcvd" 3794.1333333333
-scalar LinkDegradation.hostB.eth[0].mac "rx channel idle (%)" 99.996145066667
-scalar LinkDegradation.hostB.eth[0].mac "rx channel utilization (%)" 0.0038549333333333
+scalar LinkDegradation.hostB.eth[0].mac "bits/sec rcvd" 8225.3333333333
+scalar LinkDegradation.hostB.eth[0].mac "rx channel idle (%)" 99.991510133333
+scalar LinkDegradation.hostB.eth[0].mac "rx channel utilization (%)" 0.0084898666666667
 scalar LinkDegradation.hostB.eth[0].mac txPk:count 1
 attr interpolationmode none
 attr recordingmode count
@@ -7660,12 +7801,12 @@ attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceivedFromUpper
 attr title "packet bytes from higher layer, sum(packetBytes)"
-scalar LinkDegradation.hostB.eth[0].mac passedUpPk:count 57
+scalar LinkDegradation.hostB.eth[0].mac passedUpPk:count 248
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToUpper
 attr title "packets passed to higher layer, count"
-scalar LinkDegradation.hostB.eth[0].mac passedUpPk:sum(packetBytes) 28456
+scalar LinkDegradation.hostB.eth[0].mac passedUpPk:sum(packetBytes) 61690
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSentToUpper
@@ -7716,12 +7857,12 @@ scalar LinkDegradation.hostB.eth[0].mac txPausePkUnits:sum 0
 attr interpolationmode none
 attr recordingmode sum
 attr title "pause units sent, sum"
-scalar LinkDegradation.hostB.eth[0].mac rxPkOk:count 57
+scalar LinkDegradation.hostB.eth[0].mac rxPkOk:count 248
 attr interpolationmode none
 attr recordingmode count
 attr source rxPkOk
 attr title "packets received OK, count"
-scalar LinkDegradation.hostB.eth[0].mac rxPkOk:sum(packetBytes) 28456
+scalar LinkDegradation.hostB.eth[0].mac rxPkOk:sum(packetBytes) 61690
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source rxPkOk
@@ -7942,12 +8083,12 @@ par LinkDegradation.hostB.udp icmpv6Module "\"^.ipv6.icmpv6\""
 par LinkDegradation.hostB.udp crcMode "\"declared\""
 attr enum disabled,declared,computed
 par LinkDegradation.hostB.udp defaultMulticastLoop true
-scalar LinkDegradation.hostB.udp packetReceived:count 50
+scalar LinkDegradation.hostB.udp packetReceived:count 241
 attr interpolationmode none
 attr recordingmode count
 attr source packetReceived
 attr title "packets received, count"
-scalar LinkDegradation.hostB.udp packetReceived:sum(packetBytes) 26000
+scalar LinkDegradation.hostB.udp packetReceived:sum(packetBytes) 51976
 attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetReceived
@@ -7962,7 +8103,7 @@ attr interpolationmode none
 attr recordingmode sum(packetBytes)
 attr source packetSent
 attr title "packets sent, sum(packetBytes)"
-scalar LinkDegradation.hostB.udp passedUpPk:count 50
+scalar LinkDegradation.hostB.udp passedUpPk:count 241
 attr interpolationmode none
 attr recordingmode count
 attr source packetSentToUpper
@@ -8025,116 +8166,25 @@ attr interpolationmode none
 attr recordingmode count
 attr source packetReceived
 attr title "packets received, count"
-statistic LinkDegradation.hostB.app[0] endToEndDelay:histogram
-field count 50
-field mean 0.0045319598
-field stddev 0.0056569006114695
-field min 0.00018152
-field max 0.01518142
-field sum 0.22659799
-field sqrsum 0.002594958683315
-attr interpolationmode none
-attr recordingmode histogram
-attr source dataAge(packetReceived)
-attr title "end-to-end delay"
+par LinkDegradation.hostB.app[1] typename "\"inet.applications.udpapp.UdpSink\""
+par LinkDegradation.hostB.app[1] interfaceTableModule "\"LinkDegradation.hostB.interfaceTable\""
+par LinkDegradation.hostB.app[1] startTime 0s
 attr unit s
-bin	-inf	0
-bin	0	25
-bin	0.0002	1
-bin	0.0004	0
-bin	0.0006	0
-bin	0.0008	1
-bin	0.001	0
-bin	0.0012	0
-bin	0.0014	0
-bin	0.0016	1
-bin	0.0018	0
-bin	0.002	0
-bin	0.0022	0
-bin	0.0024	1
-bin	0.0026	0
-bin	0.0028	0
-bin	0.003	1
-bin	0.0032	0
-bin	0.0034	0
-bin	0.0036	0
-bin	0.0038	1
-bin	0.004	0
-bin	0.0042	0
-bin	0.0044	0
-bin	0.0046	1
-bin	0.0048	0
-bin	0.005	0
-bin	0.0052	0
-bin	0.0054	1
-bin	0.0056	0
-bin	0.0058	0
-bin	0.006	1
-bin	0.0062	0
-bin	0.0064	0
-bin	0.0066	0
-bin	0.0068	1
-bin	0.007	0
-bin	0.0072	0
-bin	0.0074	0
-bin	0.0076	1
-bin	0.0078	0
-bin	0.008	0
-bin	0.0082	0
-bin	0.0084	1
-bin	0.0086	0
-bin	0.0088	0
-bin	0.009	1
-bin	0.0092	0
-bin	0.0094	0
-bin	0.0096	0
-bin	0.0098	1
-bin	0.01	0
-bin	0.0102	0
-bin	0.0104	0
-bin	0.0106	1
-bin	0.0108	0
-bin	0.011	0
-bin	0.0112	0
-bin	0.0114	1
-bin	0.0116	0
-bin	0.0118	0
-bin	0.012	1
-bin	0.0122	0
-bin	0.0124	0
-bin	0.0126	0
-bin	0.0128	1
-bin	0.013	0
-bin	0.0132	0
-bin	0.0134	0
-bin	0.0136	1
-bin	0.0138	0
-bin	0.014	0
-bin	0.0142	0
-bin	0.0144	1
-bin	0.0146	0
-bin	0.0148	0
-bin	0.015	5
-bin	0.0152	0
-bin	0.0154	0
-bin	0.0156	0
-bin	0.0158	0
-bin	0.016	0
-bin	0.0162	0
-bin	0.0164	0
-bin	0.0166	0
-bin	0.0168	0
-bin	0.017	0
-bin	0.0172	0
-bin	0.0174	0
-bin	0.0176	0
-bin	0.0178	0
-bin	0.018	0
-bin	0.0182	0
-bin	0.0184	0
-bin	0.0186	0
-bin	0.0188	0
-bin	0.019	0
+par LinkDegradation.hostB.app[1] stopTime -1s
+attr unit s
+par LinkDegradation.hostB.app[1] localPort 5001
+par LinkDegradation.hostB.app[1] receiveBroadcast false
+par LinkDegradation.hostB.app[1] multicastGroup "\"\""
+par LinkDegradation.hostB.app[1] multicastSources "\"\""
+par LinkDegradation.hostB.app[1] stopOperationExtraTime -1s
+attr unit s
+par LinkDegradation.hostB.app[1] stopOperationTimeout 2s
+attr unit s
+scalar LinkDegradation.hostB.app[1] packetReceived:count 191
+attr interpolationmode none
+attr recordingmode count
+attr source packetReceived
+attr title "packets received, count"
 par LinkDegradation.hostB.at typename "\"inet.common.MessageDispatcher\""
 par LinkDegradation.hostB.at displayStringTextFormat "\"processed %p pk (%l)\""
 par LinkDegradation.hostB.at forwardServiceRegistration true
@@ -8163,7 +8213,7 @@ par LinkDegradation.hostB multicastForwarding false
 par LinkDegradation.hostB hasUdp true
 par LinkDegradation.hostB hasTcp true
 par LinkDegradation.hostB hasSctp false
-par LinkDegradation.hostB numApps 1
+par LinkDegradation.hostB numApps 2
 par LinkDegradation.configurator typename "\"inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator\""
 par LinkDegradation.configurator minLinkWeight 0.001
 par LinkDegradation.configurator configureIsolatedNetworksSeparatly false
@@ -8186,6 +8236,7 @@ par LinkDegradation.scenarioManager script "<script>...</script> at content:1"
 par LinkDegradation.degradationController typename "\"dissertationsim.controller.LinkDegradationController\""
 par LinkDegradation.degradationController firstInterfaceModule "\"^.r2.eth[1]\""
 par LinkDegradation.degradationController secondInterfaceModule "\"^.r3.eth[0]\""
+par LinkDegradation.degradationController profile "\"mildLinear\""
 par LinkDegradation.degradationController startTime 20s
 attr unit s
 par LinkDegradation.degradationController endTime 40s

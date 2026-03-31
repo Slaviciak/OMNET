@@ -1,31 +1,31 @@
 version 3
-run StrongLinear-0-20260331-14:43:30-9764
-attr configname StrongLinear
-attr datetime 20260331-14:43:30
-attr datetimef 20260331-144330
-attr experiment StrongLinear
+run UnstableLinear-0-20260331-14:44:39-24324
+attr configname UnstableLinear
+attr datetime 20260331-14:44:39
+attr datetimef 20260331-144439
+attr experiment UnstableLinear
 attr inifile omnetpp.ini
 attr iterationvars ""
 attr iterationvarsd ""
 attr iterationvarsf ""
 attr measurement ""
 attr network dissertationsim.simulations.linkdegradation.LinkDegradation
-attr processid 9764
+attr processid 24324
 attr repetition 0
 attr replication #0
 attr resultdir results
 attr runnumber 0
 attr seedset 0
 config image-path ../../../inet4.5/images
-config description "Stronger linear delay and PER increase on r2-r3 from 20s to 40s, followed by hard failure at 45s"
-config **.degradationController.profile "\"strongLinear\""
-config **.degradationController.targetDelay 40ms
-config **.degradationController.targetPacketErrorRate 0.08
+config description "Overall upward delay and PER trend with deterministic oscillations on r2-r3 before hard failure at 45s"
+config **.degradationController.profile "\"unstableLinear\""
+config **.degradationController.targetDelay 25ms
+config **.degradationController.targetPacketErrorRate 0.05
 config network dissertationsim.simulations.linkdegradation.LinkDegradation
 config sim-time-limit 60s
-config output-scalar-file ../../results/linkdegradation/eval/StrongLinear-0.sca
-config output-vector-file ../../results/linkdegradation/eval/StrongLinear-0.vec
-config eventlog-file ../../results/linkdegradation/debug/StrongLinear-0.elog
+config output-scalar-file ../../results/linkdegradation/eval/UnstableLinear-0.sca
+config output-vector-file ../../results/linkdegradation/eval/UnstableLinear-0.vec
+config eventlog-file ../../results/linkdegradation/debug/UnstableLinear-0.elog
 config record-eventlog false
 config **.ospf.ospfConfig "xmldoc(\"ASConfig.xml\")"
 config **.hostA.numApps 2
@@ -8239,15 +8239,15 @@ par LinkDegradation.scenarioManager script "<script>...</script> at content:1"
 par LinkDegradation.degradationController typename "\"dissertationsim.controller.LinkDegradationController\""
 par LinkDegradation.degradationController firstInterfaceModule "\"^.r2.eth[1]\""
 par LinkDegradation.degradationController secondInterfaceModule "\"^.r3.eth[0]\""
-par LinkDegradation.degradationController profile "\"strongLinear\""
+par LinkDegradation.degradationController profile "\"unstableLinear\""
 par LinkDegradation.degradationController startTime 20s
 attr unit s
 par LinkDegradation.degradationController endTime 40s
 attr unit s
 par LinkDegradation.degradationController updateInterval 0.5s
 attr unit s
-par LinkDegradation.degradationController targetDelay 0.04s
+par LinkDegradation.degradationController targetDelay 0.025s
 attr unit s
-par LinkDegradation.degradationController targetPacketErrorRate 0.08
+par LinkDegradation.degradationController targetPacketErrorRate 0.05
 par LinkDegradation typename "\"dissertationsim.simulations.linkdegradation.LinkDegradation\""
 

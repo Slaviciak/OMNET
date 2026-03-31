@@ -1,0 +1,106 @@
+LinkDegradation Dataset Sanity Report
+====================================
+
+Dataset Shape
+  rows: 180
+  columns: 26
+
+Rows Per Config
+  MildLinear: 60
+  StrongLinear: 60
+  UnstableLinear: 60
+
+Rows Per Label
+  degraded: 60
+  failed: 45
+  normal: 60
+  pre_failure: 15
+
+Rows Per Run
+  0: 180
+
+Missing Value Counts Per Column
+  config_name: 0
+  run_number: 0
+  window_start_s: 0
+  window_end_s: 0
+  label: 0
+  controller_delay_mean_s: 0
+  controller_delay_max_s: 0
+  controller_delay_last_s: 0
+  controller_packet_error_rate_mean: 0
+  controller_packet_error_rate_max: 0
+  controller_packet_error_rate_last: 0
+  receiver_app0_packet_count: 0
+  receiver_app0_seq_progress: 0
+  receiver_app0_last_seq: 30
+  receiver_app0_e2e_delay_mean_s: 30
+  receiver_app0_e2e_delay_max_s: 30
+  receiver_app0_throughput_mean_bps: 0
+  receiver_app0_throughput_last_bps: 0
+  receiver_app1_packet_count: 0
+  receiver_app1_seq_progress: 0
+  receiver_app1_last_seq: 36
+  receiver_app1_e2e_delay_mean_s: 36
+  receiver_app1_e2e_delay_max_s: 36
+  receiver_app1_throughput_mean_bps: 0
+  receiver_app1_throughput_last_bps: 0
+  receiver_total_packet_count: 0
+
+Descriptive Stats For Key Numeric Columns
+  controller_delay_mean_s:
+    count=180
+    mean=0.013266591196640278
+    median=0.011386206681624999
+    min=1e-07
+    max=0.04
+  controller_packet_error_rate_mean:
+    count=180
+    mean=0.026533081886719163
+    median=0.022772335202628877
+    min=0.0
+    max=0.08
+  receiver_total_packet_count:
+    count=180
+    mean=3.9722222222222223
+    median=5.0
+    min=0.0
+    max=5.0
+  receiver_app0_e2e_delay_mean_s:
+    count=150
+    mean=0.007902753915633333
+    median=0.00038073875
+    min=0.00018152
+    max=0.04018142
+  receiver_app1_e2e_delay_mean_s:
+    count=144
+    mean=0.0082920783096
+    median=0.001973812
+    min=5.864e-05
+    max=0.04009314
+
+Per-Config Summary For Key Features
+  MildLinear (rows=60)
+    controller_delay_mean_s: count=60, mean=0.0074688002083333335, min=1e-07, max=0.015
+    controller_packet_error_rate_mean: count=60, mean=0.0149375, min=0.0, max=0.03
+    receiver_total_packet_count: count=60, mean=4.016666666666667, min=0.0, max=5.0
+    receiver_app0_e2e_delay_mean_s: count=50, mean=0.0045325046, min=0.00018152, max=0.01518142
+    receiver_app1_e2e_delay_mean_s: count=48, mean=0.0047112472890625005, min=5.864e-05, max=0.015086220000000001
+  StrongLinear (rows=60)
+    controller_delay_mean_s: count=60, mean=0.019916716875, min=1e-07, max=0.04
+    controller_packet_error_rate_mean: count=60, mean=0.03983333333333334, min=0.0, max=0.08
+    receiver_total_packet_count: count=60, mean=3.95, min=0.0, max=5.0
+    receiver_app0_e2e_delay_mean_s: count=50, mean=0.0117825046, min=0.00018152, max=0.04018142
+    receiver_app1_e2e_delay_mean_s: count=48, mean=0.012416241671875, min=5.864e-05, max=0.04009314
+  UnstableLinear (rows=60)
+    controller_delay_mean_s: count=60, mean=0.012414256506587501, min=1e-07, max=0.025
+    controller_packet_error_rate_mean: count=60, mean=0.02482841232682416, min=0.0, max=0.05
+    receiver_total_packet_count: count=60, mean=3.95, min=0.0, max=5.0
+    receiver_app0_e2e_delay_mean_s: count=50, mean=0.0073932525469, min=0.00018152, max=0.02518142
+    receiver_app1_e2e_delay_mean_s: count=48, mean=0.0077487459678625, min=5.864e-05, max=0.02509314
+
+Generated Files
+  report: C:/Users/slavi_6voo0ou/Desktop/omnetpp-6.3.0-windows-x86_64/omnetpp-6.3.0/samples/dissertation/dissertationsim/analysis/output/dataset_report.txt
+  missing-values csv: C:/Users/slavi_6voo0ou/Desktop/omnetpp-6.3.0-windows-x86_64/omnetpp-6.3.0/samples/dissertation/dissertationsim/analysis/output/dataset_missing_values.csv
+  per-config summary csv: C:/Users/slavi_6voo0ou/Desktop/omnetpp-6.3.0-windows-x86_64/omnetpp-6.3.0/samples/dissertation/dissertationsim/analysis/output/dataset_per_config_summary.csv
+
