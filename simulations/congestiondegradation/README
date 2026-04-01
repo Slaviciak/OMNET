@@ -1,0 +1,39 @@
+CongestionDegradation
+=====================
+
+Overview
+- This scenario generates pre-failure telemetry through traffic-driven congestion on the primary r2-r3 path.
+- It keeps the same dual-path topology and OSPF structure as the other dissertation scenarios.
+- Unlike the synthetic linkdegradation scenario, it does not inject delay or packet error rate directly into the channel.
+
+Topology
+- Primary path: hostA -> r1 -> r2 -> r3 -> hostB
+- Backup path: hostA -> r1 -> r4 -> r3 -> hostB
+- The primary r2-r3 link is a fixed 30 Mbps bottleneck.
+- All other links remain at 100 Mbps.
+
+Timeline
+- 0s-20s: routing convergence, no traffic
+- 20s-50s: baseline and light load with only the probe flow and the first bulk flow
+- 50s-125s: staged demand rise as additional bulk flows start
+- 125s-150s: critical congestion period with all configured flows active
+- 150s: physical disconnect of r2-r3 by ScenarioManager
+- 150s-180s: post-failure observation
+
+Traffic
+- Probe flow: 256 B every 10 ms, starts at 20 s
+- Seven bulk flows: 1200 B every 2 ms
+- Bulk flow start times: 30 s, 50 s, 65 s, 80 s, 95 s, 110 s, 125 s
+
+Measurements
+- Sender and receiver packet counts for all flows
+- Receiver throughput, end-to-end delay, and received sequence progression vectors
+- IPv4 no-route and interface-down drop counters
+- Bottleneck queue vectors on r2.eth[1].queue:
+  - queueLength
+  - queueBitLength
+  - queueingTime
+
+Purpose
+- Provide a more realistic data-generation scenario where degradation emerges from rising demand and queue buildup on the primary path.
+- Keep the setup deterministic, reproducible, and interpretable for later dataset generation.
