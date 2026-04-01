@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 """
-Build a simple ML-ready CSV dataset from OMNeT++ vector results for the
-linkdegradation scenario.
+Build a simple ML-ready CSV dataset from OMNeT++ vector results.
 
 Assumptions:
-- Input files are OMNeT++ .vec files under results/linkdegradation/eval/.
+- Input files are OMNeT++ .vec files under results/<scenario>/eval/ by default.
 - Windows are fixed-size and non-overlapping.
 - Labels are assigned from configurable time boundaries using the window start.
 - Receiver-side metrics may be absent in some runs; missing values are left blank.
-- Older runs using the legacy "LinkDegradation" config name are treated as
-  MildLinear for compatibility.
+- Older runs using legacy or debug config names may be normalized to the main
+  config name for dataset consistency.
+- The CLI uses scenario presets so later scenario-specific builders can follow
+  the same style.
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 import math
 import re
@@ -27,14 +29,33 @@ DEGRADATION_START_SECONDS = 20.0
 PRE_FAILURE_START_SECONDS = 40.0
 HARD_FAILURE_TIME_SECONDS = 45.0
 
-SUPPORTED_CONFIGS = {"MildLinear", "StrongLinear", "UnstableLinear"}
-CONFIG_ALIASES = {
-    "LinkDegradation": "MildLinear",
-}
+CONGESTION_CONVERGENCE_END_SECONDS = 20.0
+CONGESTION_BASELINE_END_SECONDS = 50.0
+CONGESTION_RISING_END_SECONDS = 125.0
+CONGESTION_CRITICAL_END_SECONDS = 150.0
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-RESULTS_DIR = PROJECT_ROOT / "results" / "linkdegradation" / "eval"
-OUTPUT_FILE = PROJECT_ROOT / "analysis" / "output" / "linkdegradation_dataset.csv"
+DEFAULT_SCENARIO = "linkdegradation"
+BOTTLE_NECK_QUEUE_MODULE_SUFFIX = ".r2.eth[1].queue"
+
+SCENARIO_PRESETS = {
+    "linkdegradation": {
+        "results_dir": PROJECT_ROOT / "results" / "linkdegradation" / "eval",
+        "output_file": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_dataset.csv",
+        "supported_configs": {"MildLinear", "StrongLinear", "UnstableLinear"},
+        "config_aliases": {
+            "LinkDegradation": "MildLinear",
+        },
+        "default_sim_time_limit": 60.0,
+    },
+    "congestiondegradation": {
+        "results_dir": PROJECT_ROOT / "results" / "congestiondegradation" / "eval",
+        "output_file": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_dataset.csv",
+        "supported_configs": {"CongestionDegradation", "CongestionDegradationMild"},
+        "config_aliases": {},
+        "default_sim_time_limit": 180.0,
+    },
+}
 
 HOSTB_APP_RE = re.compile(r".*\.hostB\.app\[(\d+)\]$")
 
@@ -49,11 +70,39 @@ def parse_time_value(raw: str) -> float | None:
         return None
 
 
-def normalize_config_name(name: str) -> str:
-    return CONFIG_ALIASES.get(name, name)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build a windowed dataset from OMNeT++ vector results.")
+    parser.add_argument(
+        "--scenario",
+        default=DEFAULT_SCENARIO,
+        help=f"Scenario preset to use for defaults. Currently supported: {', '.join(sorted(SCENARIO_PRESETS))}.",
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        help="Directory containing .vec files. Defaults to the preset results directory.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Output CSV path. Defaults to analysis/output/<scenario>_dataset.csv.",
+    )
+    return parser.parse_args()
 
 
-def label_for_window(window_start: float) -> str:
+def get_scenario_preset(scenario: str) -> dict[str, object]:
+    preset = SCENARIO_PRESETS.get(scenario)
+    if preset is None:
+        supported = ", ".join(sorted(SCENARIO_PRESETS))
+        raise SystemExit(f"Unsupported scenario '{scenario}'. Supported scenarios: {supported}")
+    return preset
+
+
+def normalize_config_name(name: str, config_aliases: dict[str, str]) -> str:
+    return config_aliases.get(name, name)
+
+
+def label_for_linkdegradation_window(window_start: float) -> str:
     if window_start < DEGRADATION_START_SECONDS:
         return "normal"
     if window_start < PRE_FAILURE_START_SECONDS:
@@ -61,6 +110,26 @@ def label_for_window(window_start: float) -> str:
     if window_start < HARD_FAILURE_TIME_SECONDS:
         return "pre_failure"
     return "failed"
+
+
+def label_for_congestiondegradation_window(window_start: float) -> str:
+    if window_start < CONGESTION_CONVERGENCE_END_SECONDS:
+        return "convergence"
+    if window_start < CONGESTION_BASELINE_END_SECONDS:
+        return "baseline"
+    if window_start < CONGESTION_RISING_END_SECONDS:
+        return "rising_congestion"
+    if window_start < CONGESTION_CRITICAL_END_SECONDS:
+        return "critical_congestion"
+    return "failed"
+
+
+def label_for_window(scenario: str, window_start: float) -> str:
+    if scenario == "linkdegradation":
+        return label_for_linkdegradation_window(window_start)
+    if scenario == "congestiondegradation":
+        return label_for_congestiondegradation_window(window_start)
+    raise SystemExit(f"Unsupported scenario '{scenario}' for labeling")
 
 
 def last_value_before_or_at(series: list[tuple[float, float]], time_point: float) -> float | None:
@@ -126,14 +195,24 @@ def sequence_summary(series: list[tuple[float, float]], window_start: float, win
     }
 
 
-def init_run_data() -> dict:
-    return {
-        "controller": {
-            "appliedDelay": [],
-            "appliedPacketErrorRate": [],
-        },
+def init_run_data(scenario: str) -> dict:
+    run_data = {
         "receiver_apps": {},
     }
+    if scenario == "linkdegradation":
+        run_data["controller"] = {
+            "appliedDelay": [],
+            "appliedPacketErrorRate": [],
+        }
+    elif scenario == "congestiondegradation":
+        run_data["bottleneck_queue"] = {
+            "queueLength": [],
+            "queueBitLength": [],
+            "queueingTime": [],
+        }
+    else:
+        raise SystemExit(f"Unsupported scenario '{scenario}' for dataset extraction")
+    return run_data
 
 
 def ensure_receiver_app(run_data: dict, app_index: int) -> dict:
@@ -144,9 +223,12 @@ def ensure_receiver_app(run_data: dict, app_index: int) -> dict:
     })
 
 
-def register_vector_target(run_data: dict, module: str, name: str) -> tuple[str, int | None] | None:
-    if module.endswith(".degradationController") and name in {"appliedDelay", "appliedPacketErrorRate"}:
+def register_vector_target(scenario: str, run_data: dict, module: str, name: str) -> tuple[str, int | None] | None:
+    if scenario == "linkdegradation" and module.endswith(".degradationController") and name in {"appliedDelay", "appliedPacketErrorRate"}:
         return ("controller", name)
+
+    if scenario == "congestiondegradation" and module.endswith(BOTTLE_NECK_QUEUE_MODULE_SUFFIX) and name in {"queueLength", "queueBitLength", "queueingTime"}:
+        return ("bottleneck_queue", name)
 
     match = HOSTB_APP_RE.match(module)
     if match and name in {"throughput", "endToEndDelay", "rcvdPkSeqNo"}:
@@ -155,13 +237,19 @@ def register_vector_target(run_data: dict, module: str, name: str) -> tuple[str,
     return None
 
 
-def parse_vec_file(vec_path: Path) -> dict | None:
+def parse_vec_file(
+    vec_path: Path,
+    scenario: str,
+    supported_configs: set[str],
+    config_aliases: dict[str, str],
+    default_sim_time_limit: float,
+) -> dict | None:
     metadata = {
         "configname": None,
         "runnumber": None,
         "sim_time_limit": None,
     }
-    run_data = init_run_data()
+    run_data = init_run_data(scenario)
     vector_targets: dict[int, tuple[str, int | str | None]] = {}
 
     with vec_path.open("r", encoding="utf-8") as handle:
@@ -194,7 +282,7 @@ def parse_vec_file(vec_path: Path) -> dict | None:
                 name = parts[3]
                 if name.endswith(":vector"):
                     name = name[:-7]
-                target = register_vector_target(run_data, module, name)
+                target = register_vector_target(scenario, run_data, module, name)
                 if target is not None:
                     vector_targets[vector_id] = target
                 continue
@@ -217,12 +305,14 @@ def parse_vec_file(vec_path: Path) -> dict | None:
             target_type, target_key = target
             if target_type == "controller":
                 run_data["controller"][target_key].append((timestamp, value))
+            elif target_type == "bottleneck_queue":
+                run_data["bottleneck_queue"][target_key].append((timestamp, value))
             else:
                 app_metrics = ensure_receiver_app(run_data, int(target_key))
                 app_metrics[target_type].append((timestamp, value))
 
-    configname = normalize_config_name(metadata["configname"] or "")
-    if configname not in SUPPORTED_CONFIGS:
+    configname = normalize_config_name(metadata["configname"] or "", config_aliases)
+    if configname not in supported_configs:
         return None
 
     if metadata["runnumber"] is None:
@@ -230,12 +320,12 @@ def parse_vec_file(vec_path: Path) -> dict | None:
         metadata["runnumber"] = int(match.group(1)) if match else 0
 
     metadata["configname"] = configname
-    metadata["sim_time_limit"] = metadata["sim_time_limit"] if metadata["sim_time_limit"] is not None else 60.0
+    metadata["sim_time_limit"] = metadata["sim_time_limit"] if metadata["sim_time_limit"] is not None else default_sim_time_limit
     run_data["metadata"] = metadata
     return run_data
 
 
-def build_rows_for_run(run_data: dict) -> list[dict[str, object]]:
+def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]:
     metadata = run_data["metadata"]
     sim_time_limit = float(metadata["sim_time_limit"])
     num_windows = int(math.ceil(sim_time_limit / WINDOW_SIZE_SECONDS))
@@ -246,22 +336,42 @@ def build_rows_for_run(run_data: dict) -> list[dict[str, object]]:
         window_start = window_index * WINDOW_SIZE_SECONDS
         window_end = min(sim_time_limit, window_start + WINDOW_SIZE_SECONDS)
 
-        delay_summary = numeric_summary(run_data["controller"]["appliedDelay"], window_start, window_end)
-        per_summary = numeric_summary(run_data["controller"]["appliedPacketErrorRate"], window_start, window_end)
-
         row = {
             "config_name": metadata["configname"],
             "run_number": metadata["runnumber"],
             "window_start_s": window_start,
             "window_end_s": window_end,
-            "label": label_for_window(window_start),
-            "controller_delay_mean_s": delay_summary["mean"],
-            "controller_delay_max_s": delay_summary["max"],
-            "controller_delay_last_s": delay_summary["last"],
-            "controller_packet_error_rate_mean": per_summary["mean"],
-            "controller_packet_error_rate_max": per_summary["max"],
-            "controller_packet_error_rate_last": per_summary["last"],
+            "label": label_for_window(scenario, window_start),
         }
+
+        if scenario == "linkdegradation":
+            delay_summary = numeric_summary(run_data["controller"]["appliedDelay"], window_start, window_end)
+            per_summary = numeric_summary(run_data["controller"]["appliedPacketErrorRate"], window_start, window_end)
+            row.update({
+                "controller_delay_mean_s": delay_summary["mean"],
+                "controller_delay_max_s": delay_summary["max"],
+                "controller_delay_last_s": delay_summary["last"],
+                "controller_packet_error_rate_mean": per_summary["mean"],
+                "controller_packet_error_rate_max": per_summary["max"],
+                "controller_packet_error_rate_last": per_summary["last"],
+            })
+        elif scenario == "congestiondegradation":
+            queue_length_summary = numeric_summary(run_data["bottleneck_queue"]["queueLength"], window_start, window_end)
+            queue_bit_length_summary = numeric_summary(run_data["bottleneck_queue"]["queueBitLength"], window_start, window_end)
+            queueing_time_summary = numeric_summary(run_data["bottleneck_queue"]["queueingTime"], window_start, window_end)
+            row.update({
+                "bottleneck_queue_length_mean_pk": queue_length_summary["mean"],
+                "bottleneck_queue_length_max_pk": queue_length_summary["max"],
+                "bottleneck_queue_length_last_pk": queue_length_summary["last"],
+                "bottleneck_queue_bit_length_mean_b": queue_bit_length_summary["mean"],
+                "bottleneck_queue_bit_length_max_b": queue_bit_length_summary["max"],
+                "bottleneck_queue_bit_length_last_b": queue_bit_length_summary["last"],
+                "bottleneck_queueing_time_mean_s": queueing_time_summary["mean"],
+                "bottleneck_queueing_time_max_s": queueing_time_summary["max"],
+                "bottleneck_queueing_time_last_s": queueing_time_summary["last"],
+            })
+        else:
+            raise SystemExit(f"Unsupported scenario '{scenario}' for dataset row generation")
 
         total_packets = 0
         for app_index in sorted(receiver_apps.keys()):
@@ -285,18 +395,24 @@ def build_rows_for_run(run_data: dict) -> list[dict[str, object]]:
     return rows
 
 
-def collect_rows() -> list[dict[str, object]]:
+def collect_rows(
+    results_dir: Path,
+    scenario: str,
+    supported_configs: set[str],
+    config_aliases: dict[str, str],
+    default_sim_time_limit: float,
+) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    for vec_path in sorted(RESULTS_DIR.glob("*.vec")):
-        run_data = parse_vec_file(vec_path)
+    for vec_path in sorted(results_dir.glob("*.vec")):
+        run_data = parse_vec_file(vec_path, scenario, supported_configs, config_aliases, default_sim_time_limit)
         if run_data is None:
             continue
-        rows.extend(build_rows_for_run(run_data))
+        rows.extend(build_rows_for_run(run_data, scenario))
     return rows
 
 
-def write_dataset(rows: list[dict[str, object]]) -> None:
-    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+def write_dataset(rows: list[dict[str, object]], output_file: Path) -> None:
+    output_file.parent.mkdir(parents=True, exist_ok=True)
 
     fieldnames: list[str] = []
     for row in rows:
@@ -304,22 +420,31 @@ def write_dataset(rows: list[dict[str, object]]) -> None:
             if key not in fieldnames:
                 fieldnames.append(key)
 
-    with OUTPUT_FILE.open("w", newline="", encoding="utf-8") as handle:
+    with output_file.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
 
 
 def main() -> None:
-    if not RESULTS_DIR.exists():
-        raise SystemExit(f"Results directory not found: {RESULTS_DIR}")
+    args = parse_args()
+    preset = get_scenario_preset(args.scenario)
 
-    rows = collect_rows()
+    results_dir = args.input if args.input is not None else preset["results_dir"]
+    output_file = args.output if args.output is not None else preset["output_file"]
+    supported_configs = preset["supported_configs"]
+    config_aliases = preset["config_aliases"]
+    default_sim_time_limit = preset["default_sim_time_limit"]
+
+    if not results_dir.exists():
+        raise SystemExit(f"Results directory not found: {results_dir}")
+
+    rows = collect_rows(results_dir, args.scenario, supported_configs, config_aliases, default_sim_time_limit)
     if not rows:
-        raise SystemExit("No supported linkdegradation .vec files were found.")
+        raise SystemExit(f"No supported {args.scenario} .vec files were found in {results_dir}.")
 
-    write_dataset(rows)
-    print(f"Wrote {len(rows)} dataset rows to {OUTPUT_FILE}")
+    write_dataset(rows, output_file)
+    print(f"Wrote {len(rows)} dataset rows to {output_file}")
 
 
 if __name__ == "__main__":

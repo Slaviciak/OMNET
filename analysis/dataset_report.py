@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """
-Generate a lightweight sanity report for the linkdegradation dataset.
+Generate a lightweight sanity report for a scenario dataset.
 
 Assumptions:
 - The dataset CSV was produced by analysis/build_dataset.py.
 - Empty strings represent missing values.
 - Only simple summary and data quality checks are needed at this stage.
 - The report should stay robust even if some expected columns are missing.
+- Version 1 uses scenario presets and a simple CLI so the
+  same workflow can be extended later without changing the reporting style.
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -18,19 +21,79 @@ from statistics import fmean, median
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DATASET_PATH = PROJECT_ROOT / "analysis" / "output" / "linkdegradation_dataset.csv"
-REPORT_PATH = PROJECT_ROOT / "analysis" / "output" / "dataset_report.txt"
-MISSING_CSV_PATH = PROJECT_ROOT / "analysis" / "output" / "dataset_missing_values.csv"
-PER_CONFIG_CSV_PATH = PROJECT_ROOT / "analysis" / "output" / "dataset_per_config_summary.csv"
+DEFAULT_SCENARIO = "linkdegradation"
 
-EXPECTED_CONFIGS = ["MildLinear", "StrongLinear", "UnstableLinear"]
-KEY_NUMERIC_COLUMNS = [
-    "controller_delay_mean_s",
-    "controller_packet_error_rate_mean",
-    "receiver_total_packet_count",
-    "receiver_app0_e2e_delay_mean_s",
-    "receiver_app1_e2e_delay_mean_s",
-]
+SCENARIO_PRESETS = {
+    "linkdegradation": {
+        "dataset_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_dataset.csv",
+        "report_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_report.txt",
+        "missing_csv_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_missing_values.csv",
+        "per_config_csv_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_per_config_summary.csv",
+        "report_title": "LinkDegradation Dataset Sanity Report",
+        "expected_configs": ["MildLinear", "StrongLinear", "UnstableLinear"],
+        "key_numeric_columns": [
+            "controller_delay_mean_s",
+            "controller_packet_error_rate_mean",
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app1_e2e_delay_mean_s",
+        ],
+    },
+    "congestiondegradation": {
+        "dataset_path": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_dataset.csv",
+        "report_path": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_report.txt",
+        "missing_csv_path": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_missing_values.csv",
+        "per_config_csv_path": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_per_config_summary.csv",
+        "report_title": "CongestionDegradation Dataset Sanity Report",
+        "expected_configs": ["CongestionDegradation", "CongestionDegradationMild"],
+        "key_numeric_columns": [
+            "bottleneck_queue_length_mean_pk",
+            "bottleneck_queue_bit_length_mean_b",
+            "bottleneck_queueing_time_mean_s",
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+        ],
+    },
+}
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate a lightweight sanity report for a dataset CSV.")
+    parser.add_argument(
+        "--scenario",
+        default=DEFAULT_SCENARIO,
+        help=f"Scenario preset to use for defaults. Currently supported: {', '.join(sorted(SCENARIO_PRESETS))}.",
+    )
+    parser.add_argument(
+        "--input",
+        type=Path,
+        help="Input dataset CSV path. Defaults to analysis/output/<scenario>_dataset.csv.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Report text path. Defaults to analysis/output/<scenario>_report.txt.",
+    )
+    parser.add_argument(
+        "--missing-output",
+        type=Path,
+        help="CSV path for missing-value counts. Defaults to analysis/output/<scenario>_missing_values.csv.",
+    )
+    parser.add_argument(
+        "--summary-output",
+        type=Path,
+        help="CSV path for per-config numeric summaries. Defaults to analysis/output/<scenario>_per_config_summary.csv.",
+    )
+    return parser.parse_args()
+
+
+def get_scenario_preset(scenario: str) -> dict[str, object]:
+    preset = SCENARIO_PRESETS.get(scenario)
+    if preset is None:
+        supported = ", ".join(sorted(SCENARIO_PRESETS))
+        raise SystemExit(f"Unsupported scenario '{scenario}'. Supported scenarios: {supported}")
+    return preset
 
 
 def load_rows(path: Path) -> list[dict[str, str]]:
@@ -143,7 +206,16 @@ def format_numeric_section(title: str, rows: list[dict[str, str]], columns: list
     return lines
 
 
-def build_report(rows: list[dict[str, str]]) -> str:
+def build_report(
+    rows: list[dict[str, str]],
+    report_title: str,
+    expected_configs: list[str],
+    key_numeric_columns: list[str],
+    dataset_path: Path,
+    report_path: Path,
+    missing_csv_path: Path,
+    per_config_csv_path: Path,
+) -> str:
     if not rows:
         return "Dataset is empty.\n"
 
@@ -152,13 +224,16 @@ def build_report(rows: list[dict[str, str]]) -> str:
     label_counts = Counter(row.get("label", "") for row in rows)
     run_counts = Counter(row.get("run_number", "") for row in rows)
     missing_counts = count_missing(rows, columns)
-    missing_expected_configs = [config for config in EXPECTED_CONFIGS if config not in config_counts]
-    key_columns_present = [column for column in KEY_NUMERIC_COLUMNS if column in columns]
-    key_columns_missing = [column for column in KEY_NUMERIC_COLUMNS if column not in columns]
+    missing_expected_configs = [config for config in expected_configs if config not in config_counts]
+    key_columns_present = [column for column in key_numeric_columns if column in columns]
+    key_columns_missing = [column for column in key_numeric_columns if column not in columns]
 
     lines: list[str] = []
-    lines.append("LinkDegradation Dataset Sanity Report")
-    lines.append("====================================")
+    lines.append(report_title)
+    lines.append("=" * len(report_title))
+    lines.append("")
+    lines.append("Input Dataset")
+    lines.append(f"  {dataset_path}")
     lines.append("")
     lines.append("Dataset Shape")
     lines.append(f"  rows: {len(rows)}")
@@ -204,35 +279,55 @@ def build_report(rows: list[dict[str, str]]) -> str:
             )
     lines.append("")
     lines.append("Generated Files")
-    lines.append(f"  report: {REPORT_PATH}")
-    lines.append(f"  missing-values csv: {MISSING_CSV_PATH}")
-    lines.append(f"  per-config summary csv: {PER_CONFIG_CSV_PATH}")
+    lines.append(f"  report: {report_path}")
+    lines.append(f"  missing-values csv: {missing_csv_path}")
+    lines.append(f"  per-config summary csv: {per_config_csv_path}")
     lines.append("")
 
     return "\n".join(lines) + "\n"
 
 
 def main() -> None:
-    if not DATASET_PATH.exists():
-        raise SystemExit(f"Dataset CSV not found: {DATASET_PATH}")
+    args = parse_args()
+    preset = get_scenario_preset(args.scenario)
 
-    rows = load_rows(DATASET_PATH)
-    report_text = build_report(rows)
+    dataset_path = args.input if args.input is not None else preset["dataset_path"]
+    report_path = args.output if args.output is not None else preset["report_path"]
+    missing_csv_path = args.missing_output if args.missing_output is not None else preset["missing_csv_path"]
+    per_config_csv_path = args.summary_output if args.summary_output is not None else preset["per_config_csv_path"]
+    report_title = preset["report_title"]
+    expected_configs = preset["expected_configs"]
+    key_numeric_columns = preset["key_numeric_columns"]
 
-    REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text(report_text, encoding="utf-8")
+    if not dataset_path.exists():
+        raise SystemExit(f"Dataset CSV not found: {dataset_path}")
+
+    rows = load_rows(dataset_path)
+    report_text = build_report(
+        rows,
+        report_title,
+        expected_configs,
+        key_numeric_columns,
+        dataset_path,
+        report_path,
+        missing_csv_path,
+        per_config_csv_path,
+    )
+
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report_text, encoding="utf-8")
 
     columns = list(rows[0].keys()) if rows else []
     missing_counts = count_missing(rows, columns)
     missing_rows = [{"column": column, "missing_count": missing_counts[column]} for column in columns]
-    per_config_rows = per_config_numeric_summary(rows, [column for column in KEY_NUMERIC_COLUMNS if column in columns])
+    per_config_rows = per_config_numeric_summary(rows, [column for column in key_numeric_columns if column in columns])
 
-    write_csv(MISSING_CSV_PATH, missing_rows)
-    write_csv(PER_CONFIG_CSV_PATH, per_config_rows)
+    write_csv(missing_csv_path, missing_rows)
+    write_csv(per_config_csv_path, per_config_rows)
 
-    print(f"Wrote report to {REPORT_PATH}")
-    print(f"Wrote missing-value summary to {MISSING_CSV_PATH}")
-    print(f"Wrote per-config summary to {PER_CONFIG_CSV_PATH}")
+    print(f"Wrote report to {report_path}")
+    print(f"Wrote missing-value summary to {missing_csv_path}")
+    print(f"Wrote per-config summary to {per_config_csv_path}")
 
 
 if __name__ == "__main__":

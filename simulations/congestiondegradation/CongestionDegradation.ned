@@ -17,10 +17,10 @@ network CongestionDegradation
             datarate = 100Mbps;
             thruputDisplayFormat = "#N";
         }
-        channel BottleneckEth30M extends ThruputMeteringChannel
+        channel BottleneckEth10M extends ThruputMeteringChannel
         {
             delay = 0.1us;
-            datarate = 30Mbps;
+            datarate = 10Mbps;
             thruputDisplayFormat = "#N";
         }
     submodules:
@@ -81,7 +81,7 @@ network CongestionDegradation
     connections:
         hostA.ethg[0] <--> Eth100M <--> r1.ethg[0];
         r1.ethg[1] <--> Eth100M <--> r2.ethg[0];
-        r2.ethg[1] <--> BottleneckEth30M <--> r3.ethg[0];
+        r2.ethg[1] <--> BottleneckEth10M <--> r3.ethg[0];
         r1.ethg[2] <--> Eth100M <--> r4.ethg[0];
         r4.ethg[1] <--> Eth100M <--> r3.ethg[1];
         r3.ethg[2] <--> Eth100M <--> hostB.ethg[0];
