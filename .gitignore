@@ -1,0 +1,31 @@
+# Build outputs
+/out/
+/src/*.exe
+/src/*_dbg.exe
+/src/*.dll
+/src/*.lib
+/src/*.a
+/src/Makefile.*
+*.o
+*.o.d
+.last-copts
+
+# Simulation results and debug artifacts
+/results/
+/simulations/**/results/
+*.sca
+*.vec
+*.vci
+*.elog
+*.anf
+
+# Generated analysis outputs
+/analysis/output/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Local OMNeT++ / Qtenv state
+.qtenvrc
+/simulations/**/.qtenvrc

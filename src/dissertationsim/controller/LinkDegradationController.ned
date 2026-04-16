@@ -6,6 +6,7 @@ simple LinkDegradationController
         @class(dissertationsim::controller::LinkDegradationController);
         string firstInterfaceModule;
         string secondInterfaceModule;
+        // Supported profiles: mildLinear, strongLinear, unstableLinear, stagedRealistic.
         string profile = default("mildLinear");
         double startTime @unit(s);
         double endTime @unit(s);

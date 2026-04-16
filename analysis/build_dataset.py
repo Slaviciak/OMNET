@@ -7,6 +7,8 @@ Assumptions:
 - Windows are fixed-size and non-overlapping.
 - Labels are assigned from configurable time boundaries using the window start.
 - Receiver-side metrics may be absent in some runs; missing values are left blank.
+- Throughput vectors are rate samples, so they are summarized from actual
+  nonnegative samples inside each window only.
 - Older runs using legacy or debug config names may be normalized to the main
   config name for dataset consistency.
 - The CLI uses scenario presets so later scenario-specific builders can follow
@@ -34,15 +36,28 @@ CONGESTION_BASELINE_END_SECONDS = 50.0
 CONGESTION_RISING_END_SECONDS = 125.0
 CONGESTION_CRITICAL_END_SECONDS = 150.0
 
+REGIONAL_REACTIVE_FAILURE_TIME_SECONDS = 40.0
+REGIONAL_REACTIVE_DISRUPTION_END_SECONDS = 50.0
+
+REGIONAL_DEGRADATION_START_SECONDS = 35.0
+REGIONAL_DEGRADATION_END_SECONDS = 55.0
+REGIONAL_HARD_FAILURE_TIME_SECONDS = 60.0
+
+REGIONAL_CONGESTION_CONVERGENCE_END_SECONDS = 20.0
+REGIONAL_CONGESTION_BASELINE_END_SECONDS = 35.0
+REGIONAL_CONGESTION_RISING_END_SECONDS = 80.0
+REGIONAL_CONGESTION_CRITICAL_END_SECONDS = 125.0
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCENARIO = "linkdegradation"
 BOTTLE_NECK_QUEUE_MODULE_SUFFIX = ".r2.eth[1].queue"
+REGIONAL_BOTTLENECK_QUEUE_MODULE_SUFFIX = ".coreNW.eth[1].queue"
 
 SCENARIO_PRESETS = {
     "linkdegradation": {
         "results_dir": PROJECT_ROOT / "results" / "linkdegradation" / "eval",
         "output_file": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_dataset.csv",
-        "supported_configs": {"MildLinear", "StrongLinear", "UnstableLinear"},
+        "supported_configs": {"MildLinear", "StrongLinear", "UnstableLinear", "StagedRealistic"},
         "config_aliases": {
             "LinkDegradation": "MildLinear",
         },
@@ -54,6 +69,24 @@ SCENARIO_PRESETS = {
         "supported_configs": {"CongestionDegradation", "CongestionDegradationMild"},
         "config_aliases": {},
         "default_sim_time_limit": 180.0,
+    },
+    "regionalbackbone": {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "eval",
+        "output_file": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_dataset.csv",
+        "supported_configs": {
+            "RegionalBackboneBaseline",
+            "RegionalBackboneReactiveFailure",
+            "RegionalBackboneControlledDegradation",
+            "RegionalBackboneCongestionDegradation",
+        },
+        "config_aliases": {},
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            "RegionalBackboneBaseline": 60.0,
+            "RegionalBackboneReactiveFailure": 80.0,
+            "RegionalBackboneControlledDegradation": 90.0,
+            "RegionalBackboneCongestionDegradation": 150.0,
+        },
     },
 }
 
@@ -124,12 +157,58 @@ def label_for_congestiondegradation_window(window_start: float) -> str:
     return "failed"
 
 
-def label_for_window(scenario: str, window_start: float) -> str:
+def label_for_regionalbackbone_window(config_name: str, window_start: float) -> str:
+    if config_name == "RegionalBackboneBaseline":
+        return "normal"
+
+    if config_name == "RegionalBackboneReactiveFailure":
+        if window_start < REGIONAL_REACTIVE_FAILURE_TIME_SECONDS:
+            return "normal"
+        if window_start < REGIONAL_REACTIVE_DISRUPTION_END_SECONDS:
+            return "reactive_disruption"
+        return "post_reroute"
+
+    if config_name == "RegionalBackboneControlledDegradation":
+        if window_start < REGIONAL_DEGRADATION_START_SECONDS:
+            return "normal"
+        if window_start < REGIONAL_DEGRADATION_END_SECONDS:
+            return "degraded"
+        if window_start < REGIONAL_HARD_FAILURE_TIME_SECONDS:
+            return "pre_failure"
+        return "failed"
+
+    if config_name == "RegionalBackboneCongestionDegradation":
+        if window_start < REGIONAL_CONGESTION_CONVERGENCE_END_SECONDS:
+            return "convergence"
+        if window_start < REGIONAL_CONGESTION_BASELINE_END_SECONDS:
+            return "baseline"
+        if window_start < REGIONAL_CONGESTION_RISING_END_SECONDS:
+            return "rising_congestion"
+        if window_start < REGIONAL_CONGESTION_CRITICAL_END_SECONDS:
+            return "critical_congestion"
+        return "failed"
+
+    raise SystemExit(f"Unsupported regionalbackbone config '{config_name}' for labeling")
+
+
+def label_for_window(scenario: str, config_name: str, window_start: float) -> str:
     if scenario == "linkdegradation":
         return label_for_linkdegradation_window(window_start)
     if scenario == "congestiondegradation":
         return label_for_congestiondegradation_window(window_start)
+    if scenario == "regionalbackbone":
+        return label_for_regionalbackbone_window(config_name, window_start)
     raise SystemExit(f"Unsupported scenario '{scenario}' for labeling")
+
+
+def default_sim_time_limit_for_config(
+    default_sim_time_limit: float,
+    config_name: str,
+    default_sim_time_limits_by_config: dict[str, float] | None,
+) -> float:
+    if default_sim_time_limits_by_config is None:
+        return default_sim_time_limit
+    return default_sim_time_limits_by_config.get(config_name, default_sim_time_limit)
 
 
 def last_value_before_or_at(series: list[tuple[float, float]], time_point: float) -> float | None:
@@ -168,6 +247,25 @@ def numeric_summary(series: list[tuple[float, float]], window_start: float, wind
         "mean": fmean(samples),
         "max": max(samples),
         "last": end_value if end_value is not None else samples[-1],
+    }
+
+
+def throughput_summary(series: list[tuple[float, float]], window_start: float, window_end: float) -> dict[str, float | str]:
+    if not series:
+        return {"mean": "", "max": "", "last": ""}
+
+    # Throughput is a sampled rate, not a state variable. Boundary carry-over can
+    # misrepresent a window, and INET may emit a startup estimator artifact below
+    # zero, which is not physically meaningful for throughput.
+    samples = [value for timestamp, value in series if window_start <= timestamp < window_end and value >= 0]
+
+    if not samples:
+        return {"mean": "", "max": "", "last": ""}
+
+    return {
+        "mean": fmean(samples),
+        "max": max(samples),
+        "last": samples[-1],
     }
 
 
@@ -210,6 +308,16 @@ def init_run_data(scenario: str) -> dict:
             "queueBitLength": [],
             "queueingTime": [],
         }
+    elif scenario == "regionalbackbone":
+        run_data["controller"] = {
+            "appliedDelay": [],
+            "appliedPacketErrorRate": [],
+        }
+        run_data["bottleneck_queue"] = {
+            "queueLength": [],
+            "queueBitLength": [],
+            "queueingTime": [],
+        }
     else:
         raise SystemExit(f"Unsupported scenario '{scenario}' for dataset extraction")
     return run_data
@@ -223,11 +331,19 @@ def ensure_receiver_app(run_data: dict, app_index: int) -> dict:
     })
 
 
-def register_vector_target(scenario: str, run_data: dict, module: str, name: str) -> tuple[str, int | None] | None:
-    if scenario == "linkdegradation" and module.endswith(".degradationController") and name in {"appliedDelay", "appliedPacketErrorRate"}:
+def register_vector_target(scenario: str, config_name: str, run_data: dict, module: str, name: str) -> tuple[str, int | str | None] | None:
+    if scenario in {"linkdegradation", "regionalbackbone"} and module.endswith(".degradationController") and name in {"appliedDelay", "appliedPacketErrorRate"}:
         return ("controller", name)
 
     if scenario == "congestiondegradation" and module.endswith(BOTTLE_NECK_QUEUE_MODULE_SUFFIX) and name in {"queueLength", "queueBitLength", "queueingTime"}:
+        return ("bottleneck_queue", name)
+
+    if (
+        scenario == "regionalbackbone"
+        and config_name == "RegionalBackboneCongestionDegradation"
+        and module.endswith(REGIONAL_BOTTLENECK_QUEUE_MODULE_SUFFIX)
+        and name in {"queueLength", "queueBitLength", "queueingTime"}
+    ):
         return ("bottleneck_queue", name)
 
     match = HOSTB_APP_RE.match(module)
@@ -243,6 +359,7 @@ def parse_vec_file(
     supported_configs: set[str],
     config_aliases: dict[str, str],
     default_sim_time_limit: float,
+    default_sim_time_limits_by_config: dict[str, float] | None,
 ) -> dict | None:
     metadata = {
         "configname": None,
@@ -270,7 +387,8 @@ def parse_vec_file(
                 continue
 
             if line.startswith("config sim-time-limit "):
-                metadata["sim_time_limit"] = parse_time_value(line.split(" ", 2)[2])
+                if metadata["sim_time_limit"] is None:
+                    metadata["sim_time_limit"] = parse_time_value(line.split(" ", 2)[2])
                 continue
 
             if line.startswith("vector "):
@@ -282,7 +400,8 @@ def parse_vec_file(
                 name = parts[3]
                 if name.endswith(":vector"):
                     name = name[:-7]
-                target = register_vector_target(scenario, run_data, module, name)
+                configname = normalize_config_name(metadata["configname"] or "", config_aliases)
+                target = register_vector_target(scenario, configname, run_data, module, name)
                 if target is not None:
                     vector_targets[vector_id] = target
                 continue
@@ -320,7 +439,11 @@ def parse_vec_file(
         metadata["runnumber"] = int(match.group(1)) if match else 0
 
     metadata["configname"] = configname
-    metadata["sim_time_limit"] = metadata["sim_time_limit"] if metadata["sim_time_limit"] is not None else default_sim_time_limit
+    metadata["sim_time_limit"] = (
+        metadata["sim_time_limit"]
+        if metadata["sim_time_limit"] is not None
+        else default_sim_time_limit_for_config(default_sim_time_limit, configname, default_sim_time_limits_by_config)
+    )
     run_data["metadata"] = metadata
     return run_data
 
@@ -341,10 +464,10 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             "run_number": metadata["runnumber"],
             "window_start_s": window_start,
             "window_end_s": window_end,
-            "label": label_for_window(scenario, window_start),
+            "label": label_for_window(scenario, metadata["configname"], window_start),
         }
 
-        if scenario == "linkdegradation":
+        if scenario in {"linkdegradation", "regionalbackbone"}:
             delay_summary = numeric_summary(run_data["controller"]["appliedDelay"], window_start, window_end)
             per_summary = numeric_summary(run_data["controller"]["appliedPacketErrorRate"], window_start, window_end)
             row.update({
@@ -355,7 +478,8 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
                 "controller_packet_error_rate_max": per_summary["max"],
                 "controller_packet_error_rate_last": per_summary["last"],
             })
-        elif scenario == "congestiondegradation":
+
+        if scenario in {"congestiondegradation", "regionalbackbone"}:
             queue_length_summary = numeric_summary(run_data["bottleneck_queue"]["queueLength"], window_start, window_end)
             queue_bit_length_summary = numeric_summary(run_data["bottleneck_queue"]["queueBitLength"], window_start, window_end)
             queueing_time_summary = numeric_summary(run_data["bottleneck_queue"]["queueingTime"], window_start, window_end)
@@ -370,7 +494,7 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
                 "bottleneck_queueing_time_max_s": queueing_time_summary["max"],
                 "bottleneck_queueing_time_last_s": queueing_time_summary["last"],
             })
-        else:
+        elif scenario != "linkdegradation":
             raise SystemExit(f"Unsupported scenario '{scenario}' for dataset row generation")
 
         total_packets = 0
@@ -378,7 +502,7 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             metrics = receiver_apps[app_index]
             seq = sequence_summary(metrics["rcvdPkSeqNo"], window_start, window_end)
             delay = numeric_summary(metrics["endToEndDelay"], window_start, window_end)
-            throughput = numeric_summary(metrics["throughput"], window_start, window_end)
+            throughput = throughput_summary(metrics["throughput"], window_start, window_end)
 
             total_packets += int(seq["count"])
             row[f"receiver_app{app_index}_packet_count"] = seq["count"]
@@ -401,10 +525,18 @@ def collect_rows(
     supported_configs: set[str],
     config_aliases: dict[str, str],
     default_sim_time_limit: float,
+    default_sim_time_limits_by_config: dict[str, float] | None,
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for vec_path in sorted(results_dir.glob("*.vec")):
-        run_data = parse_vec_file(vec_path, scenario, supported_configs, config_aliases, default_sim_time_limit)
+        run_data = parse_vec_file(
+            vec_path,
+            scenario,
+            supported_configs,
+            config_aliases,
+            default_sim_time_limit,
+            default_sim_time_limits_by_config,
+        )
         if run_data is None:
             continue
         rows.extend(build_rows_for_run(run_data, scenario))
@@ -435,11 +567,19 @@ def main() -> None:
     supported_configs = preset["supported_configs"]
     config_aliases = preset["config_aliases"]
     default_sim_time_limit = preset["default_sim_time_limit"]
+    default_sim_time_limits_by_config = preset.get("default_sim_time_limits_by_config")
 
     if not results_dir.exists():
         raise SystemExit(f"Results directory not found: {results_dir}")
 
-    rows = collect_rows(results_dir, args.scenario, supported_configs, config_aliases, default_sim_time_limit)
+    rows = collect_rows(
+        results_dir,
+        args.scenario,
+        supported_configs,
+        config_aliases,
+        default_sim_time_limit,
+        default_sim_time_limits_by_config,
+    )
     if not rows:
         raise SystemExit(f"No supported {args.scenario} .vec files were found in {results_dir}.")
 

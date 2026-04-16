@@ -1,9 +1,9 @@
-file 751552 1774961084                                          
+file 751552 1776169633                                          
 version 3
-run UnstableLinear-0-20260331-14:44:39-24324
+run UnstableLinear-0-20260414-14:27:05-28220
 attr configname UnstableLinear
-attr datetime 20260331-14:44:39
-attr datetimef 20260331-144439
+attr datetime 20260414-14:27:05
+attr datetimef 20260414-142705
 attr experiment UnstableLinear
 attr inifile omnetpp.ini
 attr iterationvars ""
@@ -11,7 +11,7 @@ attr iterationvarsd ""
 attr iterationvarsf ""
 attr measurement ""
 attr network dissertationsim.simulations.linkdegradation.LinkDegradation
-attr processid 24324
+attr processid 28220
 attr repetition 0
 attr replication #0
 attr resultdir results

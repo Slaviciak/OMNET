@@ -30,7 +30,7 @@ SCENARIO_PRESETS = {
         "missing_csv_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_missing_values.csv",
         "per_config_csv_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_per_config_summary.csv",
         "report_title": "LinkDegradation Dataset Sanity Report",
-        "expected_configs": ["MildLinear", "StrongLinear", "UnstableLinear"],
+        "expected_configs": ["MildLinear", "StrongLinear", "UnstableLinear", "StagedRealistic"],
         "key_numeric_columns": [
             "controller_delay_mean_s",
             "controller_packet_error_rate_mean",
@@ -53,6 +53,29 @@ SCENARIO_PRESETS = {
             "receiver_total_packet_count",
             "receiver_app0_e2e_delay_mean_s",
             "receiver_app0_throughput_mean_bps",
+        ],
+    },
+    "regionalbackbone": {
+        "dataset_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_dataset.csv",
+        "report_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_report.txt",
+        "missing_csv_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_missing_values.csv",
+        "per_config_csv_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_per_config_summary.csv",
+        "report_title": "RegionalBackbone Dataset Sanity Report",
+        "expected_configs": [
+            "RegionalBackboneBaseline",
+            "RegionalBackboneReactiveFailure",
+            "RegionalBackboneControlledDegradation",
+            "RegionalBackboneCongestionDegradation",
+        ],
+        "key_numeric_columns": [
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+            "controller_delay_mean_s",
+            "controller_packet_error_rate_mean",
+            "bottleneck_queue_length_mean_pk",
+            "bottleneck_queue_bit_length_mean_b",
+            "bottleneck_queueing_time_mean_s",
         ],
     },
 }

@@ -20,6 +20,12 @@ Configs
 - MildLinear: moderate linear degradation.
 - StrongLinear: stronger linear degradation with higher target delay and PER.
 - UnstableLinear: upward overall trend with small deterministic oscillations during the ramp.
+- StagedRealistic: staged deterministic degradation with mild early delay growth, delay variation in the middle phase, and accelerated late delay/PER increase.
+
+Design notes
+- The staged profile keeps hard failure separate from pre-failure quality degradation.
+- It treats delay, delay variation, and packet loss as distinct observable symptoms, following the style of IP performance metrics used in IETF IPPM work.
+- The profile is deterministic so repeated runs remain reproducible for dataset generation.
 
 Purpose
 - Provide a clean scenario for collecting time-series data before hard failure.

@@ -11,6 +11,12 @@ namespace {
 
 constexpr double PI = 3.14159265358979323846;
 
+struct ProfileProgress
+{
+    double delay = 0;
+    double packetErrorRate = 0;
+};
+
 double clamp01(double value)
 {
     if (value < 0)
@@ -18,6 +24,34 @@ double clamp01(double value)
     if (value > 1)
         return 1;
     return value;
+}
+
+ProfileProgress stagedRealisticProgress(double progress)
+{
+    if (progress <= 1.0 / 3.0) {
+        auto phaseProgress = progress * 3.0;
+        return {
+            0.20 * std::pow(phaseProgress, 1.2),
+            0.02 * phaseProgress,
+        };
+    }
+
+    if (progress <= 2.0 / 3.0) {
+        auto phaseProgress = (progress - 1.0 / 3.0) * 3.0;
+        auto delayTrend = 0.20 + 0.40 * phaseProgress;
+        // Deterministic delay variation: small bounded oscillations around the trend.
+        auto delayVariation = 0.04 * std::sin(4.0 * PI * phaseProgress);
+        return {
+            clamp01(delayTrend + delayVariation),
+            0.02 + 0.18 * phaseProgress,
+        };
+    }
+
+    auto phaseProgress = (progress - 2.0 / 3.0) * 3.0;
+    return {
+        0.60 + 0.40 * std::pow(phaseProgress, 1.7),
+        0.20 + 0.80 * std::pow(phaseProgress, 1.8),
+    };
 }
 
 } // namespace
@@ -45,7 +79,7 @@ void LinkDegradationController::initialize()
         throw cRuntimeError("targetDelay must be non-negative");
     if (targetPacketErrorRate < 0 || targetPacketErrorRate > 1)
         throw cRuntimeError("targetPacketErrorRate must be between 0 and 1");
-    if (profile != "mildLinear" && profile != "strongLinear" && profile != "unstableLinear")
+    if (profile != "mildLinear" && profile != "strongLinear" && profile != "unstableLinear" && profile != "stagedRealistic")
         throw cRuntimeError("Unsupported degradation profile '%s'", profile.c_str());
 
     channels[0] = resolveTransmitChannel(par("firstInterfaceModule"));
@@ -122,18 +156,25 @@ void LinkDegradationController::applyProfile(simtime_t now)
         progress = clamp01((now - startTime).dbl() / (endTime - startTime).dbl());
     }
 
-    double shapedProgress = progress;
+    double delayProgress = progress;
+    double packetErrorRateProgress = progress;
     if (profile == "unstableLinear") {
         // Small deterministic oscillations around the upward trend.
         auto oscillation = 0.08 * std::sin(6.0 * PI * progress);
-        shapedProgress = clamp01(progress + oscillation * progress);
+        delayProgress = clamp01(progress + oscillation * progress);
+        packetErrorRateProgress = delayProgress;
+    }
+    else if (profile == "stagedRealistic") {
+        auto stagedProgress = stagedRealisticProgress(progress);
+        delayProgress = stagedProgress.delay;
+        packetErrorRateProgress = stagedProgress.packetErrorRate;
     }
 
-    auto appliedDelay = channels[0].initialDelay + (targetDelay - channels[0].initialDelay) * shapedProgress;
-    auto appliedPacketErrorRate = channels[0].initialPacketErrorRate + (targetPacketErrorRate - channels[0].initialPacketErrorRate) * shapedProgress;
+    auto appliedDelay = channels[0].initialDelay + (targetDelay - channels[0].initialDelay) * delayProgress;
+    auto appliedPacketErrorRate = channels[0].initialPacketErrorRate + (targetPacketErrorRate - channels[0].initialPacketErrorRate) * packetErrorRateProgress;
 
     for (auto& channelState : channels)
-        applyToChannel(channelState, channelState.initialDelay + (targetDelay - channelState.initialDelay) * shapedProgress, channelState.initialPacketErrorRate + (targetPacketErrorRate - channelState.initialPacketErrorRate) * shapedProgress);
+        applyToChannel(channelState, channelState.initialDelay + (targetDelay - channelState.initialDelay) * delayProgress, channelState.initialPacketErrorRate + (targetPacketErrorRate - channelState.initialPacketErrorRate) * packetErrorRateProgress);
 
     recordAppliedValues(appliedDelay, appliedPacketErrorRate);
 }

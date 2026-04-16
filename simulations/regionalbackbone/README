@@ -1,0 +1,103 @@
+RegionalBackbone
+================
+
+Overview
+- This scenario is the first medium-scale baseline topology for the dissertation project.
+- It starts with baseline validation and now includes reactive-failure, controlled-degradation, and traffic-driven congestion configs.
+- It does not add predictive logic, proactive rerouting, or new C++ modules.
+- Its purpose is to validate a larger OSPF topology before using it for later protective reroute experiments.
+
+Topology
+- Endpoints:
+  - hostA
+  - hostB
+- Access routers:
+  - accessA
+  - accessB
+- West-side aggregation/provider-edge routers:
+  - west1
+  - west2
+- East-side aggregation/provider-edge routers:
+  - east1
+  - east2
+- Backbone/core routers:
+  - coreNW
+  - coreNE
+  - coreSW
+  - coreSE
+  - coreC1
+  - coreC2
+
+Preferred path
+- hostA -> accessA -> west1 -> coreNW -> coreNE -> east1 -> accessB -> hostB
+
+Alternative paths
+- Southern corridor:
+  - hostA -> accessA -> west2 -> coreSW -> coreSE -> east2 -> accessB -> hostB
+- First diagonal alternative:
+  - hostA -> accessA -> west1 -> coreNW -> coreC1 -> coreSE -> east2 -> accessB -> hostB
+- Second diagonal alternative:
+  - hostA -> accessA -> west2 -> coreSW -> coreC2 -> coreNE -> east1 -> accessB -> hostB
+
+OSPF cost intent
+- Low costs on the northern corridor make the preferred path unambiguous.
+- Higher costs on the southern and diagonal alternatives keep fallback paths available without accidental ECMP in the first version.
+- This makes later rerouting experiments easier to interpret because the primary and fallback path hierarchy is explicit.
+
+Traffic
+- Baseline, reactive-failure, and controlled-degradation configs use one light UDP flow from hostA to hostB.
+- The traffic-driven congestion config uses one low-rate probe flow plus staged bulk UDP flows.
+- Traffic starts after an initial routing-convergence period.
+- Non-congestion configs keep load intentionally small so they validate routing, failure, or controlled impairment behavior only.
+
+Configs
+- `RegionalBackboneBaseline`
+  - Baseline routing validation.
+  - No failures.
+- `RegionalBackboneReactiveFailure`
+  - Pure reactive rerouting experiment.
+  - Traffic starts at 20s.
+  - The preferred `coreNW <-> coreNE` backbone span is physically disconnected at 40s.
+  - OSPF is expected to reconverge after the failure onto an available alternative path.
+- `RegionalBackboneControlledDegradation`
+  - Controlled synthetic pre-failure degradation experiment.
+  - Reuses the project-local `LinkDegradationController`.
+  - Traffic starts at 20s.
+  - The preferred `coreNW <-> coreNE` backbone span degrades from 35s to 55s using `stagedRealistic`.
+  - The same span is physically disconnected at 60s.
+  - OSPF is expected to react only after the hard failure.
+- `RegionalBackboneCongestionDegradation`
+  - Traffic-driven pre-failure congestion experiment.
+  - Uses a fixed 10 Mbps bottleneck on the preferred `coreNW <-> coreNE` backbone span.
+  - All other links remain at 100 Mbps.
+  - Probe traffic starts at 20s.
+  - Six staged bulk flows start at 35s, 50s, 65s, 80s, 95s, and 110s.
+  - The same span is physically disconnected at 125s.
+  - OSPF is expected to keep using the preferred path during congestion and react only after the hard failure.
+- Debug variants enable eventlog recording for manual path inspection.
+
+Congestion timeline
+- 0s-20s: routing convergence, no traffic.
+- 20s-35s: normal/light-load probe traffic.
+- 35s-80s: rising congestion as staged bulk flows accumulate below or near the bottleneck capacity.
+- 80s-125s: critical congestion as aggregate offered load exceeds the 10 Mbps bottleneck.
+- 125s: physical disconnect of `coreNW <-> coreNE` by ScenarioManager.
+- 125s-150s: post-failure observation and reactive rerouting.
+
+Measurements
+- Sender packet count.
+- Receiver packet count.
+- Receiver throughput vector.
+- Receiver end-to-end delay vector.
+- Receiver received sequence-number vector.
+- Basic IPv4 no-route and interface-down drop counters.
+- Controller-side applied delay and packet-error-rate vectors for controlled-degradation configs.
+- Bottleneck queue vectors on `coreNW.eth[1].queue` for traffic-driven congestion configs:
+  - queueLength
+  - queueBitLength
+  - queueingTime
+
+Purpose
+- Move beyond the tiny dual-path topology without jumping to an Internet-scale model.
+- Provide a defensible medium topology for later baseline, reactive failure, controlled degradation, and congestion-driven experiments.
+- Keep the first step small enough to debug before adding impairment or protective reroute logic.

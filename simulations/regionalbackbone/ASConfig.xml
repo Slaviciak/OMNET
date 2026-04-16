@@ -1,0 +1,111 @@
+<?xml version="1.0"?>
+<OSPFASConfig xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="OSPF.xsd">
+
+  <Area id="0.0.0.0">
+    <AddressRange address="hostA" mask="hostA" />
+    <AddressRange address="hostB" mask="hostB" />
+    <AddressRange address="accessA>west1" mask="accessA>west1" />
+    <AddressRange address="west1>accessA" mask="west1>accessA" />
+    <AddressRange address="accessA>west2" mask="accessA>west2" />
+    <AddressRange address="west2>accessA" mask="west2>accessA" />
+    <AddressRange address="west1>coreNW" mask="west1>coreNW" />
+    <AddressRange address="coreNW>west1" mask="coreNW>west1" />
+    <AddressRange address="west2>coreSW" mask="west2>coreSW" />
+    <AddressRange address="coreSW>west2" mask="coreSW>west2" />
+    <AddressRange address="coreNW>coreNE" mask="coreNW>coreNE" />
+    <AddressRange address="coreNE>coreNW" mask="coreNE>coreNW" />
+    <AddressRange address="coreSW>coreSE" mask="coreSW>coreSE" />
+    <AddressRange address="coreSE>coreSW" mask="coreSE>coreSW" />
+    <AddressRange address="coreNW>coreSW" mask="coreNW>coreSW" />
+    <AddressRange address="coreSW>coreNW" mask="coreSW>coreNW" />
+    <AddressRange address="coreNE>coreSE" mask="coreNE>coreSE" />
+    <AddressRange address="coreSE>coreNE" mask="coreSE>coreNE" />
+    <AddressRange address="coreNW>coreC1" mask="coreNW>coreC1" />
+    <AddressRange address="coreC1>coreNW" mask="coreC1>coreNW" />
+    <AddressRange address="coreC1>coreSE" mask="coreC1>coreSE" />
+    <AddressRange address="coreSE>coreC1" mask="coreSE>coreC1" />
+    <AddressRange address="coreSW>coreC2" mask="coreSW>coreC2" />
+    <AddressRange address="coreC2>coreSW" mask="coreC2>coreSW" />
+    <AddressRange address="coreC2>coreNE" mask="coreC2>coreNE" />
+    <AddressRange address="coreNE>coreC2" mask="coreNE>coreC2" />
+    <AddressRange address="coreNE>east1" mask="coreNE>east1" />
+    <AddressRange address="east1>coreNE" mask="east1>coreNE" />
+    <AddressRange address="coreSE>east2" mask="coreSE>east2" />
+    <AddressRange address="east2>coreSE" mask="east2>coreSE" />
+    <AddressRange address="east1>accessB" mask="east1>accessB" />
+    <AddressRange address="accessB>east1" mask="accessB>east1" />
+    <AddressRange address="east2>accessB" mask="east2>accessB" />
+    <AddressRange address="accessB>east2" mask="accessB>east2" />
+  </Area>
+
+  <Router name="accessA" RFC1583Compatible="true">
+    <BroadcastInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" routerPriority="1" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" />
+    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="4" />
+  </Router>
+
+  <Router name="west1" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" />
+  </Router>
+
+  <Router name="west2" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" />
+  </Router>
+
+  <Router name="coreNW" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" />
+    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="5" />
+    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="6" />
+  </Router>
+
+  <Router name="coreNE" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="5" />
+    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="7" />
+    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="1" />
+  </Router>
+
+  <Router name="coreSW" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" />
+    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="5" />
+    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="7" />
+  </Router>
+
+  <Router name="coreSE" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="5" />
+    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="6" />
+    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="4" />
+  </Router>
+
+  <Router name="coreC1" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="6" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="6" />
+  </Router>
+
+  <Router name="coreC2" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="7" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="7" />
+  </Router>
+
+  <Router name="east1" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" />
+  </Router>
+
+  <Router name="east2" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" />
+  </Router>
+
+  <Router name="accessB" RFC1583Compatible="true">
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" />
+    <BroadcastInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="1" routerPriority="1" />
+  </Router>
+
+</OSPFASConfig>

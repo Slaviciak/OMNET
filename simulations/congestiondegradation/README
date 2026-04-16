@@ -26,8 +26,11 @@ Timeline
 Traffic
 - Probe flow: 256 B every 10 ms, starts at 20 s
 - Strong case bulk flows: 1200 B every 2 ms
-- Mild case bulk flows: 1200 B every 3 ms
-- Bulk flow start times: 30 s, 50 s, 65 s, 80 s, 95 s, 110 s, 125 s
+- Strong case bulk flow start times: 30 s, 50 s, 65 s, 80 s, 95 s, 110 s, 125 s
+- Mild case:
+  - app1-app3 use 1200 B every 3 ms at 30 s, 50 s, and 65 s
+  - app4 starts at 125 s with 1200 B every 10 ms
+  - app5-app7 are delayed beyond the 180 s run and do not affect pre-failure congestion
 
 Measurements
 - Sender and receiver packet counts for all flows
