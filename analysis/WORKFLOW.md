@@ -108,9 +108,17 @@ py -3 analysis\dataset_report.py --scenario congestiondegradation
 py -3 analysis\dataset_report.py --scenario regionalbackbone
 ```
 
-### 5. Later model training
-- Training is intentionally out of scope for the current step.
-- The next layer should consume `analysis/output/<scenario>_dataset.csv` rather than reading `.vec` files directly.
+### 5. Offline risk-model training
+- Offline training consumes `analysis/output/<scenario>_dataset.csv`; it should not read `.vec` files directly.
+- The first trainer maps scenario-specific labels into the shared risk taxonomy: `safe`, `warning`, `protect`, `failed`.
+- Run the first offline risk-model pipeline with:
+
+```powershell
+py -3 analysis\train_risk_model.py --scenarios linkdegradation congestiondegradation regionalbackbone
+```
+
+- If one dataset has not been generated yet, either generate it first or use `--allow-missing` for a partial local check.
+- This is still offline analysis only; do not integrate it into OMNeT++ runtime behavior yet.
 
 ## Required Config Runs
 
@@ -175,6 +183,12 @@ Debug configs should be used only when sequence-chart or event-level inspection 
 - Helper summaries:
   - `analysis/output/<scenario>_missing_values.csv`
   - `analysis/output/<scenario>_per_config_summary.csv`
+- Offline model artifacts:
+  - `analysis/output/risk_model_report.txt`
+  - `analysis/output/risk_model_class_distribution.csv`
+  - `analysis/output/risk_model_confusion_matrix.csv`
+  - `analysis/output/risk_model_feature_importance.csv`
+  - `analysis/output/risk_model_per_class_metrics.csv`
 
 ## Batch Workflow
 
@@ -220,6 +234,11 @@ py -3 analysis\prepare_batch.py --scenario regionalbackbone --clean --yes
 - Build the dataset only after all required eval configs have completed.
 - Then generate the report from the freshly built dataset.
 - Inspect row counts per config and run number before using the dataset for modeling.
+
+### Offline training
+- Run offline training only after the relevant datasets and reports have been regenerated and sanity-checked.
+- Exclude generated model reports and CSV artifacts from git; they live under `analysis/output/`.
+- Treat the first model as a baseline for later inference design, not as online routing logic.
 
 ## Naming Convention
 
@@ -278,5 +297,8 @@ The standardized dataset/report pipeline is currently implemented for:
 - `linkdegradation`
 - `congestiondegradation`
 - `regionalbackbone`
+
+The offline risk-model training pipeline is implemented in:
+- `analysis/train_risk_model.py`
 
 The older small-topology baseline, reactivefailure, and proactiveswitch scenarios remain reference/validation branches and do not have dedicated dataset/report presets.
