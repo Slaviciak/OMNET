@@ -1,0 +1,16 @@
+row_type,name,value,coefficient,mean,scale,impute_value
+meta,format,aimrce_logreg_v1,,,,
+meta,decision_mode,logistic_regression_binary,,,,
+meta,positive_label,protect,,,,
+meta,threshold,0.6,,,,
+meta,intercept,0.141030694988,,,,
+meta,selected_scenarios,regionalbackbone,,,,
+meta,selected_configs,RegionalBackboneCongestionDegradation,,,,
+meta,training_rows,105,,,,
+meta,risk_label_counts,protect=45; safe=15; warning=45,,,,
+meta,source_files,regionalbackbone=C:\Users\slavi_6voo0ou\Desktop\omnetpp-6.3.0-windows-x86_64\omnetpp-6.3.0\samples\dissertation\dissertationsim\analysis\output\regionalbackbone_dataset.csv,,,,
+meta,note,Binary runtime deployment artifact trained for protect vs safe/warning using scenario-phase supervision.,,,,
+feature,bottleneck_queue_length_last_pk,,1.65095132653,330.380952381,438.630908536,0
+feature,receiver_app0_e2e_delay_mean_s,,1.59885318461,0.304273097512,0.409142296523,0.00102998
+feature,receiver_app0_throughput_mean_bps,,-1.61625043081,202947.047619,5556.97478572,204800
+feature,receiver_app0_packet_count,,-1.59634796864,99.1142857143,2.78196328658,100

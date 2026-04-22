@@ -1,3 +1,7 @@
+// Reusable controller for controlled synthetic degradation proxies.
+// It manipulates channel delay and packet error rate on a protected span and
+// is intentionally separate from protocol-standard routing behavior.
+
 package dissertationsim.controller;
 
 simple LinkDegradationController
@@ -6,7 +10,9 @@ simple LinkDegradationController
         @class(dissertationsim::controller::LinkDegradationController);
         string firstInterfaceModule;
         string secondInterfaceModule;
-        // Supported profiles: mildLinear, strongLinear, unstableLinear, stagedRealistic.
+        // Supported profiles are controlled synthetic proxies, not empirical
+        // field-failure curves: mildLinear, strongLinear, unstableLinear,
+        // stagedRealistic.
         string profile = default("mildLinear");
         double startTime @unit(s);
         double endTime @unit(s);

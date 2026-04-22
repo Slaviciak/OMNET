@@ -21,6 +21,8 @@
 
 # Generated analysis outputs
 /analysis/output/
+/analysis/sklearn-env/
+/analysis/.venv/
 
 # Python caches
 __pycache__/

@@ -1,0 +1,3 @@
+# Offline ML dependency for analysis/train_risk_model.py
+# Pinned to the currently validated project version for reproducible reporting.
+scikit-learn==1.8.0

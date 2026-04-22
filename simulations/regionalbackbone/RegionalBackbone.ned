@@ -1,5 +1,13 @@
+// Medium-scale OSPF backbone used for dissertation experiments.
+//
+// The routers and routing behavior come from standard INET components. Optional
+// project-local controllers can add controlled synthetic degradation proxies,
+// a traffic bottleneck approximation, or the first AI-MRCE runtime prototype
+// without modifying OSPF internals.
+
 package dissertationsim.simulations.regionalbackbone;
 
+import dissertationsim.controller.AiMrceController;
 import dissertationsim.controller.LinkDegradationController;
 import inet.common.misc.ThruputMeteringChannel;
 import inet.common.scenario.ScenarioManager;
@@ -11,7 +19,12 @@ network RegionalBackbone
 {
     parameters:
         bool enableDegradationController = default(false);
+        // Enables the fixed 10 Mbps preferred-span bottleneck used by the
+        // traffic-driven congestion approximation branch.
         bool enableCoreBottleneck = default(false);
+        // Enables the project-local AI-MRCE runtime prototype. Standard OSPF
+        // behavior still comes from the underlying INET routers.
+        bool enableAiMrceController = default(false);
         @display("b=1120,520");
     types:
         channel Eth100M extends ThruputMeteringChannel
@@ -22,6 +35,7 @@ network RegionalBackbone
         }
         channel BottleneckEth10M extends ThruputMeteringChannel
         {
+            // Simple fixed-capacity bottleneck for the congestion branch.
             delay = 0.1us;
             datarate = 10Mbps;
             thruputDisplayFormat = "#N";
@@ -143,6 +157,11 @@ network RegionalBackbone
         }
         degradationController: LinkDegradationController if enableDegradationController {
             @display("p=170,460;is=s");
+        }
+        aiMrceController: AiMrceController if enableAiMrceController {
+            // First runtime AI-MRCE prototype. It observes telemetry and uses
+            // administrative withdrawal as its initial protective action.
+            @display("p=300,460;is=s");
         }
     connections:
         hostA.ethg[0] <--> Eth100M <--> accessA.ethg[0];

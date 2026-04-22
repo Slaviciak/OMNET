@@ -1,3 +1,10 @@
+// Project-local helper for deterministic protective-reroute baselines.
+//
+// This controller performs a scheduled administrative withdrawal of two
+// interfaces. It is intentionally simple and aligns with ordinary operational
+// interface-down semantics in routing experiments rather than any custom OSPF
+// protocol extension.
+
 #ifndef __DISSERTATIONSIM_INTERFACEWITHDRAWCONTROLLER_H
 #define __DISSERTATIONSIM_INTERFACEWITHDRAWCONTROLLER_H
 
@@ -9,6 +16,13 @@ class NetworkInterface;
 
 namespace dissertationsim::controller {
 
+/**
+ * Small reusable helper for scheduled interface withdrawal experiments.
+ *
+ * It is used for deterministic baselines such as proactive switch experiments,
+ * where the action time is known in advance and no runtime inference is
+ * involved.
+ */
 class InterfaceWithdrawController : public omnetpp::cSimpleModule
 {
   protected:
@@ -20,6 +34,7 @@ class InterfaceWithdrawController : public omnetpp::cSimpleModule
     virtual void finish() override;
 
     inet::NetworkInterface *resolveInterface(const char *modulePath) const;
+    // Uses administrative interface shutdown rather than deep protocol changes.
     void administrativelyWithdraw(const char *modulePath);
 };
 

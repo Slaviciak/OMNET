@@ -7,6 +7,8 @@ Assumptions:
 - Windows are fixed-size and non-overlapping.
 - Labels are assigned from configurable time boundaries using the window start.
 - Receiver-side metrics may be absent in some runs; missing values are left blank.
+- State-like vectors and event/sample-like vectors are summarized separately so
+  queue and controller metrics are not averaged like per-packet delay samples.
 - Throughput vectors are rate samples, so they are summarized from actual
   nonnegative samples inside each window only.
 - Older runs using legacy or debug config names may be normalized to the main
@@ -225,40 +227,19 @@ def values_in_window(series: list[tuple[float, float]], window_start: float, win
     return [value for timestamp, value in series if window_start <= timestamp < window_end]
 
 
-def numeric_summary(series: list[tuple[float, float]], window_start: float, window_end: float) -> dict[str, float | str]:
+def sample_summary(
+    series: list[tuple[float, float]],
+    window_start: float,
+    window_end: float,
+    *,
+    nonnegative_only: bool = False,
+) -> dict[str, float | str]:
     if not series:
         return {"mean": "", "max": "", "last": ""}
 
-    samples = []
-    start_value = last_value_before_or_at(series, window_start)
-    end_value = last_value_before_or_at(series, window_end)
-    in_window_values = values_in_window(series, window_start, window_end)
-
-    if start_value is not None:
-        samples.append(start_value)
-    samples.extend(in_window_values)
-    if end_value is not None and (not samples or end_value != samples[-1]):
-        samples.append(end_value)
-
-    if not samples:
-        return {"mean": "", "max": "", "last": ""}
-
-    return {
-        "mean": fmean(samples),
-        "max": max(samples),
-        "last": end_value if end_value is not None else samples[-1],
-    }
-
-
-def throughput_summary(series: list[tuple[float, float]], window_start: float, window_end: float) -> dict[str, float | str]:
-    if not series:
-        return {"mean": "", "max": "", "last": ""}
-
-    # Throughput is a sampled rate, not a state variable. Boundary carry-over can
-    # misrepresent a window, and INET may emit a startup estimator artifact below
-    # zero, which is not physically meaningful for throughput.
-    samples = [value for timestamp, value in series if window_start <= timestamp < window_end and value >= 0]
-
+    samples = values_in_window(series, window_start, window_end)
+    if nonnegative_only:
+        samples = [value for value in samples if value >= 0]
     if not samples:
         return {"mean": "", "max": "", "last": ""}
 
@@ -266,6 +247,48 @@ def throughput_summary(series: list[tuple[float, float]], window_start: float, w
         "mean": fmean(samples),
         "max": max(samples),
         "last": samples[-1],
+    }
+
+
+def state_summary(series: list[tuple[float, float]], window_start: float, window_end: float) -> dict[str, float | str]:
+    if not series:
+        return {"mean": "", "max": "", "last": ""}
+
+    window_duration = window_end - window_start
+    if window_duration <= 0:
+        return {"mean": "", "max": "", "last": ""}
+
+    current_value = last_value_before_or_at(series, window_start)
+    current_time = window_start
+    integral = 0.0
+    max_value = current_value
+    had_state = current_value is not None
+
+    for timestamp, value in series:
+        if timestamp < window_start:
+            continue
+        if timestamp >= window_end:
+            break
+
+        if current_value is not None and timestamp > current_time:
+            integral += current_value * (timestamp - current_time)
+
+        current_value = value
+        current_time = timestamp
+        had_state = True
+        if max_value is None or value > max_value:
+            max_value = value
+
+    if current_value is not None and current_time < window_end:
+        integral += current_value * (window_end - current_time)
+
+    if not had_state or max_value is None:
+        return {"mean": "", "max": "", "last": ""}
+
+    return {
+        "mean": integral / window_duration,
+        "max": max_value,
+        "last": current_value if current_value is not None else "",
     }
 
 
@@ -468,8 +491,8 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
         }
 
         if scenario in {"linkdegradation", "regionalbackbone"}:
-            delay_summary = numeric_summary(run_data["controller"]["appliedDelay"], window_start, window_end)
-            per_summary = numeric_summary(run_data["controller"]["appliedPacketErrorRate"], window_start, window_end)
+            delay_summary = state_summary(run_data["controller"]["appliedDelay"], window_start, window_end)
+            per_summary = state_summary(run_data["controller"]["appliedPacketErrorRate"], window_start, window_end)
             row.update({
                 "controller_delay_mean_s": delay_summary["mean"],
                 "controller_delay_max_s": delay_summary["max"],
@@ -480,9 +503,9 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             })
 
         if scenario in {"congestiondegradation", "regionalbackbone"}:
-            queue_length_summary = numeric_summary(run_data["bottleneck_queue"]["queueLength"], window_start, window_end)
-            queue_bit_length_summary = numeric_summary(run_data["bottleneck_queue"]["queueBitLength"], window_start, window_end)
-            queueing_time_summary = numeric_summary(run_data["bottleneck_queue"]["queueingTime"], window_start, window_end)
+            queue_length_summary = state_summary(run_data["bottleneck_queue"]["queueLength"], window_start, window_end)
+            queue_bit_length_summary = state_summary(run_data["bottleneck_queue"]["queueBitLength"], window_start, window_end)
+            queueing_time_summary = state_summary(run_data["bottleneck_queue"]["queueingTime"], window_start, window_end)
             row.update({
                 "bottleneck_queue_length_mean_pk": queue_length_summary["mean"],
                 "bottleneck_queue_length_max_pk": queue_length_summary["max"],
@@ -501,8 +524,8 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
         for app_index in sorted(receiver_apps.keys()):
             metrics = receiver_apps[app_index]
             seq = sequence_summary(metrics["rcvdPkSeqNo"], window_start, window_end)
-            delay = numeric_summary(metrics["endToEndDelay"], window_start, window_end)
-            throughput = throughput_summary(metrics["throughput"], window_start, window_end)
+            delay = sample_summary(metrics["endToEndDelay"], window_start, window_end)
+            throughput = sample_summary(metrics["throughput"], window_start, window_end, nonnegative_only=True)
 
             total_packets += int(seq["count"])
             row[f"receiver_app{app_index}_packet_count"] = seq["count"]

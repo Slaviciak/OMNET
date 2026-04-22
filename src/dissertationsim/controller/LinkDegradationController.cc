@@ -1,3 +1,10 @@
+// Controlled synthetic degradation proxy for dissertation experiments.
+//
+// This controller varies ordinary OMNeT++ channel delay and packet error rate
+// over time so the platform can generate pre-failure telemetry. The profiles
+// are intentionally deterministic and interpretable; they are not presented as
+// real carrier impairment traces.
+
 #include "LinkDegradationController.h"
 
 #include <cmath>
@@ -28,6 +35,9 @@ double clamp01(double value)
 
 ProfileProgress stagedRealisticProgress(double progress)
 {
+    // This profile is a hand-designed controlled synthetic degradation proxy.
+    // It aims to produce a gradual early phase, a noisier mid phase, and a
+    // sharper late phase without claiming empirical field calibration.
     if (progress <= 1.0 / 3.0) {
         auto phaseProgress = progress * 3.0;
         return {
@@ -88,6 +98,8 @@ void LinkDegradationController::initialize()
     appliedDelayVector.setName("appliedDelay");
     appliedPacketErrorRateVector.setName("appliedPacketErrorRate");
 
+    // Record the initial unmodified state so later analysis can see the full
+    // trajectory from baseline through the synthetic degradation proxy.
     recordAppliedValues(channels[0].initialDelay, channels[0].initialPacketErrorRate);
 
     updateTimer = new cMessage("degradationUpdateTimer");
@@ -159,7 +171,8 @@ void LinkDegradationController::applyProfile(simtime_t now)
     double delayProgress = progress;
     double packetErrorRateProgress = progress;
     if (profile == "unstableLinear") {
-        // Small deterministic oscillations around the upward trend.
+        // Small deterministic oscillations around the upward trend provide a
+        // simple non-monotonic proxy without introducing randomness.
         auto oscillation = 0.08 * std::sin(6.0 * PI * progress);
         delayProgress = clamp01(progress + oscillation * progress);
         packetErrorRateProgress = delayProgress;
@@ -181,6 +194,8 @@ void LinkDegradationController::applyProfile(simtime_t now)
 
 void LinkDegradationController::applyToChannel(ChannelState& channelState, simtime_t delay, double packetErrorRate)
 {
+    // This operates on the simulator channel object itself. The effect is a
+    // project-local impairment mechanism, not any standardized protocol signal.
     EV_INFO << "Applying degradation to channel " << channelState.channel->getFullPath()
             << " delay=" << delay << " per=" << packetErrorRate << endl;
     cMethodCallContextSwitcher contextSwitcher(channelState.channel);
@@ -190,6 +205,8 @@ void LinkDegradationController::applyToChannel(ChannelState& channelState, simti
 
 void LinkDegradationController::recordAppliedValues(simtime_t delay, double packetErrorRate)
 {
+    // Current scenarios apply symmetric settings to both directions, so the
+    // recorded values are representative span-level control settings.
     appliedDelayVector.record(delay.dbl());
     appliedPacketErrorRateVector.record(packetErrorRate);
 }

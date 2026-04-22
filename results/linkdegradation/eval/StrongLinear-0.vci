@@ -1,9 +1,9 @@
-file 746410 1776169598                                          
+file 746410 1776769968                                          
 version 3
-run StrongLinear-0-20260414-14:26:34-17540
+run StrongLinear-0-20260421-13:12:44-17912
 attr configname StrongLinear
-attr datetime 20260414-14:26:34
-attr datetimef 20260414-142634
+attr datetime 20260421-13:12:44
+attr datetimef 20260421-131244
 attr experiment StrongLinear
 attr inifile omnetpp.ini
 attr iterationvars ""
@@ -11,7 +11,7 @@ attr iterationvarsd ""
 attr iterationvarsf ""
 attr measurement ""
 attr network dissertationsim.simulations.linkdegradation.LinkDegradation
-attr processid 17540
+attr processid 17912
 attr repetition 0
 attr replication #0
 attr resultdir results

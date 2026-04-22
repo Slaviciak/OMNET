@@ -25,16 +25,16 @@ SCENARIO_PRESETS = {
         "eval_dir": PROJECT_ROOT / "results" / "linkdegradation" / "eval",
         "debug_dir": PROJECT_ROOT / "results" / "linkdegradation" / "debug",
         "configs": ["MildLinear", "StrongLinear", "UnstableLinear", "StagedRealistic"],
-        "dataset_command": "py -3 analysis\\build_dataset.py --scenario linkdegradation",
-        "report_command": "py -3 analysis\\dataset_report.py --scenario linkdegradation",
+        "dataset_command": "run_analysis.bat build-dataset --scenario linkdegradation",
+        "report_command": "run_analysis.bat dataset-report --scenario linkdegradation",
     },
     "congestiondegradation": {
         "description": "Traffic-driven congestion data-generation batch",
         "eval_dir": PROJECT_ROOT / "results" / "congestiondegradation" / "eval",
         "debug_dir": PROJECT_ROOT / "results" / "congestiondegradation" / "debug",
         "configs": ["CongestionDegradation", "CongestionDegradationMild"],
-        "dataset_command": "py -3 analysis\\build_dataset.py --scenario congestiondegradation",
-        "report_command": "py -3 analysis\\dataset_report.py --scenario congestiondegradation",
+        "dataset_command": "run_analysis.bat build-dataset --scenario congestiondegradation",
+        "report_command": "run_analysis.bat dataset-report --scenario congestiondegradation",
     },
     "regionalbackbone": {
         "description": "Medium-scale regional backbone baseline, reactive failure, controlled degradation, and congestion batch",
@@ -46,8 +46,8 @@ SCENARIO_PRESETS = {
             "RegionalBackboneControlledDegradation",
             "RegionalBackboneCongestionDegradation",
         ],
-        "dataset_command": "py -3 analysis\\build_dataset.py --scenario regionalbackbone",
-        "report_command": "py -3 analysis\\dataset_report.py --scenario regionalbackbone",
+        "dataset_command": "run_analysis.bat build-dataset --scenario regionalbackbone",
+        "report_command": "run_analysis.bat dataset-report --scenario regionalbackbone",
     },
 }
 

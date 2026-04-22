@@ -3,9 +3,10 @@ RegionalBackbone
 
 Overview
 - This scenario is the first medium-scale baseline topology for the dissertation project.
-- It starts with baseline validation and now includes reactive-failure, controlled-degradation, and traffic-driven congestion configs.
-- It does not add predictive logic, proactive rerouting, or new C++ modules.
-- Its purpose is to validate a larger OSPF topology before using it for later protective reroute experiments.
+- It starts with baseline validation and now includes reactive-failure, controlled-degradation, traffic-driven congestion, and first-step AI-MRCE prototype configs.
+- The first AI-MRCE prototype adds one project-local runtime controller, but it still avoids deep OSPF-internal modifications.
+- Its purpose is to validate a larger OSPF topology before and during the first practical predictive-protection experiments.
+- Controlled degradation and congestion phases should be treated as defensible approximations for supervised experimentation, not as empirically calibrated carrier-failure traces.
 
 Topology
 - Endpoints:
@@ -60,20 +61,33 @@ Configs
   - The preferred `coreNW <-> coreNE` backbone span is physically disconnected at 40s.
   - OSPF is expected to reconverge after the failure onto an available alternative path.
 - `RegionalBackboneControlledDegradation`
-  - Controlled synthetic pre-failure degradation experiment.
+  - Controlled synthetic pre-failure degradation proxy experiment.
   - Reuses the project-local `LinkDegradationController`.
   - Traffic starts at 20s.
   - The preferred `coreNW <-> coreNE` backbone span degrades from 35s to 55s using `stagedRealistic`.
   - The same span is physically disconnected at 60s.
   - OSPF is expected to react only after the hard failure.
 - `RegionalBackboneCongestionDegradation`
-  - Traffic-driven pre-failure congestion experiment.
+  - Traffic-driven pre-failure congestion approximation experiment.
   - Uses a fixed 10 Mbps bottleneck on the preferred `coreNW <-> coreNE` backbone span.
   - All other links remain at 100 Mbps.
   - Probe traffic starts at 20s.
   - Six staged bulk flows start at 35s, 50s, 65s, 80s, 95s, and 110s.
   - The same span is physically disconnected at 125s.
   - OSPF is expected to keep using the preferred path during congestion and react only after the hard failure.
+- `RegionalBackboneAiMrceRuleBased`
+  - First runtime AI-MRCE prototype on the congestion branch only.
+  - Monitors the protected `coreNW.eth[1] -> coreNE` corridor using queue occupancy plus probe-flow delay, throughput, and packet continuity.
+  - Evaluates a compact hand-built protection score once per second.
+  - Requires multiple consecutive positive controller cycles before action.
+  - Proactive action is a latched administrative withdrawal of `coreNW.eth[1]` and `coreNE.eth[0]`.
+  - The protective step follows ordinary administrative interface-down semantics in the simulator rather than any custom OSPF extension.
+  - This is experimental protection logic, not a production-grade predictive routing system.
+- `RegionalBackboneAiMrceLogReg`
+  - First runtime AI-MRCE prototype using an exported binary logistic-regression runtime model.
+  - Uses the same telemetry inputs and the same conservative administrative-withdrawal action as the rule-based prototype.
+  - Consumes `aimrce_runtime_logreg.csv` from this scenario directory.
+  - The exported model is trained from scenario-phase supervision and should be discussed as a runtime deployment artifact and proxy model, not as real-world failure-ground-truth inference.
 - Debug variants enable eventlog recording for manual path inspection.
 
 Congestion timeline
@@ -96,8 +110,33 @@ Measurements
   - queueLength
   - queueBitLength
   - queueingTime
+- AI-MRCE runtime prototype vectors in the AI-MRCE configs:
+  - `observedQueueLengthPk`
+  - `observedQueueBitLengthB`
+  - `observedProbeDelayMeanS`
+  - `observedProbeThroughputBps`
+  - `observedProbePacketCount`
+  - `riskScore`
+  - `decisionPositive`
+  - `positiveDecisionStreak`
+  - `protectionActive`
+- AI-MRCE runtime prototype scalars in the AI-MRCE configs:
+  - `protectionActivated`
+  - `protectionActivationTime`
+
+Queue Assumption
+- No custom queue discipline, AQM, or vendor-specific buffer model is configured for the congestion branch.
+- The bottleneck queue metrics come from the default INET interface queue attached to `coreNW.eth[1]` in this simulator version.
+- Interpret the queue telemetry as a simple simulator-default backlog approximation rather than as a calibrated backbone-router buffer study.
 
 Purpose
 - Move beyond the tiny dual-path topology without jumping to an Internet-scale model.
 - Provide a defensible medium topology for later baseline, reactive failure, controlled degradation, and congestion-driven experiments.
 - Keep the first step small enough to debug before adding impairment or protective reroute logic.
+- Provide a first practical AI-MRCE runtime prototype that can be measured end-to-end before any deeper OSPF integration is attempted.
+
+AI-MRCE Prototype Scope Limit
+- The first runtime AI-MRCE prototype is intentionally limited to the congestion-driven regional backbone branch.
+- It does not modify OSPF internals, advertise custom LSAs, or attempt any online learning.
+- It uses a compact and interpretable telemetry set plus either a rule-based score or an exported binary logistic model.
+- Its protective action is a conservative administrative withdrawal that stands in for an early protective reroute decision on the monitored corridor.
