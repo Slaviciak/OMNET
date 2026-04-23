@@ -3,7 +3,9 @@
 // The controller manipulates ordinary OMNeT++ channel delay and packet error
 // rate on a protected span to generate interpretable pre-failure telemetry.
 // These profiles are controlled synthetic proxies for experiments; they are
-// not empirically calibrated field-failure traces.
+// not empirically calibrated field-failure traces. The most realistic profile
+// intentionally approximates intermittent deterioration or "brownout"-style
+// behavior rather than claiming that every failure follows a smooth ramp.
 
 #ifndef __DISSERTATIONSIM_LINKDEGRADATIONCONTROLLER_H
 #define __DISSERTATIONSIM_LINKDEGRADATIONCONTROLLER_H
@@ -24,7 +26,9 @@ namespace dissertationsim::controller {
  * Applies deterministic channel-impairment profiles to a protected span.
  *
  * Experimentally, this controller provides a reusable way to stage synthetic
- * pre-failure behavior without changing routing protocol internals.
+ * pre-failure behavior without changing routing protocol internals. The
+ * profiles are deterministic so the scenario family remains reproducible even
+ * when a profile is meant to approximate intermittent deterioration.
  */
 class LinkDegradationController : public omnetpp::cSimpleModule
 {
@@ -52,6 +56,8 @@ class LinkDegradationController : public omnetpp::cSimpleModule
     inet::NetworkInterface *resolveInterface(const char *modulePath) const;
     ChannelState resolveTransmitChannel(const char *modulePath) const;
     // Selects and applies one of the controlled synthetic degradation profiles.
+    // These remain project-local approximations of observable impairment
+    // symptoms, not protocol-standard failure signals.
     void applyProfile(omnetpp::simtime_t now);
     // Applies standard OMNeT++ channel parameters, not protocol-standard logic.
     void applyToChannel(ChannelState& channelState, omnetpp::simtime_t delay, double packetErrorRate);

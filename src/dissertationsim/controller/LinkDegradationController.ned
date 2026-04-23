@@ -12,7 +12,9 @@ simple LinkDegradationController
         string secondInterfaceModule;
         // Supported profiles are controlled synthetic proxies, not empirical
         // field-failure curves: mildLinear, strongLinear, unstableLinear,
-        // stagedRealistic.
+        // stagedRealistic. The stagedRealistic profile is intentionally a
+        // deterministic intermittent-deterioration proxy rather than a claim
+        // that operators can observe a perfectly smooth pre-failure ramp.
         string profile = default("mildLinear");
         double startTime @unit(s);
         double endTime @unit(s);

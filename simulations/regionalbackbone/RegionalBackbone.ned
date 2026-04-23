@@ -2,8 +2,8 @@
 //
 // The routers and routing behavior come from standard INET components. Optional
 // project-local controllers can add controlled synthetic degradation proxies,
-// a traffic bottleneck approximation, or the first AI-MRCE runtime prototype
-// without modifying OSPF internals.
+// a traffic bottleneck approximation, or the current AI-MRCE runtime
+// prototype family without modifying OSPF internals.
 
 package dissertationsim.simulations.regionalbackbone;
 
@@ -159,8 +159,8 @@ network RegionalBackbone
             @display("p=170,460;is=s");
         }
         aiMrceController: AiMrceController if enableAiMrceController {
-            // First runtime AI-MRCE prototype. It observes telemetry and uses
-            // administrative withdrawal as its initial protective action.
+            // Current runtime AI-MRCE prototype family. It observes telemetry
+            // and uses administrative withdrawal as its protective action.
             @display("p=300,460;is=s");
         }
     connections:

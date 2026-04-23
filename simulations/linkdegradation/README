@@ -2,9 +2,13 @@ LinkDegradation
 ===============
 
 Overview
-- This scenario is dedicated to gradual pre-failure data generation on the primary r2-r3 link.
+- This scenario is dedicated to gradual and intermittent pre-failure data generation on the primary r2-r3 link.
 - It keeps the same dual-path topology and OSPF structure as the existing dissertation scenarios.
 - It now supports multiple degradation profiles through omnetpp.ini configs.
+- The most realistic profile in this family remains a project-local approximation:
+  it is meant to emulate intermittent deterioration or brownout-style behavior
+  before a later hard failure, not to claim that every operational failure is
+  preceded by a clean deterministic warning pattern.
 
 Topology
 - Primary path: hostA -> r1 -> r2 -> r3 -> hostB
@@ -20,12 +24,17 @@ Configs
 - MildLinear: moderate linear degradation.
 - StrongLinear: stronger linear degradation with higher target delay and PER.
 - UnstableLinear: upward overall trend with small deterministic oscillations during the ramp.
-- StagedRealistic: staged deterministic degradation with mild early delay growth, delay variation in the middle phase, and accelerated late delay/PER increase.
+- StagedRealistic: staged intermittent brownout-style degradation with mild early drift, repeated mid-phase delay/loss episodes, and denser late deterioration before the scripted hard failure.
 
 Design notes
 - The staged profile keeps hard failure separate from pre-failure quality degradation.
 - It treats delay, delay variation, and packet loss as distinct observable symptoms, following the style of IP performance metrics used in IETF IPPM work.
-- The profile is deterministic so repeated runs remain reproducible for dataset generation.
+- Its intended approximation is literature-aligned rather than field-calibrated:
+  delay variation is treated as an observable symptom in the IPPM sense, while
+  the intermittent loss episodes are meant to approximate gray-failure or
+  hardware-deterioration behavior reported in the systems and networking
+  literature.
+- The profile is deterministic so repeated runs remain reproducible for dataset generation even though it approximates intermittent behavior.
 
 Purpose
 - Provide a clean scenario for collecting time-series data before hard failure.

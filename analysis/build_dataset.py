@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
 """
-Build a simple ML-ready CSV dataset from OMNeT++ vector results.
+Build an ML-ready and outcome-aware CSV dataset from OMNeT++ result files.
 
 Assumptions:
 - Input files are OMNeT++ .vec files under results/<scenario>/eval/ by default.
+- Matching .sca files are used only for project-local controller outcome
+  measurement support such as protection activation timing.
 - Windows are fixed-size and non-overlapping.
-- Labels are assigned from configurable time boundaries using the window start.
-- Receiver-side metrics may be absent in some runs; missing values are left blank.
+- Labels remain scenario-phase supervision labels assigned from configurable
+  time boundaries using the window start.
+- Recovery and protection outcome fields are a separate project-local
+  measurement layer derived from observable receiver-side telemetry plus known
+  scripted event times. They are not protocol-standard fields and they are not
+  replacements for the supervision labels.
+- Receiver-side metrics may be absent in some runs; missing values are left
+  blank where possible.
 - State-like vectors and event/sample-like vectors are summarized separately so
   queue and controller metrics are not averaged like per-packet delay samples.
 - Throughput vectors are rate samples, so they are summarized from actual
@@ -14,7 +22,7 @@ Assumptions:
 - Older runs using legacy or debug config names may be normalized to the main
   config name for dataset consistency.
 - The CLI uses scenario presets so later scenario-specific builders can follow
-  the same style.
+  the same style without changing the workflow.
 """
 
 from __future__ import annotations
@@ -23,11 +31,16 @@ import argparse
 import csv
 import math
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from statistics import fmean
 
 
 WINDOW_SIZE_SECONDS = 1.0
+
+SMALL_REACTIVE_FAILURE_TIME_SECONDS = 20.0
+SMALL_PROACTIVE_PROTECTION_TIME_SECONDS = 18.0
+SMALL_PROACTIVE_HARD_FAILURE_TIME_SECONDS = 20.0
 
 DEGRADATION_START_SECONDS = 20.0
 PRE_FAILURE_START_SECONDS = 40.0
@@ -37,6 +50,7 @@ CONGESTION_CONVERGENCE_END_SECONDS = 20.0
 CONGESTION_BASELINE_END_SECONDS = 50.0
 CONGESTION_RISING_END_SECONDS = 125.0
 CONGESTION_CRITICAL_END_SECONDS = 150.0
+CONGESTION_HARD_FAILURE_TIME_SECONDS = 150.0
 
 REGIONAL_REACTIVE_FAILURE_TIME_SECONDS = 40.0
 REGIONAL_REACTIVE_DISRUPTION_END_SECONDS = 50.0
@@ -49,11 +63,48 @@ REGIONAL_CONGESTION_CONVERGENCE_END_SECONDS = 20.0
 REGIONAL_CONGESTION_BASELINE_END_SECONDS = 35.0
 REGIONAL_CONGESTION_RISING_END_SECONDS = 80.0
 REGIONAL_CONGESTION_CRITICAL_END_SECONDS = 125.0
+REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS = 125.0
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCENARIO = "linkdegradation"
 BOTTLE_NECK_QUEUE_MODULE_SUFFIX = ".r2.eth[1].queue"
 REGIONAL_BOTTLENECK_QUEUE_MODULE_SUFFIX = ".coreNW.eth[1].queue"
+HOSTB_APP_RE = re.compile(r".*\.hostB\.app\[(\d+)\]$")
+TARGET_CONTROLLER_SCALAR_NAMES = {"protectionActivated", "protectionActivationTime"}
+REGIONALBACKBONE_FAMILY_SCENARIOS = {"regionalbackbone", "regionalbackbone_congestion_protection"}
+
+REGIONALBACKBONE_DATASET_CONFIGS = {
+    "RegionalBackboneBaseline",
+    "RegionalBackboneReactiveFailure",
+    "RegionalBackboneControlledDegradation",
+    "RegionalBackboneCongestionDegradation",
+}
+REGIONALBACKBONE_OPTIONAL_RUNTIME_CONFIGS = {
+    "RegionalBackboneAiMrceRuleBased",
+    "RegionalBackboneAiMrceLogReg",
+    "RegionalBackboneAiMrceLinearSvm",
+    "RegionalBackboneAiMrceShallowTree",
+}
+REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS = {
+    "RegionalBackboneCongestionDegradation",
+    "RegionalBackboneAiMrceRuleBased",
+    "RegionalBackboneAiMrceLogReg",
+    "RegionalBackboneAiMrceLinearSvm",
+    "RegionalBackboneAiMrceShallowTree",
+}
+
+
+@dataclass(frozen=True)
+class OutcomeProfile:
+    hard_failure_time_s: float | None
+    protection_mode: str
+    monitored_app_index: int
+    packet_size_bits: float
+    send_interval_s: float
+    flow_start_time_s: float
+    protection_expected: bool = False
+    scheduled_protection_time_s: float | None = None
+
 
 SCENARIO_PRESETS = {
     "linkdegradation": {
@@ -72,15 +123,25 @@ SCENARIO_PRESETS = {
         "config_aliases": {},
         "default_sim_time_limit": 180.0,
     },
+    "reactivefailure": {
+        "results_dir": PROJECT_ROOT / "results" / "reactivefailure" / "eval",
+        "output_file": PROJECT_ROOT / "analysis" / "output" / "reactivefailure_dataset.csv",
+        "supported_configs": {"ReactiveFailure"},
+        "config_aliases": {},
+        "default_sim_time_limit": 60.0,
+    },
+    "proactiveswitch": {
+        "results_dir": PROJECT_ROOT / "results" / "proactiveswitch" / "eval",
+        "output_file": PROJECT_ROOT / "analysis" / "output" / "proactiveswitch_dataset.csv",
+        "supported_configs": {"ProactiveSwitch"},
+        "config_aliases": {},
+        "default_sim_time_limit": 60.0,
+    },
     "regionalbackbone": {
         "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "eval",
         "output_file": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_dataset.csv",
-        "supported_configs": {
-            "RegionalBackboneBaseline",
-            "RegionalBackboneReactiveFailure",
-            "RegionalBackboneControlledDegradation",
-            "RegionalBackboneCongestionDegradation",
-        },
+        "supported_configs": REGIONALBACKBONE_DATASET_CONFIGS,
+        "optional_runtime_configs": REGIONALBACKBONE_OPTIONAL_RUNTIME_CONFIGS,
         "config_aliases": {},
         "default_sim_time_limit": 150.0,
         "default_sim_time_limits_by_config": {
@@ -88,11 +149,39 @@ SCENARIO_PRESETS = {
             "RegionalBackboneReactiveFailure": 80.0,
             "RegionalBackboneControlledDegradation": 90.0,
             "RegionalBackboneCongestionDegradation": 150.0,
+            "RegionalBackboneAiMrceRuleBased": 150.0,
+            "RegionalBackboneAiMrceLogReg": 150.0,
+            "RegionalBackboneAiMrceLinearSvm": 150.0,
+            "RegionalBackboneAiMrceShallowTree": 150.0,
+        },
+    },
+    "regionalbackbone_congestion_protection": {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "congestion_protection_cohort",
+        "output_file": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_congestion_protection_multirun_dataset.csv",
+        "supported_configs": {
+            "RegionalBackboneCongestionDegradation",
+            "RegionalBackboneAiMrceRuleBased",
+            "RegionalBackboneAiMrceLogReg",
+            "RegionalBackboneAiMrceLinearSvm",
+            "RegionalBackboneAiMrceShallowTree",
+        },
+        "config_aliases": {
+            "RegionalBackboneCongestionDegradationCohort": "RegionalBackboneCongestionDegradation",
+            "RegionalBackboneAiMrceRuleBasedCohort": "RegionalBackboneAiMrceRuleBased",
+            "RegionalBackboneAiMrceLogRegCohort": "RegionalBackboneAiMrceLogReg",
+            "RegionalBackboneAiMrceLinearSvmCohort": "RegionalBackboneAiMrceLinearSvm",
+            "RegionalBackboneAiMrceShallowTreeCohort": "RegionalBackboneAiMrceShallowTree",
+        },
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            "RegionalBackboneCongestionDegradation": 150.0,
+            "RegionalBackboneAiMrceRuleBased": 150.0,
+            "RegionalBackboneAiMrceLogReg": 150.0,
+            "RegionalBackboneAiMrceLinearSvm": 150.0,
+            "RegionalBackboneAiMrceShallowTree": 150.0,
         },
     },
 }
-
-HOSTB_APP_RE = re.compile(r".*\.hostB\.app\[(\d+)\]$")
 
 
 def parse_time_value(raw: str) -> float | None:
@@ -106,7 +195,7 @@ def parse_time_value(raw: str) -> float | None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build a windowed dataset from OMNeT++ vector results.")
+    parser = argparse.ArgumentParser(description="Build a windowed dataset from OMNeT++ result files.")
     parser.add_argument(
         "--scenario",
         default=DEFAULT_SCENARIO,
@@ -122,6 +211,16 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Output CSV path. Defaults to analysis/output/<scenario>_dataset.csv.",
     )
+    parser.add_argument(
+        "--include-runtime-protection-configs",
+        action="store_true",
+        help=(
+            "For regionalbackbone only, also include the optional AI-MRCE runtime "
+            "prototype configs in the dataset. This is intended for outcome "
+            "evaluation and is kept opt-in so the existing main dataset batch "
+            "semantics do not change silently."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -131,6 +230,13 @@ def get_scenario_preset(scenario: str) -> dict[str, object]:
         supported = ", ".join(sorted(SCENARIO_PRESETS))
         raise SystemExit(f"Unsupported scenario '{scenario}'. Supported scenarios: {supported}")
     return preset
+
+
+def effective_supported_configs(preset: dict[str, object], include_runtime_protection_configs: bool) -> set[str]:
+    supported_configs = set(preset["supported_configs"])
+    if include_runtime_protection_configs:
+        supported_configs.update(preset.get("optional_runtime_configs", set()))
+    return supported_configs
 
 
 def normalize_config_name(name: str, config_aliases: dict[str, str]) -> str:
@@ -159,6 +265,22 @@ def label_for_congestiondegradation_window(window_start: float) -> str:
     return "failed"
 
 
+def label_for_reactivefailure_window(window_start: float) -> str:
+    if window_start < SMALL_REACTIVE_FAILURE_TIME_SECONDS:
+        return "normal"
+    if window_start < SMALL_REACTIVE_FAILURE_TIME_SECONDS + 10.0:
+        return "reactive_disruption"
+    return "post_reroute"
+
+
+def label_for_proactiveswitch_window(window_start: float) -> str:
+    if window_start < SMALL_PROACTIVE_PROTECTION_TIME_SECONDS:
+        return "normal"
+    if window_start < SMALL_PROACTIVE_HARD_FAILURE_TIME_SECONDS:
+        return "protected_pre_failure"
+    return "post_failure_protected"
+
+
 def label_for_regionalbackbone_window(config_name: str, window_start: float) -> str:
     if config_name == "RegionalBackboneBaseline":
         return "normal"
@@ -179,7 +301,10 @@ def label_for_regionalbackbone_window(config_name: str, window_start: float) -> 
             return "pre_failure"
         return "failed"
 
-    if config_name == "RegionalBackboneCongestionDegradation":
+    if config_name in REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS:
+        # The runtime AI-MRCE configs reuse the congestion-branch supervision
+        # timeline intentionally. These labels remain scenario-phase schedule
+        # labels, not measured protection-outcome ground truth.
         if window_start < REGIONAL_CONGESTION_CONVERGENCE_END_SECONDS:
             return "convergence"
         if window_start < REGIONAL_CONGESTION_BASELINE_END_SECONDS:
@@ -198,9 +323,135 @@ def label_for_window(scenario: str, config_name: str, window_start: float) -> st
         return label_for_linkdegradation_window(window_start)
     if scenario == "congestiondegradation":
         return label_for_congestiondegradation_window(window_start)
-    if scenario == "regionalbackbone":
+    if scenario == "reactivefailure":
+        return label_for_reactivefailure_window(window_start)
+    if scenario == "proactiveswitch":
+        return label_for_proactiveswitch_window(window_start)
+    if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
         return label_for_regionalbackbone_window(config_name, window_start)
     raise SystemExit(f"Unsupported scenario '{scenario}' for labeling")
+
+
+def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
+    if scenario == "linkdegradation":
+        return OutcomeProfile(
+            hard_failure_time_s=HARD_FAILURE_TIME_SECONDS,
+            protection_mode="reactive_only",
+            monitored_app_index=0,
+            packet_size_bits=512.0 * 8.0,
+            send_interval_s=1.0,
+            flow_start_time_s=10.0,
+        )
+
+    if scenario == "congestiondegradation":
+        return OutcomeProfile(
+            hard_failure_time_s=CONGESTION_HARD_FAILURE_TIME_SECONDS,
+            protection_mode="reactive_only",
+            monitored_app_index=0,
+            packet_size_bits=256.0 * 8.0,
+            send_interval_s=0.01,
+            flow_start_time_s=20.0,
+        )
+
+    if scenario == "reactivefailure":
+        return OutcomeProfile(
+            hard_failure_time_s=SMALL_REACTIVE_FAILURE_TIME_SECONDS,
+            protection_mode="reactive_only",
+            monitored_app_index=0,
+            packet_size_bits=512.0 * 8.0,
+            send_interval_s=1.0,
+            flow_start_time_s=10.0,
+        )
+
+    if scenario == "proactiveswitch":
+        return OutcomeProfile(
+            hard_failure_time_s=SMALL_PROACTIVE_HARD_FAILURE_TIME_SECONDS,
+            protection_mode="deterministic_admin_protection",
+            monitored_app_index=0,
+            packet_size_bits=512.0 * 8.0,
+            send_interval_s=1.0,
+            flow_start_time_s=10.0,
+            protection_expected=True,
+            scheduled_protection_time_s=SMALL_PROACTIVE_PROTECTION_TIME_SECONDS,
+        )
+
+    if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
+        profiles = {
+            "RegionalBackboneBaseline": OutcomeProfile(
+                hard_failure_time_s=None,
+                protection_mode="no_protection_baseline",
+                monitored_app_index=0,
+                packet_size_bits=512.0 * 8.0,
+                send_interval_s=1.0,
+                flow_start_time_s=20.0,
+            ),
+            "RegionalBackboneReactiveFailure": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_REACTIVE_FAILURE_TIME_SECONDS,
+                protection_mode="reactive_only",
+                monitored_app_index=0,
+                packet_size_bits=512.0 * 8.0,
+                send_interval_s=1.0,
+                flow_start_time_s=20.0,
+            ),
+            "RegionalBackboneControlledDegradation": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="reactive_only",
+                monitored_app_index=0,
+                packet_size_bits=512.0 * 8.0,
+                send_interval_s=1.0,
+                flow_start_time_s=20.0,
+            ),
+            "RegionalBackboneCongestionDegradation": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="reactive_only",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+            ),
+            "RegionalBackboneAiMrceRuleBased": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_rule_based",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+            ),
+            "RegionalBackboneAiMrceLogReg": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_logistic_regression",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+            ),
+            "RegionalBackboneAiMrceLinearSvm": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_linear_svm",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+            ),
+            "RegionalBackboneAiMrceShallowTree": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_shallow_tree",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+            ),
+        }
+        profile = profiles.get(config_name)
+        if profile is None:
+            raise SystemExit(f"Unsupported regionalbackbone config '{config_name}' for outcome profiling")
+        return profile
+
+    raise SystemExit(f"Unsupported scenario '{scenario}' for outcome profiling")
 
 
 def default_sim_time_limit_for_config(
@@ -319,6 +570,7 @@ def sequence_summary(series: list[tuple[float, float]], window_start: float, win
 def init_run_data(scenario: str) -> dict:
     run_data = {
         "receiver_apps": {},
+        "scalars": {},
     }
     if scenario == "linkdegradation":
         run_data["controller"] = {
@@ -331,7 +583,9 @@ def init_run_data(scenario: str) -> dict:
             "queueBitLength": [],
             "queueingTime": [],
         }
-    elif scenario == "regionalbackbone":
+    elif scenario in {"reactivefailure", "proactiveswitch"}:
+        pass
+    elif scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
         run_data["controller"] = {
             "appliedDelay": [],
             "appliedPacketErrorRate": [],
@@ -354,16 +608,22 @@ def ensure_receiver_app(run_data: dict, app_index: int) -> dict:
     })
 
 
-def register_vector_target(scenario: str, config_name: str, run_data: dict, module: str, name: str) -> tuple[str, int | str | None] | None:
-    if scenario in {"linkdegradation", "regionalbackbone"} and module.endswith(".degradationController") and name in {"appliedDelay", "appliedPacketErrorRate"}:
+def register_vector_target(
+    scenario: str,
+    config_name: str,
+    run_data: dict,
+    module: str,
+    name: str,
+) -> tuple[str, int | str | None] | None:
+    if scenario in {"linkdegradation", *REGIONALBACKBONE_FAMILY_SCENARIOS} and module.endswith(".degradationController") and name in {"appliedDelay", "appliedPacketErrorRate"}:
         return ("controller", name)
 
     if scenario == "congestiondegradation" and module.endswith(BOTTLE_NECK_QUEUE_MODULE_SUFFIX) and name in {"queueLength", "queueBitLength", "queueingTime"}:
         return ("bottleneck_queue", name)
 
     if (
-        scenario == "regionalbackbone"
-        and config_name == "RegionalBackboneCongestionDegradation"
+        scenario in REGIONALBACKBONE_FAMILY_SCENARIOS
+        and config_name in REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS
         and module.endswith(REGIONAL_BOTTLENECK_QUEUE_MODULE_SUFFIX)
         and name in {"queueLength", "queueBitLength", "queueingTime"}
     ):
@@ -374,6 +634,43 @@ def register_vector_target(scenario: str, config_name: str, run_data: dict, modu
         return (name, int(match.group(1)))
 
     return None
+
+
+def parse_scalar_file(sca_path: Path) -> dict[str, float]:
+    scalars: dict[str, float] = {}
+    if not sca_path.exists():
+        return scalars
+
+    with sca_path.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line.startswith("scalar "):
+                continue
+
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+
+            module_name = parts[1]
+            scalar_name = parts[2]
+            raw_value = parts[3]
+
+            if scalar_name not in TARGET_CONTROLLER_SCALAR_NAMES:
+                continue
+
+            try:
+                scalar_value = float(raw_value)
+            except ValueError:
+                continue
+
+            if scalar_name not in scalars:
+                scalars[scalar_name] = scalar_value
+                continue
+
+            if module_name.endswith(".aiMrceController") or module_name.endswith(".withdrawController"):
+                scalars[scalar_name] = scalar_value
+
+    return scalars
 
 
 def parse_vec_file(
@@ -468,14 +765,240 @@ def parse_vec_file(
         else default_sim_time_limit_for_config(default_sim_time_limit, configname, default_sim_time_limits_by_config)
     )
     run_data["metadata"] = metadata
+    run_data["scalars"] = parse_scalar_file(vec_path.with_suffix(".sca"))
     return run_data
+
+
+def parse_numeric_cell(value: object) -> float | None:
+    if value in ("", None):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_int_cell(value: object) -> int | None:
+    if value in ("", None):
+        return None
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def optional_numeric(value: float | int | None) -> float | int | str:
+    if value is None:
+        return ""
+    return value
+
+
+def bool_flag(value: bool | None) -> int | str:
+    if value is None:
+        return ""
+    return 1 if value else 0
+
+
+def availability_thresholds(profile: OutcomeProfile) -> tuple[float, int, float]:
+    expected_packets_per_window = WINDOW_SIZE_SECONDS / profile.send_interval_s
+    packet_progress_floor = max(1, int(math.ceil(expected_packets_per_window * 0.5)))
+    expected_throughput_bps = profile.packet_size_bits / profile.send_interval_s
+    throughput_floor_bps = expected_throughput_bps * 0.5
+    return expected_packets_per_window, packet_progress_floor, throughput_floor_bps
+
+
+def operational_service_available(
+    seq_progress: int | None,
+    throughput_mean_bps: float | None,
+    packet_progress_floor: int,
+    throughput_floor_bps: float,
+) -> bool:
+    # This is a project-local operational definition for service availability.
+    # It relies only on receiver-observable packet continuity and throughput,
+    # not on protocol-internal oracle knowledge or RFC-standard thresholds.
+    if seq_progress is not None and seq_progress >= packet_progress_floor:
+        return True
+    if throughput_mean_bps is not None and throughput_mean_bps >= throughput_floor_bps:
+        return True
+    return False
+
+
+def resolve_protection_activation(profile: OutcomeProfile, scalar_values: dict[str, float]) -> tuple[bool, float | None, str]:
+    activation_flag = scalar_values.get("protectionActivated")
+    activation_time = scalar_values.get("protectionActivationTime")
+
+    if activation_flag is not None and activation_flag > 0.5 and activation_time is not None and activation_time >= 0:
+        return True, activation_time, "controller_scalar"
+
+    if activation_flag is not None and activation_flag > 0.5 and profile.scheduled_protection_time_s is not None:
+        return True, profile.scheduled_protection_time_s, "scheduled_baseline_fallback"
+
+    if activation_flag is None and activation_time is None and profile.scheduled_protection_time_s is not None:
+        # This fallback preserves backward compatibility for deterministic
+        # proactive baseline runs generated before shared controller scalars
+        # were recorded. It uses only the known local control schedule.
+        return True, profile.scheduled_protection_time_s, "scheduled_baseline_fallback"
+
+    if profile.protection_expected:
+        return False, None, "not_activated"
+    return False, None, "not_applicable"
+
+
+def zero_progress_gap_metrics(rows: list[dict[str, object]], monitored_app_index: int, reference_time_s: float | None) -> tuple[int | None, int | None]:
+    if reference_time_s is None:
+        return None, None
+
+    zero_progress_count = 0
+    max_streak = 0
+    current_streak = 0
+    column_name = f"receiver_app{monitored_app_index}_seq_progress"
+
+    for row in rows:
+        window_start_s = float(row["window_start_s"])
+        if window_start_s < reference_time_s:
+            continue
+
+        seq_progress = parse_int_cell(row.get(column_name))
+        if seq_progress is not None and seq_progress <= 0:
+            zero_progress_count += 1
+            current_streak += 1
+            max_streak = max(max_streak, current_streak)
+        else:
+            current_streak = 0
+
+    return zero_progress_count, max_streak
+
+
+def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, scenario: str) -> None:
+    if not rows:
+        return
+
+    metadata = run_data["metadata"]
+    profile = get_outcome_profile(scenario, metadata["configname"])
+    _, packet_progress_floor, throughput_floor_bps = availability_thresholds(profile)
+
+    protection_activated, protection_activation_time_s, protection_activation_source = resolve_protection_activation(
+        profile,
+        run_data["scalars"],
+    )
+    hard_failure_time_s = profile.hard_failure_time_s
+    protection_activated_before_failure = (
+        protection_activated
+        and protection_activation_time_s is not None
+        and hard_failure_time_s is not None
+        and protection_activation_time_s < hard_failure_time_s
+    )
+    protection_lead_time_before_failure_s = (
+        hard_failure_time_s - protection_activation_time_s
+        if protection_activated_before_failure and hard_failure_time_s is not None and protection_activation_time_s is not None
+        else None
+    )
+
+    if protection_activated_before_failure:
+        reference_event = "protection_activation"
+        reference_time_s = protection_activation_time_s
+    elif hard_failure_time_s is not None:
+        reference_event = "hard_failure"
+        reference_time_s = hard_failure_time_s
+    elif protection_activated and protection_activation_time_s is not None:
+        reference_event = "protection_activation_no_failure"
+        reference_time_s = protection_activation_time_s
+    else:
+        reference_event = "none"
+        reference_time_s = None
+
+    service_interruption_start_time_s = None
+    service_interruption_end_time_s = None
+
+    if reference_time_s is not None:
+        interruption_started = False
+        for row in rows:
+            window_start_s = float(row["window_start_s"])
+            service_available = parse_int_cell(row.get("service_available_operational"))
+            if window_start_s < reference_time_s:
+                continue
+
+            if not interruption_started and service_available == 0:
+                service_interruption_start_time_s = window_start_s
+                interruption_started = True
+                continue
+
+            if interruption_started and service_available == 1 and window_start_s > service_interruption_start_time_s:
+                service_interruption_end_time_s = window_start_s
+                break
+
+    service_interruption_duration_s = None
+    if service_interruption_start_time_s is not None and service_interruption_end_time_s is not None:
+        service_interruption_duration_s = service_interruption_end_time_s - service_interruption_start_time_s
+
+    recovery_observed: bool | None = None
+    recovery_time_after_failure_s = None
+    throughput_restored_after_failure: bool | None = None
+    if hard_failure_time_s is not None:
+        recovery_observed = False
+        throughput_restored_after_failure = False
+        monitored_throughput_column = f"receiver_app{profile.monitored_app_index}_throughput_mean_bps"
+
+        for row in rows:
+            window_start_s = float(row["window_start_s"])
+            if window_start_s < hard_failure_time_s:
+                continue
+
+            if parse_int_cell(row.get("service_available_operational")) == 1 and recovery_observed is False:
+                recovery_observed = True
+                recovery_time_after_failure_s = window_start_s - hard_failure_time_s
+
+            throughput_mean_bps = parse_numeric_cell(row.get(monitored_throughput_column))
+            if throughput_mean_bps is not None and throughput_mean_bps >= throughput_floor_bps:
+                throughput_restored_after_failure = True
+
+    zero_progress_window_count_after_reference, max_zero_progress_window_streak_after_reference = zero_progress_gap_metrics(
+        rows,
+        profile.monitored_app_index,
+        reference_time_s,
+    )
+
+    unnecessary_protection = protection_activated and hard_failure_time_s is None
+    missed_protection = (
+        profile.protection_expected
+        and hard_failure_time_s is not None
+        and not protection_activated_before_failure
+    )
+
+    run_outcome_fields = {
+        "protection_activated": bool_flag(protection_activated),
+        "protection_activation_time_s": optional_numeric(protection_activation_time_s),
+        "protection_activation_source": protection_activation_source,
+        "hard_failure_time_s": optional_numeric(hard_failure_time_s),
+        "protection_activated_before_failure": bool_flag(protection_activated_before_failure) if hard_failure_time_s is not None else "",
+        "protection_lead_time_before_failure_s": optional_numeric(protection_lead_time_before_failure_s),
+        "service_interruption_reference_event": reference_event,
+        "service_interruption_reference_time_s": optional_numeric(reference_time_s),
+        "service_interruption_observed": bool_flag(service_interruption_start_time_s is not None) if reference_time_s is not None else "",
+        "service_interruption_start_time_s": optional_numeric(service_interruption_start_time_s),
+        "service_interruption_end_time_s": optional_numeric(service_interruption_end_time_s),
+        "service_interruption_duration_s": optional_numeric(service_interruption_duration_s),
+        "recovery_observed": bool_flag(recovery_observed),
+        "recovery_time_after_failure_s": optional_numeric(recovery_time_after_failure_s),
+        "zero_progress_window_count_after_reference": optional_numeric(zero_progress_window_count_after_reference),
+        "max_zero_progress_window_streak_after_reference": optional_numeric(max_zero_progress_window_streak_after_reference),
+        "throughput_restored_after_failure": bool_flag(throughput_restored_after_failure),
+        "unnecessary_protection": bool_flag(unnecessary_protection),
+        "missed_protection": bool_flag(missed_protection),
+    }
+
+    for row in rows:
+        row.update(run_outcome_fields)
 
 
 def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]:
     metadata = run_data["metadata"]
+    outcome_profile = get_outcome_profile(scenario, metadata["configname"])
     sim_time_limit = float(metadata["sim_time_limit"])
     num_windows = int(math.ceil(sim_time_limit / WINDOW_SIZE_SECONDS))
     receiver_apps = run_data["receiver_apps"]
+    expected_packets_per_window, packet_progress_floor, throughput_floor_bps = availability_thresholds(outcome_profile)
+    expected_throughput_bps = outcome_profile.packet_size_bits / outcome_profile.send_interval_s
 
     rows = []
     for window_index in range(num_windows):
@@ -488,9 +1011,15 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             "window_start_s": window_start,
             "window_end_s": window_end,
             "label": label_for_window(scenario, metadata["configname"], window_start),
+            "protection_mode": outcome_profile.protection_mode,
+            "monitored_flow_app_index": outcome_profile.monitored_app_index,
+            "monitored_flow_expected_packets_per_window": expected_packets_per_window,
+            "monitored_flow_expected_throughput_bps": expected_throughput_bps,
+            "service_availability_packet_progress_floor": packet_progress_floor,
+            "service_availability_throughput_floor_bps": throughput_floor_bps,
         }
 
-        if scenario in {"linkdegradation", "regionalbackbone"}:
+        if scenario in {"linkdegradation", *REGIONALBACKBONE_FAMILY_SCENARIOS}:
             delay_summary = state_summary(run_data["controller"]["appliedDelay"], window_start, window_end)
             per_summary = state_summary(run_data["controller"]["appliedPacketErrorRate"], window_start, window_end)
             row.update({
@@ -502,7 +1031,7 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
                 "controller_packet_error_rate_last": per_summary["last"],
             })
 
-        if scenario in {"congestiondegradation", "regionalbackbone"}:
+        if scenario in {"congestiondegradation", *REGIONALBACKBONE_FAMILY_SCENARIOS}:
             queue_length_summary = state_summary(run_data["bottleneck_queue"]["queueLength"], window_start, window_end)
             queue_bit_length_summary = state_summary(run_data["bottleneck_queue"]["queueBitLength"], window_start, window_end)
             queueing_time_summary = state_summary(run_data["bottleneck_queue"]["queueingTime"], window_start, window_end)
@@ -517,7 +1046,7 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
                 "bottleneck_queueing_time_max_s": queueing_time_summary["max"],
                 "bottleneck_queueing_time_last_s": queueing_time_summary["last"],
             })
-        elif scenario != "linkdegradation":
+        elif scenario not in {"linkdegradation", "reactivefailure", "proactiveswitch"}:
             raise SystemExit(f"Unsupported scenario '{scenario}' for dataset row generation")
 
         total_packets = 0
@@ -537,8 +1066,28 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             row[f"receiver_app{app_index}_throughput_last_bps"] = throughput["last"]
 
         row["receiver_total_packet_count"] = total_packets
+
+        monitored_seq_progress = parse_int_cell(row.get(f"receiver_app{outcome_profile.monitored_app_index}_seq_progress"))
+        monitored_throughput_bps = parse_numeric_cell(row.get(f"receiver_app{outcome_profile.monitored_app_index}_throughput_mean_bps"))
+        if window_start < outcome_profile.flow_start_time_s:
+            # Before the monitored flow starts, service availability is not yet
+            # applicable. Leaving these fields blank avoids conflating "no
+            # traffic scheduled" with "observable service degradation."
+            row["service_available_operational"] = ""
+            row["service_materially_degraded_operational"] = ""
+        else:
+            service_available = operational_service_available(
+                monitored_seq_progress,
+                monitored_throughput_bps,
+                packet_progress_floor,
+                throughput_floor_bps,
+            )
+            row["service_available_operational"] = bool_flag(service_available)
+            row["service_materially_degraded_operational"] = bool_flag(not service_available)
+
         rows.append(row)
 
+    annotate_run_outcome_metrics(rows, run_data, scenario)
     return rows
 
 
@@ -587,7 +1136,7 @@ def main() -> None:
 
     results_dir = args.input if args.input is not None else preset["results_dir"]
     output_file = args.output if args.output is not None else preset["output_file"]
-    supported_configs = preset["supported_configs"]
+    supported_configs = effective_supported_configs(preset, args.include_runtime_protection_configs)
     config_aliases = preset["config_aliases"]
     default_sim_time_limit = preset["default_sim_time_limit"]
     default_sim_time_limits_by_config = preset.get("default_sim_time_limits_by_config")

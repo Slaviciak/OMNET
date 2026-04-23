@@ -3,7 +3,9 @@
 // This controller varies ordinary OMNeT++ channel delay and packet error rate
 // over time so the platform can generate pre-failure telemetry. The profiles
 // are intentionally deterministic and interpretable; they are not presented as
-// real carrier impairment traces.
+// real carrier impairment traces. The staged profile is specifically meant to
+// approximate intermittent deterioration or gray-failure-style brownouts using
+// observable delay variation and loss symptoms, while remaining reproducible.
 
 #include "LinkDegradationController.h"
 
@@ -33,34 +35,68 @@ double clamp01(double value)
     return value;
 }
 
+double normalizeSegment(double progress, double start, double end)
+{
+    if (end <= start)
+        return progress >= end ? 1.0 : 0.0;
+    return clamp01((progress - start) / (end - start));
+}
+
+double smoothstep01(double value)
+{
+    value = clamp01(value);
+    return value * value * (3.0 - 2.0 * value);
+}
+
+double positivePulse(double phase, double sharpness)
+{
+    auto sineValue = std::sin(2.0 * PI * phase);
+    if (sineValue <= 0)
+        return 0;
+    return std::pow(sineValue, sharpness);
+}
+
 ProfileProgress stagedRealisticProgress(double progress)
 {
-    // This profile is a hand-designed controlled synthetic degradation proxy.
-    // It aims to produce a gradual early phase, a noisier mid phase, and a
-    // sharper late phase without claiming empirical field calibration.
-    if (progress <= 1.0 / 3.0) {
-        auto phaseProgress = progress * 3.0;
+    // This profile is a deterministic intermittent-deterioration proxy. It is
+    // motivated by literature on delay variation as an observable symptom and
+    // by work on gray or hardware-deterioration failures where links can spend
+    // periods of time oscillating between mostly healthy and visibly degraded
+    // operation before a later hard outage. It does not claim empirical
+    // calibration to any specific operator dataset.
+    //
+    // The intended approximation is:
+    // - early phase: mild sustained delay/loss drift
+    // - middle phase: intermittent brownout episodes with elevated delay and loss
+    // - late phase: denser and more severe brownouts before the scripted outage
+    if (progress <= 0.30) {
+        auto phaseProgress = smoothstep01(normalizeSegment(progress, 0.0, 0.30));
         return {
-            0.20 * std::pow(phaseProgress, 1.2),
+            0.12 * phaseProgress,
             0.02 * phaseProgress,
         };
     }
 
-    if (progress <= 2.0 / 3.0) {
-        auto phaseProgress = (progress - 1.0 / 3.0) * 3.0;
-        auto delayTrend = 0.20 + 0.40 * phaseProgress;
-        // Deterministic delay variation: small bounded oscillations around the trend.
-        auto delayVariation = 0.04 * std::sin(4.0 * PI * phaseProgress);
+    if (progress <= 0.75) {
+        auto phaseProgress = normalizeSegment(progress, 0.30, 0.75);
+        auto delayTrend = 0.12 + 0.26 * phaseProgress;
+        auto lossTrend = 0.02 + 0.16 * phaseProgress;
+        auto brownoutEnvelope = 0.25 + 0.75 * phaseProgress;
+        // Deterministic brownout windows create short worse-than-trend periods
+        // without introducing randomness into the dataset generation path.
+        auto brownoutPulse = positivePulse(2.5 * phaseProgress, 4.0);
         return {
-            clamp01(delayTrend + delayVariation),
-            0.02 + 0.18 * phaseProgress,
+            clamp01(delayTrend + 0.18 * brownoutEnvelope * brownoutPulse),
+            clamp01(lossTrend + 0.32 * brownoutEnvelope * brownoutPulse),
         };
     }
 
-    auto phaseProgress = (progress - 2.0 / 3.0) * 3.0;
+    auto phaseProgress = normalizeSegment(progress, 0.75, 1.0);
+    auto lateBrownoutEnvelope = 0.55 + 0.45 * phaseProgress;
+    auto lateBrownoutPulse = positivePulse(4.0 * phaseProgress + 0.15, 2.5);
     return {
-        0.60 + 0.40 * std::pow(phaseProgress, 1.7),
-        0.20 + 0.80 * std::pow(phaseProgress, 1.8),
+        clamp01(0.38 + 0.62 * std::pow(phaseProgress, 1.25) + 0.20 * lateBrownoutEnvelope * lateBrownoutPulse),
+        clamp01(0.18 + 0.82 * std::pow(phaseProgress, 1.35) + 0.25 * lateBrownoutEnvelope * lateBrownoutPulse),
     };
 }
 

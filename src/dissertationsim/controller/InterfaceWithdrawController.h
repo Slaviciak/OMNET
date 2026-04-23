@@ -27,6 +27,8 @@ class InterfaceWithdrawController : public omnetpp::cSimpleModule
 {
   protected:
     omnetpp::cMessage *withdrawTimer = nullptr;
+    bool protectionActivated = false;
+    omnetpp::simtime_t protectionActivationTime = omnetpp::simtime_t(-1);
 
   protected:
     virtual void initialize() override;

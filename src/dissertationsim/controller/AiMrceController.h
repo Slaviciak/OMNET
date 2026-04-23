@@ -1,9 +1,9 @@
-// Project-local runtime controller for the first AI-MRCE prototype.
+// Project-local runtime controller for a small AI-MRCE prototype family.
 //
 // This class implements custom dissertation logic that sits above standard INET
 // OSPF behavior. It periodically samples a compact telemetry set from the
-// regionalbackbone congestion scenario, computes either a rule-based risk score
-// or an exported logistic-regression score, and can trigger a conservative
+// regionalbackbone congestion scenario, computes a conservative rule-based or
+// exported runtime-model decision score, and can trigger a conservative
 // protective action through administrative interface withdrawal.
 //
 // Important scope note:
@@ -30,7 +30,8 @@ class IPacketCollection;
 namespace dissertationsim::controller {
 
 /**
- * First runtime AI-MRCE prototype for predictive protection experiments.
+ * Project-local runtime AI-MRCE prototype family for predictive protection
+ * experiments.
  *
  * Experimentally, the controller represents a compact decision point watching
  * a single protected corridor. It intentionally uses only telemetry that is
@@ -44,6 +45,8 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     {
         RULE_BASED,
         LOGISTIC_REGRESSION,
+        LINEAR_SVM,
+        SHALLOW_TREE,
     };
 
     // Probe-flow telemetry accumulated between controller evaluations.
@@ -81,15 +84,47 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
         double imputeValue = 0;
     };
 
-    // Minimal binary logistic-regression artifact used by the runtime
-    // prototype. The main methodological evaluation remains offline.
-    struct RuntimeLogisticModel
+    // Compact linear-model artifact used by the runtime prototype family.
+    // Logistic regression and linear SVM share the same feature preprocessing
+    // export path so the deployment logic stays simple and auditable.
+    struct RuntimeLinearModel
     {
         std::string sourcePath;
         std::string positiveLabel = "protect";
+        std::string scoreTransform;
         double intercept = 0;
         double threshold = 0.5;
         std::vector<RuntimeFeatureParameter> features;
+    };
+
+    // Tree runtime features reuse the same observable telemetry names but need
+    // only the imputation values because scaling is not part of the tree path.
+    struct RuntimeTreeFeatureParameter
+    {
+        std::string name;
+        double imputeValue = 0;
+    };
+
+    // Small decision-tree deployment artifact. This remains a project-local
+    // prototype and is intentionally limited to shallow transparent trees.
+    struct RuntimeTreeNode
+    {
+        int nodeIndex = -1;
+        int featureIndex = -1;
+        double threshold = 0;
+        int leftIndex = -1;
+        int rightIndex = -1;
+        double positiveScore = 0;
+        bool isLeaf = false;
+    };
+
+    struct RuntimeTreeModel
+    {
+        std::string sourcePath;
+        std::string positiveLabel = "protect";
+        double threshold = 0.5;
+        std::vector<RuntimeTreeFeatureParameter> features;
+        std::vector<RuntimeTreeNode> nodes;
     };
 
     omnetpp::cMessage *evaluationTimer = nullptr;
@@ -97,7 +132,8 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     inet::queueing::IPacketCollection *protectedQueue = nullptr;
     omnetpp::cModule *probeReceiverModule = nullptr;
     DecisionMode decisionMode = DecisionMode::RULE_BASED;
-    RuntimeLogisticModel logisticModel;
+    RuntimeLinearModel linearModel;
+    RuntimeTreeModel treeModel;
     IntervalTelemetry intervalTelemetry;
     bool protectionActive = false;
     int positiveDecisionStreak = 0;
@@ -130,14 +166,16 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     omnetpp::cModule *resolveModule(const char *modulePath, const char *purpose) const;
     std::string resolveParameterFilePath(const char *parameterName) const;
     // Loads the exported deployment artifact, not an evaluation report.
-    void loadRuntimeLogisticModel();
+    void loadRuntimeLinearModel();
+    void loadRuntimeTreeModel();
     // Samples the current queue state and the most recent probe interval.
     FeatureSnapshot collectFeatureSnapshot() const;
     // Interpretable baseline score used as the non-ML runtime reference.
     double computeRuleBasedRisk(const FeatureSnapshot& snapshot) const;
-    // Runtime inference path using exported coefficients only.
-    double computeLogisticRisk(const FeatureSnapshot& snapshot) const;
-    double lookupFeatureValue(const FeatureSnapshot& snapshot, const RuntimeFeatureParameter& feature, bool& available) const;
+    // Runtime inference paths using exported deployment artifacts only.
+    double computeLinearModelRisk(const FeatureSnapshot& snapshot) const;
+    double computeShallowTreeRisk(const FeatureSnapshot& snapshot) const;
+    double lookupFeatureValue(const FeatureSnapshot& snapshot, const std::string& featureName, bool& available) const;
     // Periodic controller cycle that applies debouncing before protection.
     void evaluateCycle();
     // First-step protective action: ordinary administrative withdrawal of the

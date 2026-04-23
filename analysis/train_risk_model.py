@@ -12,6 +12,9 @@ Assumptions:
 - Convergence rows and unsupported labels are excluded by default.
 - Regional reactive-failure rows are excluded by default because the first
   model is for pre-failure risk estimation, not post-hoc rerouting behavior.
+- Runtime protection configs may appear in outcome-oriented regional datasets,
+  but they remain outside this offline classifier scope because they are used
+  for mechanism evaluation rather than for the current supervision problem.
 - Scenario/config identifiers and window times are intentionally not used as
   model features, to avoid leakage from experiment design into the classifier.
 - Missing numeric feature values are handled by median imputation inside each
@@ -249,6 +252,12 @@ def remap_label(scenario: str, row: dict[str, str], include_regional_reactive: b
     if scenario == "regionalbackbone":
         if config_name == "RegionalBackboneReactiveFailure" and not include_regional_reactive:
             return None, "excluded_regional_reactive_failure"
+        if config_name.startswith("RegionalBackboneAiMrce"):
+            # These runtime protection rows are useful for project-local outcome
+            # evaluation, but keeping them out here preserves the existing
+            # offline supervision problem and avoids mixing deployment-behavior
+            # runs into the main classifier training table.
+            return None, "excluded_runtime_protection_config"
         if config_name == "RegionalBackboneBaseline":
             mapped = "safe" if label == "normal" else None
             return mapped, None if mapped else f"unsupported_regional_baseline_label:{label}"

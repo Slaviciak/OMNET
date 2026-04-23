@@ -1,10 +1,10 @@
-// Implementation of the first AI-MRCE runtime prototype.
+// Implementation of a small AI-MRCE runtime prototype family.
 //
 // The controller is intentionally conservative. It reuses ordinary OMNeT++ /
 // INET control points, consumes an explicit exported runtime model artifact
 // when configured for logistic regression, and avoids any deep changes to
 // OSPF internals. The goal is an experimentally useful and scientifically
-// transparent runtime prototype rather than a full routing product.
+// transparent runtime prototype family rather than a full routing product.
 
 #include "AiMrceController.h"
 
@@ -70,6 +70,16 @@ double parseCsvDouble(const std::string& rawValue, const char *fieldName)
     }
 }
 
+int parseCsvInt(const std::string& rawValue, const char *fieldName)
+{
+    try {
+        return std::stoi(rawValue);
+    }
+    catch (const std::exception&) {
+        throw cRuntimeError("Cannot parse '%s' as an integer value for field '%s'", rawValue.c_str(), fieldName);
+    }
+}
+
 } // namespace
 
 namespace dissertationsim::controller {
@@ -116,8 +126,10 @@ void AiMrceController::initialize()
     packetReceivedSignal = registerSignal("packetReceived");
     probeReceiverModule->subscribe(packetReceivedSignal, this);
 
-    if (decisionMode == DecisionMode::LOGISTIC_REGRESSION)
-        loadRuntimeLogisticModel();
+    if (decisionMode == DecisionMode::LOGISTIC_REGRESSION || decisionMode == DecisionMode::LINEAR_SVM)
+        loadRuntimeLinearModel();
+    else if (decisionMode == DecisionMode::SHALLOW_TREE)
+        loadRuntimeTreeModel();
 
     queueLengthVector.setName("observedQueueLengthPk");
     queueBitLengthVector.setName("observedQueueBitLengthB");
@@ -188,6 +200,10 @@ AiMrceController::DecisionMode AiMrceController::parseDecisionMode(const char *v
         return DecisionMode::RULE_BASED;
     if (mode == "logisticregression")
         return DecisionMode::LOGISTIC_REGRESSION;
+    if (mode == "linearsvm")
+        return DecisionMode::LINEAR_SVM;
+    if (mode == "shallowtree")
+        return DecisionMode::SHALLOW_TREE;
     throw cRuntimeError("Unsupported decisionMode '%s'", value);
 }
 
@@ -228,17 +244,18 @@ std::string AiMrceController::resolveParameterFilePath(const char *parameterName
     return cConfiguration::adjustPath(configuredPath.c_str(), parameterEntry.getBaseDirectory(), nullptr);
 }
 
-void AiMrceController::loadRuntimeLogisticModel()
+void AiMrceController::loadRuntimeLinearModel()
 {
     auto configuredPath = par("runtimeModelFile").stdstringValue();
     if (configuredPath.empty())
-        throw cRuntimeError("runtimeModelFile must be configured when decisionMode=logisticRegression");
+        throw cRuntimeError("runtimeModelFile must be configured for learned AI-MRCE decision modes");
 
-    logisticModel.sourcePath = resolveParameterFilePath("runtimeModelFile");
+    linearModel = RuntimeLinearModel();
+    linearModel.sourcePath = resolveParameterFilePath("runtimeModelFile");
 
-    std::ifstream input(logisticModel.sourcePath.c_str());
+    std::ifstream input(linearModel.sourcePath.c_str());
     if (!input.is_open())
-        throw cRuntimeError("Cannot open runtime logistic model file '%s' (resolved from '%s')", logisticModel.sourcePath.c_str(), configuredPath.c_str());
+        throw cRuntimeError("Cannot open runtime linear model file '%s' (resolved from '%s')", linearModel.sourcePath.c_str(), configuredPath.c_str());
 
     std::string line;
     auto lineNumber = 0;
@@ -250,18 +267,20 @@ void AiMrceController::loadRuntimeLogisticModel()
 
         auto fields = splitCsvLine(trimmedLine);
         if (fields.size() < 3)
-            throw cRuntimeError("Malformed runtime model line %d in '%s'", lineNumber, logisticModel.sourcePath.c_str());
+            throw cRuntimeError("Malformed runtime model line %d in '%s'", lineNumber, linearModel.sourcePath.c_str());
         fields.resize(7);
         if (fields[0] == "row_type")
             continue;
 
         if (fields[0] == "meta") {
             if (fields[1] == "positive_label")
-                logisticModel.positiveLabel = fields[2];
+                linearModel.positiveLabel = fields[2];
             else if (fields[1] == "threshold")
-                logisticModel.threshold = parseCsvDouble(fields[2], "threshold");
+                linearModel.threshold = parseCsvDouble(fields[2], "threshold");
             else if (fields[1] == "intercept")
-                logisticModel.intercept = parseCsvDouble(fields[2], "intercept");
+                linearModel.intercept = parseCsvDouble(fields[2], "intercept");
+            else if (fields[1] == "score_semantics")
+                linearModel.scoreTransform = fields[2];
             continue;
         }
 
@@ -275,15 +294,94 @@ void AiMrceController::loadRuntimeLogisticModel()
             feature.mean = parseCsvDouble(fields[4], "mean");
             feature.scale = parseCsvDouble(fields[5], "scale");
             feature.imputeValue = parseCsvDouble(fields[6], "impute_value");
-            logisticModel.features.push_back(feature);
+            linearModel.features.push_back(feature);
             continue;
         }
 
         throw cRuntimeError("Unsupported runtime model row type '%s' at line %d", fields[0].c_str(), lineNumber);
     }
 
-    if (logisticModel.features.empty())
-        throw cRuntimeError("Runtime logistic model '%s' does not define any features", logisticModel.sourcePath.c_str());
+    if (linearModel.features.empty())
+        throw cRuntimeError("Runtime linear model '%s' does not define any features", linearModel.sourcePath.c_str());
+
+    if (linearModel.scoreTransform.empty()) {
+        if (decisionMode == DecisionMode::LOGISTIC_REGRESSION)
+            linearModel.scoreTransform = "logistic_probability";
+        else
+            linearModel.scoreTransform = "sigmoid_of_margin";
+    }
+}
+
+void AiMrceController::loadRuntimeTreeModel()
+{
+    auto configuredPath = par("runtimeModelFile").stdstringValue();
+    if (configuredPath.empty())
+        throw cRuntimeError("runtimeModelFile must be configured when decisionMode=shallowTree");
+
+    treeModel = RuntimeTreeModel();
+    treeModel.sourcePath = resolveParameterFilePath("runtimeModelFile");
+
+    std::ifstream input(treeModel.sourcePath.c_str());
+    if (!input.is_open())
+        throw cRuntimeError("Cannot open runtime tree model file '%s' (resolved from '%s')", treeModel.sourcePath.c_str(), configuredPath.c_str());
+
+    std::string line;
+    auto lineNumber = 0;
+    while (std::getline(input, line)) {
+        lineNumber++;
+        auto trimmedLine = trim(line);
+        if (trimmedLine.empty() || trimmedLine[0] == '#')
+            continue;
+
+        auto fields = splitCsvLine(trimmedLine);
+        if (fields.size() < 3)
+            throw cRuntimeError("Malformed runtime tree line %d in '%s'", lineNumber, treeModel.sourcePath.c_str());
+        fields.resize(11);
+        if (fields[0] == "row_type")
+            continue;
+
+        if (fields[0] == "meta") {
+            if (fields[1] == "positive_label")
+                treeModel.positiveLabel = fields[2];
+            else if (fields[1] == "threshold")
+                treeModel.threshold = parseCsvDouble(fields[2], "threshold");
+            continue;
+        }
+
+        if (fields[0] == "feature") {
+            RuntimeTreeFeatureParameter feature;
+            auto featureIndex = parseCsvInt(fields[4], "feature_index");
+            if (featureIndex != static_cast<int>(treeModel.features.size()))
+                throw cRuntimeError("Runtime tree feature indices must be sequential starting at 0 in '%s'", treeModel.sourcePath.c_str());
+            feature.name = fields[1];
+            feature.imputeValue = parseCsvDouble(fields[8], "impute_value");
+            treeModel.features.push_back(feature);
+            continue;
+        }
+
+        if (fields[0] == "node") {
+            RuntimeTreeNode node;
+            node.nodeIndex = parseCsvInt(fields[3], "node_index");
+            if (node.nodeIndex != static_cast<int>(treeModel.nodes.size()))
+                throw cRuntimeError("Runtime tree node indices must be sequential starting at 0 in '%s'", treeModel.sourcePath.c_str());
+            node.featureIndex = parseCsvInt(fields[4], "feature_index");
+            node.leftIndex = parseCsvInt(fields[6], "left_index");
+            node.rightIndex = parseCsvInt(fields[7], "right_index");
+            node.positiveScore = parseCsvDouble(fields[9], "positive_score");
+            node.isLeaf = parseCsvInt(fields[10], "is_leaf") != 0;
+            if (!node.isLeaf)
+                node.threshold = parseCsvDouble(fields[5], "threshold");
+            treeModel.nodes.push_back(node);
+            continue;
+        }
+
+        throw cRuntimeError("Unsupported runtime tree row type '%s' at line %d", fields[0].c_str(), lineNumber);
+    }
+
+    if (treeModel.features.empty())
+        throw cRuntimeError("Runtime tree model '%s' does not define any features", treeModel.sourcePath.c_str());
+    if (treeModel.nodes.empty())
+        throw cRuntimeError("Runtime tree model '%s' does not define any nodes", treeModel.sourcePath.c_str());
 }
 
 AiMrceController::FeatureSnapshot AiMrceController::collectFeatureSnapshot() const
@@ -335,48 +433,98 @@ double AiMrceController::computeRuleBasedRisk(const FeatureSnapshot& snapshot) c
     return 0.40 * queueRisk + 0.40 * delayRisk + 0.10 * throughputRisk + 0.10 * packetCountRisk;
 }
 
-double AiMrceController::computeLogisticRisk(const FeatureSnapshot& snapshot) const
+double AiMrceController::computeLinearModelRisk(const FeatureSnapshot& snapshot) const
 {
     // Runtime inference uses the exported coefficients and preprocessing
     // parameters only. This keeps the deployment path deterministic and
     // separated from the richer offline sklearn evaluation environment.
-    auto linearScore = logisticModel.intercept;
-    for (const auto& feature : logisticModel.features) {
+    auto linearScore = linearModel.intercept;
+    for (const auto& feature : linearModel.features) {
         auto available = true;
-        auto value = lookupFeatureValue(snapshot, feature, available);
+        auto value = lookupFeatureValue(snapshot, feature.name, available);
         if (!available)
             value = feature.imputeValue;
         auto scale = feature.scale == 0 ? 1.0 : feature.scale;
         auto normalized = (value - feature.mean) / scale;
         linearScore += feature.coefficient * normalized;
     }
-    return 1.0 / (1.0 + std::exp(-linearScore));
+
+    if (linearModel.scoreTransform == "sigmoid_of_margin" || linearModel.scoreTransform == "logistic_probability")
+        return 1.0 / (1.0 + std::exp(-linearScore));
+
+    return linearScore;
 }
 
-double AiMrceController::lookupFeatureValue(const FeatureSnapshot& snapshot, const RuntimeFeatureParameter& feature, bool& available) const
+double AiMrceController::computeShallowTreeRisk(const FeatureSnapshot& snapshot) const
+{
+    // The tree path is kept intentionally small and explicit so later paper
+    // writing can describe the deployment logic without invoking a black-box
+    // runtime stack. Leaf scores are operational positive-class fractions
+    // under scenario-conditioned supervision, not universal probabilities.
+    auto currentNodeIndex = 0;
+    auto safetyCounter = 0;
+    while (safetyCounter < static_cast<int>(treeModel.nodes.size())) {
+        const auto& node = treeModel.nodes[currentNodeIndex];
+        if (node.isLeaf)
+            return clamp01(node.positiveScore);
+
+        if (node.featureIndex < 0 || node.featureIndex >= static_cast<int>(treeModel.features.size()))
+            throw cRuntimeError("Runtime tree node %d references invalid feature index %d", node.nodeIndex, node.featureIndex);
+
+        const auto& feature = treeModel.features[node.featureIndex];
+        auto available = true;
+        auto value = lookupFeatureValue(snapshot, feature.name, available);
+        if (!available)
+            value = feature.imputeValue;
+
+        currentNodeIndex = value <= node.threshold ? node.leftIndex : node.rightIndex;
+        if (currentNodeIndex < 0 || currentNodeIndex >= static_cast<int>(treeModel.nodes.size()))
+            throw cRuntimeError("Runtime tree traversal reached invalid node index %d", currentNodeIndex);
+        safetyCounter++;
+    }
+
+    throw cRuntimeError("Runtime tree traversal exceeded the expected node depth");
+}
+
+double AiMrceController::lookupFeatureValue(const FeatureSnapshot& snapshot, const std::string& featureName, bool& available) const
 {
     available = true;
 
-    if (feature.name == "bottleneck_queue_length_last_pk")
+    if (featureName == "bottleneck_queue_length_last_pk")
         return snapshot.queueLengthPackets;
-    if (feature.name == "receiver_app0_e2e_delay_mean_s") {
+    if (featureName == "receiver_app0_e2e_delay_mean_s") {
         available = snapshot.hasProbeDelay;
         return snapshot.probeDelayMeanSeconds;
     }
-    if (feature.name == "receiver_app0_throughput_mean_bps")
+    if (featureName == "receiver_app0_throughput_mean_bps")
         return snapshot.probeThroughputBps;
-    if (feature.name == "receiver_app0_packet_count")
+    if (featureName == "receiver_app0_packet_count")
         return snapshot.probePacketCount;
 
-    throw cRuntimeError("Runtime logistic model requested unsupported feature '%s'", feature.name.c_str());
+    throw cRuntimeError("Runtime model requested unsupported feature '%s'", featureName.c_str());
 }
 
 void AiMrceController::evaluateCycle()
 {
     auto snapshot = collectFeatureSnapshot();
 
-    auto riskScore = decisionMode == DecisionMode::RULE_BASED ? computeRuleBasedRisk(snapshot) : computeLogisticRisk(snapshot);
-    auto decisionThreshold = decisionMode == DecisionMode::RULE_BASED ? par("ruleRiskThreshold").doubleValue() : logisticModel.threshold;
+    double riskScore = 0;
+    double decisionThreshold = 0;
+    switch (decisionMode) {
+        case DecisionMode::RULE_BASED:
+            riskScore = computeRuleBasedRisk(snapshot);
+            decisionThreshold = par("ruleRiskThreshold").doubleValue();
+            break;
+        case DecisionMode::LOGISTIC_REGRESSION:
+        case DecisionMode::LINEAR_SVM:
+            riskScore = computeLinearModelRisk(snapshot);
+            decisionThreshold = linearModel.threshold;
+            break;
+        case DecisionMode::SHALLOW_TREE:
+            riskScore = computeShallowTreeRisk(snapshot);
+            decisionThreshold = treeModel.threshold;
+            break;
+    }
     auto decisionPositive = riskScore >= decisionThreshold;
 
     // Consecutive positive cycles provide simple hysteresis for the first
@@ -432,7 +580,11 @@ void AiMrceController::resetIntervalTelemetry()
 void AiMrceController::recordVectors(const FeatureSnapshot& snapshot, double riskScore, bool decisionPositive)
 {
     // Record both inputs and decisions so later analysis can separate observed
-    // network symptoms from the custom runtime AI-MRCE logic.
+    // network symptoms from the custom runtime AI-MRCE logic. The riskScore
+    // vector stores the family-specific bounded decision score; for example,
+    // logistic regression yields a probability-like score, the linear-SVM path
+    // stores a sigmoid-transformed margin, and the tree path stores a leaf
+    // positive-score estimate. These are project-local controller metrics.
     queueLengthVector.record(snapshot.queueLengthPackets);
     queueBitLengthVector.record(snapshot.queueBitLength);
     probeDelayMeanVector.record(snapshot.hasProbeDelay ? snapshot.probeDelayMeanSeconds : -1);

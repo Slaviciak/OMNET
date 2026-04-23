@@ -116,7 +116,9 @@ Commands:
   prepare-batch         Forward to analysis\prepare_batch.py.
   build-dataset         Forward to analysis\build_dataset.py.
   dataset-report        Forward to analysis\dataset_report.py.
+  compare-outcomes      Forward to analysis\compare_outcomes.py.
   train-risk-model      Forward to analysis\train_risk_model.py.
+  export-runtime-models Forward to analysis\export_runtime_models.py.
   export-runtime-logreg Forward to analysis\export_runtime_logreg.py.
 
 Examples:
@@ -125,7 +127,9 @@ Examples:
   run_analysis.bat install-ml-deps
   run_analysis.bat build-dataset --scenario regionalbackbone
   run_analysis.bat dataset-report --scenario regionalbackbone
+  run_analysis.bat compare-outcomes --allow-missing
   run_analysis.bat train-risk-model --scenarios linkdegradation congestiondegradation regionalbackbone
+  run_analysis.bat export-runtime-models --configs RegionalBackboneCongestionDegradation
   run_analysis.bat export-runtime-logreg --configs RegionalBackboneCongestionDegradation
 "@ | Write-Host
 }
@@ -160,8 +164,14 @@ try {
         "dataset-report" {
             Invoke-AnalysisScript -ScriptName "dataset_report.py" -ScriptArgs $CommandArgs
         }
+        "compare-outcomes" {
+            Invoke-AnalysisScript -ScriptName "compare_outcomes.py" -ScriptArgs $CommandArgs
+        }
         "train-risk-model" {
             Invoke-AnalysisScript -ScriptName "train_risk_model.py" -ScriptArgs $CommandArgs
+        }
+        "export-runtime-models" {
+            Invoke-AnalysisScript -ScriptName "export_runtime_models.py" -ScriptArgs $CommandArgs
         }
         "export-runtime-logreg" {
             Invoke-AnalysisScript -ScriptName "export_runtime_logreg.py" -ScriptArgs $CommandArgs

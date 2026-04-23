@@ -21,6 +21,9 @@ void InterfaceWithdrawController::initialize()
 
     withdrawTimer = new cMessage("withdrawTimer");
     scheduleAt(withdrawTime, withdrawTimer);
+
+    WATCH(protectionActivated);
+    WATCH(protectionActivationTime);
 }
 
 void InterfaceWithdrawController::handleMessage(cMessage *message)
@@ -32,10 +35,23 @@ void InterfaceWithdrawController::handleMessage(cMessage *message)
     // behavior reflects ordinary interface-down handling on both endpoints.
     administrativelyWithdraw(par("firstInterfaceModule"));
     administrativelyWithdraw(par("secondInterfaceModule"));
+
+    // These shared scalars are workflow measurement support only. They align
+    // the deterministic proactive baseline with the AI-MRCE controller output
+    // names so later outcome analysis can compare action timing without
+    // changing routing semantics or implying identical decision logic.
+    protectionActivated = true;
+    protectionActivationTime = simTime();
 }
 
 void InterfaceWithdrawController::finish()
 {
+    // This remains project-local recovery-evaluation instrumentation. The
+    // proactive baseline still uses standard administrative interface-down
+    // behavior rather than any custom OSPF or INET extension.
+    recordScalar("protectionActivated", protectionActivated);
+    recordScalar("protectionActivationTime", protectionActivationTime >= SIMTIME_ZERO ? protectionActivationTime.dbl() : -1);
+
     cancelAndDelete(withdrawTimer);
     withdrawTimer = nullptr;
 }

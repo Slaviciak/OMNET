@@ -18,9 +18,10 @@ simple AiMrceController
         // semantics on the preferred span, not a custom OSPF extension.
         string firstInterfaceModule;
         string secondInterfaceModule;
-        string decisionMode = default("ruleBased"); // Supported: ruleBased, logisticRegression.
-        // Used only in logisticRegression mode. This file is an exported
-        // runtime deployment artifact, not the main evaluation output.
+        // Supported: ruleBased, logisticRegression, linearSvm, shallowTree.
+        string decisionMode = default("ruleBased");
+        // Used only in learned-model modes. This file is an exported runtime
+        // deployment artifact, not the main methodological evaluation output.
         string runtimeModelFile = default("");
         double startTime @unit(s) = default(20s);
         double evaluationInterval @unit(s) = default(1s);

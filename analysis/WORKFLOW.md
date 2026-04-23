@@ -8,7 +8,7 @@ For the scenario tiering and next topology plan, see `analysis/EXPERIMENT_ARCHIT
 
 ### Core active data-generation scenarios
 - `simulations/linkdegradation`
-  - Purpose: controlled synthetic degradation proxy using deterministic delay and packet-error-rate ramps.
+  - Purpose: controlled synthetic degradation proxy using deterministic delay and packet-error-rate ramps plus an intermittent brownout-style staged profile.
   - Main configs: `MildLinear`, `StrongLinear`, `UnstableLinear`, `StagedRealistic`
   - Debug config: `UnstableLinearDebug`
 - `simulations/congestiondegradation`
@@ -16,7 +16,7 @@ For the scenario tiering and next topology plan, see `analysis/EXPERIMENT_ARCHIT
   - Main configs: `CongestionDegradation`, `CongestionDegradationMild`
   - Debug config: `CongestionDegradationDebug`
 - `simulations/regionalbackbone`
-  - Purpose: medium-scale OSPF backbone family for baseline routing, reactive failure, controlled synthetic degradation proxy experiments, traffic-driven congestion approximation, and the first AI-MRCE runtime prototype.
+  - Purpose: medium-scale OSPF backbone family for baseline routing, reactive failure, controlled synthetic degradation proxy experiments, traffic-driven congestion approximation, and the current AI-MRCE runtime prototype family.
   - Main configs: `RegionalBackboneBaseline`, `RegionalBackboneReactiveFailure`, `RegionalBackboneControlledDegradation`, `RegionalBackboneCongestionDegradation`
   - Debug configs: `RegionalBackboneBaselineDebug`, `RegionalBackboneReactiveFailureDebug`, `RegionalBackboneControlledDegradationDebug`, `RegionalBackboneCongestionDegradationDebug`
 
@@ -46,7 +46,7 @@ For the scenario tiering and next topology plan, see `analysis/EXPERIMENT_ARCHIT
 - `src/dissertationsim/controller/LinkDegradationController.*`
   - Used by `linkdegradation` and `regionalbackbone` controlled synthetic degradation proxy configs
 - `src/dissertationsim/controller/AiMrceController.*`
-  - Used by the first AI-MRCE runtime prototype configs in `regionalbackbone`
+  - Used by the current AI-MRCE runtime prototype family configs in `regionalbackbone`
 
 ## Current Research Workflow
 
@@ -72,9 +72,35 @@ run_analysis.bat setup-env
 run_analysis.bat install-ml-deps
 ```
 
+### Experiment orchestrator
+- The recommended batch entrypoint for reproducible command-line experiment execution is:
+
+```powershell
+run_experiments.bat <command> [options...]
+```
+
+- This orchestration layer is project-local automation around standard OMNeT++ Cmdenv execution and the existing `run_analysis.bat` tooling.
+- Generated batch logs are written under `analysis/output/experiment_logs/` and should be treated as generated artifacts only.
+- The orchestrator supports:
+  - `dataset-batch` for sequential scenario eval runs plus optional dataset/report generation
+  - `training-batch` for dataset checks plus offline methodological evaluation
+  - `aimrce-batch` for the current AI-MRCE runtime prototype family configs in `regionalbackbone`
+  - `full-pipeline` for a conservative end-to-end workflow
+- Current scenario configs normally expose run number `0` unless repeat or iteration variables are added later, so `--runs` should be interpreted as explicit OMNeT++ run numbers.
+- `dataset-batch` runs standard OMNeT++ `Cmdenv` express-mode simulations one config at a time and validates the expected `.sca` and `.vec` outputs after each run.
+- `aimrce-batch` uses the same command-line execution path for the current AI-MRCE runtime prototype family, but its `--clean` step only removes the targeted AI-MRCE eval artifacts rather than wiping the whole `regionalbackbone` eval directory.
+- Manual `--configs` subsets are meant for targeted reruns, checks, or dry runs. Keep `--skip-analysis` enabled for those partial batches so the workflow does not silently produce a partial dataset export.
+- The AI-MRCE runtime export step depends on the existing `regionalbackbone` dataset because the runtime deployment artifact is derived offline from scenario-phase supervision.
+- Example dry run:
+
+```powershell
+run_experiments.bat dataset-batch --scenario regionalbackbone --dry-run
+```
+
 ### 2. Run simulation scenarios
 - Use the config names from the scenario-local `omnetpp.ini` files.
 - Results are written into the shared top-level `results/<scenario>/` layout.
+- For reproducible non-GUI execution, prefer the experiment orchestrator in standard OMNeT++ `Cmdenv` express mode instead of manual GUI launching when you are running a batch.
 - For dataset-generating batches, prepare the eval directory before running configs:
 
 ```powershell
@@ -88,9 +114,24 @@ run_analysis.bat prepare-batch --scenario <scenario> --clean --yes
 ```
 
 - The helper only cleans `results/<scenario>/eval/`; it does not touch `debug/`.
+- The experiment orchestrator can perform the same cleanup step, but it still requires `--yes` before deleting eval files.
 
 ### 3. Generate a dataset
-- Current dataset generation is standardized for `linkdegradation`, `congestiondegradation`, and `regionalbackbone`.
+- Current dataset generation is standardized for:
+  - `linkdegradation`
+  - `congestiondegradation`
+  - `reactivefailure`
+  - `proactiveswitch`
+  - `regionalbackbone`
+- The dataset builder now carries two distinct information layers:
+  - scenario-phase supervision labels used by the existing offline ML workflow
+  - project-local recovery and protection outcome metrics derived from observable receiver-side telemetry plus known scripted event times
+- The outcome metrics are operational simulator-side definitions for later FRR-style comparison. They are not RFC-defined fields and they are not hidden oracle ground truth.
+- The controlled synthetic degradation branch remains an explicit approximation only.
+  The current staged profile is meant to emulate intermittent deterioration or
+  brownout-style pre-failure behavior through observable delay variation and
+  packet loss changes; it should not be described as an empirically calibrated
+  field trace or as evidence that all failures are predictable.
 - Build the synthetic degradation dataset with:
 
 ```powershell
@@ -107,6 +148,24 @@ run_analysis.bat build-dataset --scenario congestiondegradation
 
 ```powershell
 run_analysis.bat build-dataset --scenario regionalbackbone
+```
+
+- Build the small-topology reactive baseline outcome dataset with:
+
+```powershell
+run_analysis.bat build-dataset --scenario reactivefailure
+```
+
+- Build the small-topology deterministic proactive baseline outcome dataset with:
+
+```powershell
+run_analysis.bat build-dataset --scenario proactiveswitch
+```
+
+- For regional runtime protection outcome analysis, optionally include the AI-MRCE runtime configs as well:
+
+```powershell
+run_analysis.bat build-dataset --scenario regionalbackbone --include-runtime-protection-configs
 ```
 
 ### 4. Generate a dataset sanity report
@@ -128,7 +187,55 @@ run_analysis.bat dataset-report --scenario congestiondegradation
 run_analysis.bat dataset-report --scenario regionalbackbone
 ```
 
-### 5. Offline risk-model training
+- Produce the small-topology reactive baseline outcome report with:
+
+```powershell
+run_analysis.bat dataset-report --scenario reactivefailure
+```
+
+- Produce the small-topology deterministic proactive baseline outcome report with:
+
+```powershell
+run_analysis.bat dataset-report --scenario proactiveswitch
+```
+
+- Each dataset report now also writes `analysis/output/<scenario>_outcome_summary.csv`.
+- This one-row-per-run summary is intended for practical protection-outcome comparison and is derived from:
+  - receiver-side packet continuity
+  - receiver-side throughput behavior
+  - shared controller protection-activation scalars when present
+  - known scripted failure times from the scenario design
+- These fields remain project-local evaluation metrics. They should be described as explicit operational definitions rather than as protocol-standard recovery measurements.
+
+### 5. Compare practical protection outcomes
+- Practical outcome comparison is a separate analysis layer from offline classifier training.
+- It consumes the run-level `*_outcome_summary.csv` files and produces:
+  - a consolidated run table
+  - a cohort-aware summary CSV
+  - a human-readable report
+- The comparison script uses explicit project-local mechanism families such as:
+  - `reactive_only`
+  - `deterministic_admin_protection`
+  - `aimrce_rule_based`
+  - `aimrce_logistic_regression`
+- It also uses project-local comparison cohorts so unlike scenarios are not silently averaged together.
+- Run the default comparison step with:
+
+```powershell
+run_analysis.bat compare-outcomes --allow-missing
+```
+
+- For the main baseline-versus-runtime comparison path, first make sure the regional backbone outcome summary includes the optional AI-MRCE runtime configs, then run:
+
+```powershell
+run_analysis.bat build-dataset --scenario regionalbackbone --include-runtime-protection-configs
+run_analysis.bat dataset-report --scenario regionalbackbone
+run_analysis.bat compare-outcomes
+```
+
+- The comparison report is descriptive only. It supports internal AI-MRCE-versus-baseline validation and future article writing, but it should not be described as a statistical significance layer or as a universal FRR benchmark.
+
+### 6. Offline risk-model training
 - Offline training consumes `analysis/output/<scenario>_dataset.csv`; it should not read `.vec` files directly.
 - The first trainer maps scenario-specific labels into the shared risk taxonomy: `safe`, `warning`, `protect`, `failed`.
 - These labels are scenario-phase supervision labels derived from the experiment design; they are not measured ground-truth failure-onset annotations.
@@ -139,6 +246,11 @@ run_analysis.bat train-risk-model --scenarios linkdegradation congestiondegradat
 ```
 
 - If one dataset has not been generated yet, either generate it first or use `--allow-missing` for a partial local check.
+- The offline trainer intentionally keeps the existing classifier scope:
+  - it does not train on `reactivefailure`
+  - it does not train on `proactiveswitch`
+  - it excludes the optional `RegionalBackboneAiMrce*` runtime rows when they appear in an outcome-oriented regional dataset export
+- This keeps the current supervision problem stable while still allowing separate practical outcome comparison for reactive, deterministic proactive, and AI-MRCE runtime runs.
 - The default training command now runs:
   - an optimistic random window split baseline
   - a grouped holdout split that keeps `config_name + run_number` groups intact
@@ -147,27 +259,78 @@ run_analysis.bat train-risk-model --scenarios linkdegradation congestiondegradat
 - Treat grouped and transfer-style results as the main generalization evidence. Treat the random split only as a leakage-prone baseline reference.
 - This is still offline analysis only; do not integrate it into OMNeT++ runtime behavior yet.
 
-### 6. Export the first AI-MRCE runtime logistic model
-- The first runtime AI-MRCE prototype is currently scoped to the `regionalbackbone` congestion branch.
+### 7. Export the runtime AI-MRCE candidate family
+- The current runtime AI-MRCE prototype family is scoped to the `regionalbackbone` congestion branch.
 - Export the runtime logistic model with:
 
 ```powershell
 run_analysis.bat export-runtime-logreg --configs RegionalBackboneCongestionDegradation
 ```
 
-- This writes `simulations/regionalbackbone/aimrce_runtime_logreg.csv`.
-- The export helper trains on the selected rows using scenario-phase supervision and excludes `failed` rows so the runtime score targets the pre-failure `protect` phase rather than post-failure behavior.
-- Use the separate evaluation outputs from `train-risk-model` for methodological claims. The runtime export is a deployment artifact, not an evaluation substitute.
+- Export the current runtime model family with:
 
-### 7. Run the first AI-MRCE regional prototype
+```powershell
+run_analysis.bat export-runtime-models --configs RegionalBackboneCongestionDegradation
+```
+
+- This writes `simulations/regionalbackbone/aimrce_runtime_logreg.csv`.
+- The multi-candidate export path also writes:
+  - `simulations/regionalbackbone/aimrce_runtime_linsvm.csv`
+  - `simulations/regionalbackbone/aimrce_runtime_shallow_tree.csv`
+  - `simulations/regionalbackbone/aimrce_runtime_manifest.csv`
+- The export helper trains on the selected rows using scenario-phase supervision and excludes `failed` rows so the runtime score targets the pre-failure `protect` phase rather than post-failure behavior.
+- Use the separate evaluation outputs from `train-risk-model` for methodological claims. The runtime exports are deployment artifacts, not evaluation substitutes.
+
+### 8. Run the regional AI-MRCE runtime family
 - Rule-based baseline:
   - `RegionalBackboneAiMrceRuleBased`
 - Logistic-regression runtime model:
   - `RegionalBackboneAiMrceLogReg`
+- Linear-SVM runtime model:
+  - `RegionalBackboneAiMrceLinearSvm`
+- Shallow-tree runtime model:
+  - `RegionalBackboneAiMrceShallowTree`
 - Run those configs from `simulations/regionalbackbone/omnetpp.ini` using the same OMNeT++ launcher flow you already use for the other regional backbone configs.
 - These configs monitor the preferred `coreNW <-> coreNE` corridor and, after sustained positive decisions, administratively withdraw the protected span before the scripted hard failure.
 - The protective action is a conservative project-local control step that relies on ordinary administrative interface-down semantics rather than deep OSPF internal modification.
-- This is the first runtime AI-MRCE prototype only. It does not yet alter OSPF internals or implement a richer protection-state machine.
+- This is still a project-local runtime prototype family only. It does not alter OSPF internals or implement a richer protection-state machine.
+
+### 9. Use the experiment orchestrator
+- Dataset batch for one active scenario:
+
+```powershell
+run_experiments.bat dataset-batch --scenario linkdegradation --clean --yes
+```
+
+- Targeted config subset without downstream dataset export:
+
+```powershell
+run_experiments.bat dataset-batch --scenario regionalbackbone --configs RegionalBackboneCongestionDegradation --skip-analysis
+```
+
+- Training batch with only generalization-oriented evaluation modes:
+
+```powershell
+run_experiments.bat training-batch --stronger-evaluations-only
+```
+
+- AI-MRCE runtime batch:
+
+```powershell
+run_experiments.bat aimrce-batch
+```
+
+- AI-MRCE runtime dry run with explicit reuse of the existing runtime deployment artifact:
+
+```powershell
+run_experiments.bat aimrce-batch --skip-runtime-export --dry-run
+```
+
+- Conservative end-to-end pipeline including the current AI-MRCE runtime prototype family:
+
+```powershell
+run_experiments.bat full-pipeline --clean --yes --include-aimrce
+```
 
 ## Required Config Runs
 
@@ -232,6 +395,11 @@ Debug configs should be used only when sequence-chart or event-level inspection 
 - Helper summaries:
   - `analysis/output/<scenario>_missing_values.csv`
   - `analysis/output/<scenario>_per_config_summary.csv`
+  - `analysis/output/<scenario>_outcome_summary.csv`
+- Outcome comparison artifacts:
+  - `analysis/output/outcome_comparison_runs.csv`
+  - `analysis/output/outcome_comparison_summary.csv`
+  - `analysis/output/outcome_comparison_report.txt`
 - Offline model artifacts:
   - `analysis/output/risk_model_report.txt`
   - `analysis/output/risk_model_class_distribution.csv`
@@ -242,6 +410,9 @@ Debug configs should be used only when sequence-chart or event-level inspection 
   - `analysis/output/risk_model_per_class_metrics.csv`
 - Runtime model artifact:
   - `simulations/regionalbackbone/aimrce_runtime_logreg.csv`
+  - `simulations/regionalbackbone/aimrce_runtime_linsvm.csv`
+  - `simulations/regionalbackbone/aimrce_runtime_shallow_tree.csv`
+  - `simulations/regionalbackbone/aimrce_runtime_manifest.csv`
 
 ## Batch Workflow
 
@@ -287,6 +458,12 @@ run_analysis.bat prepare-batch --scenario regionalbackbone --clean --yes
 - Build the dataset only after all required eval configs have completed.
 - Then generate the report from the freshly built dataset.
 - Inspect row counts per config and run number before using the dataset for modeling.
+- For protection and recovery interpretation, inspect the per-run outcome summary as a separate measurement layer from the supervision labels.
+- The current operational recovery definitions are intentionally simple and explicit:
+  - receiver-side packet progression and throughput are used as the observable service-availability basis
+  - protection activation times come from shared controller scalars when available
+  - hard-failure times come from the known scripted experiment timeline
+- These are simulator-side operational definitions for reproducible comparison, not claims of carrier-calibrated restoration measurement.
 - The wrapper keeps the working directory at the project root so the existing script paths continue to behave exactly as before.
 
 ### Offline training
@@ -356,9 +533,15 @@ Should not usually be committed:
 The standardized dataset/report pipeline is currently implemented for:
 - `linkdegradation`
 - `congestiondegradation`
+- `reactivefailure`
+- `proactiveswitch`
 - `regionalbackbone`
+
+Optional regional runtime protection rows can also be included with:
+- `run_analysis.bat build-dataset --scenario regionalbackbone --include-runtime-protection-configs`
 
 The offline risk-model training pipeline is implemented in:
 - `analysis/train_risk_model.py`
 
-The older small-topology baseline, reactivefailure, and proactiveswitch scenarios remain reference/validation branches and do not have dedicated dataset/report presets.
+The older small-topology baseline scenario remains a reference/validation branch without a dedicated dataset/report preset:
+- `dualpathbaseline`

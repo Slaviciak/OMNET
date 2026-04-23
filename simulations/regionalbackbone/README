@@ -3,10 +3,14 @@ RegionalBackbone
 
 Overview
 - This scenario is the first medium-scale baseline topology for the dissertation project.
-- It starts with baseline validation and now includes reactive-failure, controlled-degradation, traffic-driven congestion, and first-step AI-MRCE prototype configs.
-- The first AI-MRCE prototype adds one project-local runtime controller, but it still avoids deep OSPF-internal modifications.
+- It starts with baseline validation and now includes reactive-failure, controlled-degradation, traffic-driven congestion, and a small family of AI-MRCE runtime prototype configs.
+- The AI-MRCE runtime family adds one project-local controller with several conservative decision policies, but it still avoids deep OSPF-internal modifications.
 - Its purpose is to validate a larger OSPF topology before and during the first practical predictive-protection experiments.
 - Controlled degradation and congestion phases should be treated as defensible approximations for supervised experimentation, not as empirically calibrated carrier-failure traces.
+- In particular, the controlled-degradation branch is meant to approximate one
+  plausible pre-failure class in which delay variation and intermittent loss
+  become visible before the later hard outage. It is not intended to imply
+  that every operational link failure has such a warning pattern.
 
 Topology
 - Endpoints:
@@ -65,6 +69,9 @@ Configs
   - Reuses the project-local `LinkDegradationController`.
   - Traffic starts at 20s.
   - The preferred `coreNW <-> coreNE` backbone span degrades from 35s to 55s using `stagedRealistic`.
+  - In the current project version, `stagedRealistic` is a deterministic
+    intermittent-deterioration proxy with brownout-style periods of elevated
+    delay and packet loss before the later hard failure.
   - The same span is physically disconnected at 60s.
   - OSPF is expected to react only after the hard failure.
 - `RegionalBackboneCongestionDegradation`
@@ -76,7 +83,7 @@ Configs
   - The same span is physically disconnected at 125s.
   - OSPF is expected to keep using the preferred path during congestion and react only after the hard failure.
 - `RegionalBackboneAiMrceRuleBased`
-  - First runtime AI-MRCE prototype on the congestion branch only.
+  - Runtime AI-MRCE rule-based baseline on the congestion branch only.
   - Monitors the protected `coreNW.eth[1] -> coreNE` corridor using queue occupancy plus probe-flow delay, throughput, and packet continuity.
   - Evaluates a compact hand-built protection score once per second.
   - Requires multiple consecutive positive controller cycles before action.
@@ -84,10 +91,20 @@ Configs
   - The protective step follows ordinary administrative interface-down semantics in the simulator rather than any custom OSPF extension.
   - This is experimental protection logic, not a production-grade predictive routing system.
 - `RegionalBackboneAiMrceLogReg`
-  - First runtime AI-MRCE prototype using an exported binary logistic-regression runtime model.
+  - Runtime AI-MRCE candidate using an exported binary logistic-regression runtime model.
   - Uses the same telemetry inputs and the same conservative administrative-withdrawal action as the rule-based prototype.
   - Consumes `aimrce_runtime_logreg.csv` from this scenario directory.
   - The exported model is trained from scenario-phase supervision and should be discussed as a runtime deployment artifact and proxy model, not as real-world failure-ground-truth inference.
+- `RegionalBackboneAiMrceLinearSvm`
+  - Runtime AI-MRCE candidate using an exported linear-SVM deployment artifact.
+  - Uses the same telemetry inputs and the same conservative administrative-withdrawal action as the other runtime candidates.
+  - Consumes `aimrce_runtime_linsvm.csv` from this scenario directory.
+  - Its bounded decision score is a monotonic transform of the learned margin and should not be described as a calibrated production-grade failure probability.
+- `RegionalBackboneAiMrceShallowTree`
+  - Runtime AI-MRCE candidate using an exported shallow decision-tree deployment artifact.
+  - Uses the same telemetry inputs and the same conservative administrative-withdrawal action as the other runtime candidates.
+  - Consumes `aimrce_runtime_shallow_tree.csv` from this scenario directory.
+  - The tree is intentionally kept shallow so the runtime policy remains auditable and publication-friendly.
 - Debug variants enable eventlog recording for manual path inspection.
 
 Congestion timeline
@@ -134,9 +151,10 @@ Purpose
 - Provide a defensible medium topology for later baseline, reactive failure, controlled degradation, and congestion-driven experiments.
 - Keep the first step small enough to debug before adding impairment or protective reroute logic.
 - Provide a first practical AI-MRCE runtime prototype that can be measured end-to-end before any deeper OSPF integration is attempted.
+- Provide a small and interpretable AI-MRCE runtime candidate family that can be compared under one consistent scenario and outcome-analysis framework.
 
 AI-MRCE Prototype Scope Limit
-- The first runtime AI-MRCE prototype is intentionally limited to the congestion-driven regional backbone branch.
+- The current runtime AI-MRCE family is intentionally limited to the congestion-driven regional backbone branch.
 - It does not modify OSPF internals, advertise custom LSAs, or attempt any online learning.
-- It uses a compact and interpretable telemetry set plus either a rule-based score or an exported binary logistic model.
+- It uses a compact and interpretable telemetry set plus a small family of conservative project-local decision policies.
 - Its protective action is a conservative administrative withdrawal that stands in for an early protective reroute decision on the monitored corridor.
