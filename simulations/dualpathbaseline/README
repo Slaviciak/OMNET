@@ -11,5 +11,6 @@ Routing
 - OSPF interface costs prefer the r1-r2-r3 branch and keep the r1-r4-r3 branch as a higher-cost alternative.
 
 Goal
-- Provide the smallest clean dissertation baseline for dual-path routing.
-- Establish a deterministic OSPF topology before adding failures, proactive rerouting logic, or custom code.
+- Archival minimal OSPF sanity reference.
+- Establish a deterministic OSPF topology for debugging only when the regional backbone path needs a tiny control case.
+- This scenario is no longer a first-class dissertation workflow target; keep it stable and avoid extending it unless a specific validation question requires it.

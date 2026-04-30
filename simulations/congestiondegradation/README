@@ -2,10 +2,11 @@ CongestionDegradation
 =====================
 
 Overview
-- This scenario generates pre-failure telemetry through traffic-driven congestion on the primary r2-r3 path.
+- This auxiliary scenario generates pre-failure telemetry through traffic-driven congestion on the primary r2-r3 path.
 - It keeps the same dual-path topology and OSPF structure as the other dissertation scenarios.
 - Unlike the synthetic linkdegradation scenario, it does not inject delay or packet error rate directly into the channel.
 - It should be treated as a controlled traffic-driven congestion approximation, not as a calibrated carrier-grade failure model.
+- It remains useful for controlled sanity checks and optional cross-topology training evidence, while `regionalbackbone` is the active dissertation validation topology.
 - It currently provides two traffic-load profiles in the same scenario:
   - `CongestionDegradation` for the stronger congestion case
   - `CongestionDegradationMild` for a milder congestion case
@@ -48,5 +49,6 @@ Queue Assumption
 - Interpret the queue telemetry as a simple simulator-default backlog approximation rather than as a calibrated device-buffer study.
 
 Purpose
-- Provide a controlled traffic-driven data-generation scenario where degradation emerges from rising demand and queue buildup on the primary path.
-- Keep the setup deterministic, reproducible, and interpretable for later dataset generation.
+- Provide a controlled auxiliary data-generation scenario where degradation emerges from rising demand and queue buildup on the primary path.
+- Keep the setup deterministic, reproducible, and interpretable for optional dataset generation.
+- Do not present this small topology as the main AI-MRCE runtime validation environment.

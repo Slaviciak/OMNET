@@ -4,11 +4,14 @@
 // OSPF behavior. It periodically samples a compact telemetry set from the
 // regionalbackbone congestion scenario, computes a conservative rule-based or
 // exported runtime-model decision score, and can trigger a conservative
-// protective action through administrative interface withdrawal.
+// project-local protective reroute abstraction.
 //
 // Important scope note:
 // - This is a runtime prototype, not a production routing stack.
 // - It does not alter OSPF internals or advertise custom LSAs.
+// - Its FRR-like mode installs explicit host-specific repair routes as an
+//   abstraction of preinstalled local protection, not as a protocol-standard
+//   Fast Reroute implementation.
 // - It depends partly on simulator-default behavior, especially the monitored
 //   interface queue implementation exposed by the current INET version.
 
@@ -21,6 +24,8 @@
 #include <omnetpp.h>
 
 namespace inet {
+class IIpv4RoutingTable;
+class Ipv4Address;
 class NetworkInterface;
 namespace queueing {
 class IPacketCollection;
@@ -47,6 +52,12 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
         LOGISTIC_REGRESSION,
         LINEAR_SVM,
         SHALLOW_TREE,
+    };
+
+    enum class ProtectionAction
+    {
+        ADMIN_WITHDRAWAL,
+        LOCAL_REPAIR_STATIC_ROUTES,
     };
 
     // Probe-flow telemetry accumulated between controller evaluations.
@@ -127,15 +138,31 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
         std::vector<RuntimeTreeNode> nodes;
     };
 
+    // One explicit static repair route to be installed when AI-MRCE activates.
+    // Each item names a router, that router's outgoing interface, the peer
+    // interface used as gateway, and the destination host interface. Keeping
+    // this route list in scenario config makes the protection path auditable.
+    struct LocalRepairRouteSpec
+    {
+        std::string routerModule;
+        std::string outputInterfaceModule;
+        std::string gatewayInterfaceModule;
+        std::string destinationInterfaceModule;
+    };
+
     omnetpp::cMessage *evaluationTimer = nullptr;
     omnetpp::simsignal_t packetReceivedSignal = SIMSIGNAL_NULL;
     inet::queueing::IPacketCollection *protectedQueue = nullptr;
     omnetpp::cModule *probeReceiverModule = nullptr;
     DecisionMode decisionMode = DecisionMode::RULE_BASED;
+    ProtectionAction protectionAction = ProtectionAction::ADMIN_WITHDRAWAL;
     RuntimeLinearModel linearModel;
     RuntimeTreeModel treeModel;
+    std::vector<LocalRepairRouteSpec> localRepairRouteSpecs;
     IntervalTelemetry intervalTelemetry;
     bool protectionActive = false;
+    bool repairRoutesInstalled = false;
+    int repairRouteCount = 0;
     int positiveDecisionStreak = 0;
     omnetpp::simtime_t protectionActivationTime = omnetpp::simtime_t(-1);
     double lastRiskScore = 0;
@@ -153,6 +180,7 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     omnetpp::cOutVector decisionPositiveVector;
     omnetpp::cOutVector positiveDecisionStreakVector;
     omnetpp::cOutVector protectionActiveVector;
+    omnetpp::cOutVector repairRoutesInstalledVector;
 
   protected:
     virtual void initialize() override;
@@ -161,7 +189,11 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, omnetpp::cObject *object, omnetpp::cObject *details) override;
 
     DecisionMode parseDecisionMode(const char *value) const;
+    ProtectionAction parseProtectionAction(const char *value) const;
+    std::vector<LocalRepairRouteSpec> parseLocalRepairRouteSpecs(const std::string& rawValue) const;
     inet::NetworkInterface *resolveInterface(const char *modulePath) const;
+    inet::IIpv4RoutingTable *resolveIpv4RoutingTable(const char *modulePath) const;
+    inet::Ipv4Address resolveInterfaceIpv4Address(const char *modulePath) const;
     inet::queueing::IPacketCollection *resolveQueue(const char *modulePath) const;
     omnetpp::cModule *resolveModule(const char *modulePath, const char *purpose) const;
     std::string resolveParameterFilePath(const char *parameterName) const;
@@ -178,10 +210,13 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     double lookupFeatureValue(const FeatureSnapshot& snapshot, const std::string& featureName, bool& available) const;
     // Periodic controller cycle that applies debouncing before protection.
     void evaluateCycle();
-    // First-step protective action: ordinary administrative withdrawal of the
-    // preferred span rather than any custom OSPF extension.
+    // Protective action is selected by configuration. The dissertation-core
+    // regional branch uses a project-local FRR-like local-repair abstraction;
+    // administrative withdrawal remains available as a conservative reference.
     void activateProtection();
     void administrativelyWithdraw(const char *modulePath);
+    void activateLocalRepairStaticRoutes();
+    bool installLocalRepairRoute(const LocalRepairRouteSpec& spec);
     void resetIntervalTelemetry();
     void recordVectors(const FeatureSnapshot& snapshot, double riskScore, bool decisionPositive);
 };

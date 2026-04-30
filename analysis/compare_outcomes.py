@@ -14,6 +14,15 @@ Assumptions:
   significance or universal properties of FRR mechanisms.
 - Comparison cohorts are explicit project-local grouping rules that keep unlike
   scenarios separate so the report does not silently average incompatible runs.
+- Mixed UDP/TCP regional cohorts include optional application-endpoint TCP
+  useful-goodput proxy fields. Those fields are descriptive and do not imply
+  protocol-standard TCP recovery measurements.
+- Packet-continuity fields summarize receiver-observed sequence-number and
+  interarrival gaps. They are descriptive evidence of application delivery
+  disruption, not protocol-standard restoration timers.
+- The after_reference continuity fields preserve the operational reference used
+  for each run, while after_hard_failure and activation-to-failure fields keep
+  post-failure protection benefit separate from pre-failure switch penalty.
 """
 
 from __future__ import annotations
@@ -26,12 +35,23 @@ from statistics import fmean
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = PROJECT_ROOT / "analysis" / "output"
+OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
+OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
 
-SUPPORTED_SCENARIOS = ("reactivefailure", "proactiveswitch", "regionalbackbone")
-DEFAULT_SCENARIOS = SUPPORTED_SCENARIOS
+SUPPORTED_SCENARIOS = (
+    "regionalbackbone",
+    "regionalbackbone_congestion_protection",
+    "regionalbackbone_mixed_traffic_protection",
+    "reactivefailure",
+    "proactiveswitch",
+)
+DEFAULT_SCENARIOS = (
+    "regionalbackbone",
+    "regionalbackbone_congestion_protection",
+    "regionalbackbone_mixed_traffic_protection",
+)
 
-NUMERIC_METRICS = [
+BASE_NUMERIC_METRICS = [
     "protection_activation_time_s",
     "protection_lead_time_before_failure_s",
     "service_interruption_duration_s",
@@ -40,7 +60,55 @@ NUMERIC_METRICS = [
     "max_zero_progress_window_streak_after_reference",
 ]
 
-FLAG_METRICS = [
+PACKET_NUMERIC_METRICS = [
+    "packet_sequence_gap_count_after_reference",
+    "packet_sequence_gap_total_missing_after_reference",
+    "max_packet_sequence_gap_after_reference",
+    "max_packet_interarrival_gap_after_reference_s",
+    "packet_interarrival_gap_exceedance_count_after_reference",
+    "first_packet_after_reference_delay_s",
+    "packet_sequence_gap_count_after_hard_failure",
+    "packet_sequence_gap_total_missing_after_hard_failure",
+    "max_packet_sequence_gap_after_hard_failure",
+    "max_packet_interarrival_gap_after_hard_failure_s",
+    "packet_interarrival_gap_exceedance_count_after_hard_failure",
+    "first_packet_after_hard_failure_delay_s",
+    "packet_sequence_gap_count_after_protection_activation",
+    "packet_sequence_gap_total_missing_after_protection_activation",
+    "max_packet_sequence_gap_after_protection_activation",
+    "max_packet_interarrival_gap_after_protection_activation_s",
+    "packet_interarrival_gap_exceedance_count_after_protection_activation",
+    "first_packet_after_protection_activation_delay_s",
+    "packet_sequence_gap_count_between_activation_and_failure",
+    "packet_sequence_gap_total_missing_between_activation_and_failure",
+    "max_packet_sequence_gap_between_activation_and_failure",
+    "max_packet_interarrival_gap_between_activation_and_failure_s",
+    "packet_interarrival_gap_exceedance_count_between_activation_and_failure",
+    "first_packet_between_activation_and_failure_delay_s",
+    "packet_sequence_gap_count_after_critical_start",
+    "packet_sequence_gap_total_missing_after_critical_start",
+    "max_packet_sequence_gap_after_critical_start",
+    "max_packet_interarrival_gap_after_critical_start_s",
+    "packet_interarrival_gap_exceedance_count_after_critical_start",
+    "first_packet_after_critical_start_delay_s",
+]
+
+TCP_NUMERIC_METRICS = [
+    "tcp_service_interruption_duration_s",
+    "tcp_zero_goodput_window_count_after_reference",
+    "tcp_max_zero_goodput_window_streak_after_reference",
+    "tcp_endpoint_receive_event_count_after_reference",
+    "tcp_first_endpoint_receive_delay_after_reference_s",
+    "tcp_max_endpoint_receive_gap_after_reference_s",
+]
+
+PROTECTION_ACTION_NUMERIC_METRICS = [
+    "repair_route_count",
+]
+
+NUMERIC_METRICS = BASE_NUMERIC_METRICS + PROTECTION_ACTION_NUMERIC_METRICS + PACKET_NUMERIC_METRICS + TCP_NUMERIC_METRICS
+
+BASE_FLAG_METRICS = [
     "protection_activated",
     "protection_activated_before_failure",
     "service_interruption_observed",
@@ -50,20 +118,57 @@ FLAG_METRICS = [
     "unnecessary_protection",
 ]
 
-PASSTHROUGH_COLUMNS = [
+PACKET_FLAG_METRICS = [
+    "packet_sequence_gap_observed_after_reference",
+    "packet_interarrival_gap_exceeded_nominal_threshold",
+    "packet_sequence_gap_observed_after_hard_failure",
+    "packet_interarrival_gap_exceeded_nominal_threshold_after_hard_failure",
+    "packet_sequence_gap_observed_after_protection_activation",
+    "packet_interarrival_gap_exceeded_nominal_threshold_after_protection_activation",
+    "packet_sequence_gap_observed_between_activation_and_failure",
+    "packet_interarrival_gap_exceeded_nominal_threshold_between_activation_and_failure",
+    "packet_sequence_gap_observed_after_critical_start",
+    "packet_interarrival_gap_exceeded_nominal_threshold_after_critical_start",
+]
+
+TCP_FLAG_METRICS = [
+    "tcp_service_interruption_observed",
+    "tcp_useful_goodput_restored_after_failure",
+]
+
+PROTECTION_ACTION_FLAG_METRICS = [
+    "repair_routes_installed",
+]
+
+FLAG_METRICS = BASE_FLAG_METRICS + PROTECTION_ACTION_FLAG_METRICS + PACKET_FLAG_METRICS + TCP_FLAG_METRICS
+
+BASE_PASSTHROUGH_COLUMNS = [
     "config_name",
     "run_number",
     "protection_mode",
     "protection_activation_source",
     "hard_failure_time_s",
-] + NUMERIC_METRICS + FLAG_METRICS
+] + BASE_NUMERIC_METRICS + BASE_FLAG_METRICS
 
-REQUIRED_COLUMNS = set(PASSTHROUGH_COLUMNS)
+OPTIONAL_PASSTHROUGH_COLUMNS = (
+    ["protection_action_code"]
+    + PROTECTION_ACTION_NUMERIC_METRICS
+    + PROTECTION_ACTION_FLAG_METRICS
+    + PACKET_NUMERIC_METRICS
+    + PACKET_FLAG_METRICS
+    + TCP_NUMERIC_METRICS
+    + TCP_FLAG_METRICS
+)
+PASSTHROUGH_COLUMNS = BASE_PASSTHROUGH_COLUMNS + OPTIONAL_PASSTHROUGH_COLUMNS
+
+REQUIRED_COLUMNS = set(BASE_PASSTHROUGH_COLUMNS)
 
 SCENARIO_PRESETS = {
-    "reactivefailure": OUTPUT_DIR / "reactivefailure_outcome_summary.csv",
-    "proactiveswitch": OUTPUT_DIR / "proactiveswitch_outcome_summary.csv",
-    "regionalbackbone": OUTPUT_DIR / "regionalbackbone_outcome_summary.csv",
+    "regionalbackbone": OUTCOMES_DIR / "regionalbackbone_outcome_summary.csv",
+    "regionalbackbone_congestion_protection": OUTCOMES_DIR / "regionalbackbone_congestion_protection_multirun_outcome_summary.csv",
+    "regionalbackbone_mixed_traffic_protection": OUTCOMES_DIR / "regionalbackbone_mixed_traffic_protection_multirun_outcome_summary.csv",
+    "reactivefailure": OUTCOMES_DIR / "reactivefailure_outcome_summary.csv",
+    "proactiveswitch": OUTCOMES_DIR / "proactiveswitch_outcome_summary.csv",
 }
 
 MECHANISM_LABELS = {
@@ -91,7 +196,10 @@ COHORT_LABELS = {
     "regionalbackbone_no_protection_baseline": "Regional backbone no-protection baseline cohort",
     "regionalbackbone_reactive_failure": "Regional backbone reactive-failure cohort",
     "regionalbackbone_controlled_degradation": "Regional backbone controlled-degradation cohort",
+    "regionalbackbone_congestion_single_run": "Regional backbone congestion single-run evaluation",
+    "regionalbackbone_aimrce_single_run": "Regional backbone AI-MRCE single-run evaluation",
     "regionalbackbone_congestion_protection": "Regional backbone congestion protection cohort",
+    "regionalbackbone_mixed_traffic_protection": "Regional backbone mixed UDP/TCP protection cohort",
     "regionalbackbone_other": "Regional backbone other cohort",
 }
 
@@ -100,8 +208,11 @@ COHORT_ORDER = {
     "regionalbackbone_no_protection_baseline": 1,
     "regionalbackbone_reactive_failure": 2,
     "regionalbackbone_controlled_degradation": 3,
-    "regionalbackbone_congestion_protection": 4,
-    "regionalbackbone_other": 5,
+    "regionalbackbone_congestion_single_run": 4,
+    "regionalbackbone_aimrce_single_run": 5,
+    "regionalbackbone_congestion_protection": 6,
+    "regionalbackbone_mixed_traffic_protection": 7,
+    "regionalbackbone_other": 8,
 }
 
 
@@ -128,7 +239,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=OUTPUT_DIR / "outcome_comparison",
+        default=OUTCOMES_DIR / "outcome_comparison",
         help="Output prefix for the consolidated run table, summary CSV, and text report.",
     )
     parser.add_argument(
@@ -214,7 +325,7 @@ def validate_columns(path: Path, fieldnames: list[str]) -> None:
 
 def infer_scenario_name(path: Path, rows: list[dict[str, str]]) -> str:
     stem_lower = path.stem.lower()
-    for scenario in SUPPORTED_SCENARIOS:
+    for scenario in sorted(SUPPORTED_SCENARIOS, key=len, reverse=True):
         if scenario in stem_lower:
             return scenario
 
@@ -237,13 +348,17 @@ def normalize_mechanism_family(protection_mode: str, config_name: str) -> str:
     # Fallback for older or manually edited summary files where the explicit
     # mechanism field might be absent. The preferred path is still the
     # protection_mode value written by the current dataset/report pipeline.
-    if config_name == "ReactiveFailure" or config_name == "RegionalBackboneReactiveFailure":
+    if config_name in {
+        "ReactiveFailure",
+        "RegionalBackboneReactiveFailure",
+        "RegionalBackboneMixedTrafficCongestionDegradation",
+    }:
         return "reactive_only"
     if config_name == "ProactiveSwitch":
         return "deterministic_admin_protection"
-    if config_name == "RegionalBackboneAiMrceRuleBased":
+    if config_name in {"RegionalBackboneAiMrceRuleBased", "RegionalBackboneAiMrceRuleBasedMixedTraffic"}:
         return "aimrce_rule_based"
-    if config_name == "RegionalBackboneAiMrceLogReg":
+    if config_name in {"RegionalBackboneAiMrceLogReg", "RegionalBackboneAiMrceLogRegMixedTraffic"}:
         return "aimrce_logistic_regression"
     if config_name == "RegionalBackboneAiMrceLinearSvm":
         return "aimrce_linear_svm"
@@ -263,6 +378,9 @@ def resolve_comparison_cohort(scenario_name: str, config_name: str, mechanism_fa
     if scenario_name in {"reactivefailure", "proactiveswitch"}:
         return "small_topology_primary_path_failure"
 
+    if scenario_name == "regionalbackbone_mixed_traffic_protection":
+        return "regionalbackbone_mixed_traffic_protection"
+
     if scenario_name == "regionalbackbone":
         if config_name == "RegionalBackboneBaseline" or mechanism_family == "no_protection_baseline":
             return "regionalbackbone_no_protection_baseline"
@@ -270,6 +388,13 @@ def resolve_comparison_cohort(scenario_name: str, config_name: str, mechanism_fa
             return "regionalbackbone_reactive_failure"
         if config_name == "RegionalBackboneControlledDegradation":
             return "regionalbackbone_controlled_degradation"
+        if config_name == "RegionalBackboneCongestionDegradation":
+            return "regionalbackbone_congestion_single_run"
+        if config_name.startswith("RegionalBackboneAiMrce") or mechanism_family.startswith("aimrce_"):
+            return "regionalbackbone_aimrce_single_run"
+        return "regionalbackbone_other"
+
+    if scenario_name == "regionalbackbone_congestion_protection":
         if config_name == "RegionalBackboneCongestionDegradation":
             return "regionalbackbone_congestion_protection"
         if config_name.startswith("RegionalBackboneAiMrce") or mechanism_family.startswith("aimrce_"):
@@ -496,6 +621,9 @@ def render_report(
     lines.append("  run-level outcome summaries. The underlying metrics remain operational")
     lines.append("  simulator-side definitions derived from observable telemetry plus scripted")
     lines.append("  event metadata and shared controller scalars where available.")
+    lines.append("  Packet sequence-gap diagnostics are receiver-observed continuity evidence;")
+    lines.append("  they complement, rather than replace, the coarse one-second availability")
+    lines.append("  and zero-progress-window metrics.")
     lines.append("  These summaries are descriptive only and should be used for internal")
     lines.append("  AI-MRCE-versus-baseline validation, not as universal FRR claims.")
     lines.append("")
@@ -536,13 +664,43 @@ def render_report(
             lines.append(
                 "      "
                 f"throughput_restored_after_failure={rate_text(summary_row, 'throughput_restored_after_failure')}, "
+                f"packet_sequence_gap_observed={rate_text(summary_row, 'packet_sequence_gap_observed_after_reference')}, "
                 f"missed_protection={rate_text(summary_row, 'missed_protection')}, "
                 f"unnecessary_protection={rate_text(summary_row, 'unnecessary_protection')}"
             )
             lines.append(
                 "      "
+                f"tcp_service_interruption_observed={rate_text(summary_row, 'tcp_service_interruption_observed')}, "
+                f"tcp_useful_goodput_restored_after_failure={rate_text(summary_row, 'tcp_useful_goodput_restored_after_failure')}"
+            )
+            lines.append(
+                "      "
                 f"lead_time={numeric_text(summary_row, 'protection_lead_time_before_failure_s')}, "
                 f"interruption_duration={numeric_text(summary_row, 'service_interruption_duration_s')}"
+            )
+            lines.append(
+                "      "
+                f"packet_sequence_missing={numeric_text(summary_row, 'packet_sequence_gap_total_missing_after_reference')}, "
+                f"max_sequence_gap={numeric_text(summary_row, 'max_packet_sequence_gap_after_reference')}, "
+                f"max_interarrival_gap={numeric_text(summary_row, 'max_packet_interarrival_gap_after_reference_s')}"
+            )
+            lines.append(
+                "      "
+                f"post_failure_sequence_missing={numeric_text(summary_row, 'packet_sequence_gap_total_missing_after_hard_failure')}, "
+                f"post_failure_max_sequence_gap={numeric_text(summary_row, 'max_packet_sequence_gap_after_hard_failure')}, "
+                f"activation_to_failure_sequence_missing={numeric_text(summary_row, 'packet_sequence_gap_total_missing_between_activation_and_failure')}"
+            )
+            lines.append(
+                "      "
+                f"after_activation_sequence_missing={numeric_text(summary_row, 'packet_sequence_gap_total_missing_after_protection_activation')}, "
+                f"critical_interval_sequence_missing={numeric_text(summary_row, 'packet_sequence_gap_total_missing_after_critical_start')}, "
+                f"critical_interval_max_sequence_gap={numeric_text(summary_row, 'max_packet_sequence_gap_after_critical_start')}"
+            )
+            lines.append(
+                "      "
+                f"tcp_interruption_duration={numeric_text(summary_row, 'tcp_service_interruption_duration_s')}, "
+                f"tcp_zero_goodput_windows={numeric_text(summary_row, 'tcp_zero_goodput_window_count_after_reference')}, "
+                f"tcp_endpoint_receive_gap={numeric_text(summary_row, 'tcp_max_endpoint_receive_gap_after_reference_s')}"
             )
             lines.append(
                 "      "
@@ -579,11 +737,38 @@ def render_report(
                 lines.append(
                     "      "
                     f"{summary_row['mechanism_label']}: "
+                    f"tcp_service_interruption_duration_s mean difference "
+                    f"(candidate - reactive) = "
+                    f"{descriptive_delta_text(reactive_baseline, summary_row, 'tcp_service_interruption_duration_s')}; "
+                    f"tcp_zero_goodput_window_count_after_reference mean difference = "
+                    f"{descriptive_delta_text(reactive_baseline, summary_row, 'tcp_zero_goodput_window_count_after_reference')}"
+                )
+                lines.append(
+                    "      "
+                    f"{summary_row['mechanism_label']}: "
                     f"zero_progress_window_count_after_reference mean difference "
                     f"(candidate - reactive) = "
                     f"{descriptive_delta_text(reactive_baseline, summary_row, 'zero_progress_window_count_after_reference')}; "
                     f"missed_protection {rate_text(summary_row, 'missed_protection')} "
                     f"vs {rate_text(reactive_baseline, 'missed_protection')}"
+                )
+                lines.append(
+                    "      "
+                    f"{summary_row['mechanism_label']}: "
+                    f"packet_sequence_gap_total_missing_after_reference mean difference "
+                    f"(candidate - reactive) = "
+                    f"{descriptive_delta_text(reactive_baseline, summary_row, 'packet_sequence_gap_total_missing_after_reference')}; "
+                    f"max_packet_interarrival_gap_after_reference_s mean difference = "
+                    f"{descriptive_delta_text(reactive_baseline, summary_row, 'max_packet_interarrival_gap_after_reference_s')}"
+                )
+                lines.append(
+                    "      "
+                    f"{summary_row['mechanism_label']}: "
+                    f"packet_sequence_gap_total_missing_after_hard_failure mean difference "
+                    f"(candidate - reactive) = "
+                    f"{descriptive_delta_text(reactive_baseline, summary_row, 'packet_sequence_gap_total_missing_after_hard_failure')}; "
+                    f"critical-interval missing mean difference = "
+                    f"{descriptive_delta_text(reactive_baseline, summary_row, 'packet_sequence_gap_total_missing_after_critical_start')}"
                 )
         lines.append("")
 

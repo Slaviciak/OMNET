@@ -18,7 +18,13 @@
 
 #include "omnetpp/cconfiguration.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/networklayer/common/L3AddressResolver.h"
 #include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/networklayer/contract/IRoute.h"
+#include "inet/networklayer/contract/ipv4/Ipv4Address.h"
+#include "inet/networklayer/ipv4/IIpv4RoutingTable.h"
+#include "inet/networklayer/ipv4/Ipv4InterfaceData.h"
+#include "inet/networklayer/ipv4/Ipv4Route.h"
 #include "inet/queueing/contract/IPacketCollection.h"
 
 using namespace omnetpp;
@@ -58,6 +64,19 @@ std::vector<std::string> splitCsvLine(const std::string& line)
     while (std::getline(stream, field, ','))
         fields.push_back(trim(field));
     return fields;
+}
+
+std::vector<std::string> splitSemicolonList(const std::string& value)
+{
+    std::vector<std::string> items;
+    std::stringstream stream(value);
+    std::string item;
+    while (std::getline(stream, item, ';')) {
+        auto trimmedItem = trim(item);
+        if (!trimmedItem.empty())
+            items.push_back(trimmedItem);
+    }
+    return items;
 }
 
 double parseCsvDouble(const std::string& rawValue, const char *fieldName)
@@ -121,6 +140,11 @@ void AiMrceController::initialize()
         throw cRuntimeError("ruleRiskThreshold must be in the range [0, 1]");
 
     decisionMode = parseDecisionMode(par("decisionMode"));
+    protectionAction = parseProtectionAction(par("protectionAction"));
+    localRepairRouteSpecs = parseLocalRepairRouteSpecs(par("localRepairRouteSpecs").stdstringValue());
+    if (protectionAction == ProtectionAction::LOCAL_REPAIR_STATIC_ROUTES && localRepairRouteSpecs.empty())
+        throw cRuntimeError("localRepairRouteSpecs must define at least one route when protectionAction=localRepairStaticRoutes");
+
     protectedQueue = resolveQueue(par("protectedQueueModule"));
     probeReceiverModule = resolveModule(par("probeReceiverModule"), "probe receiver module");
     packetReceivedSignal = registerSignal("packetReceived");
@@ -140,14 +164,18 @@ void AiMrceController::initialize()
     decisionPositiveVector.setName("decisionPositive");
     positiveDecisionStreakVector.setName("positiveDecisionStreak");
     protectionActiveVector.setName("protectionActive");
+    repairRoutesInstalledVector.setName("repairRoutesInstalled");
 
     WATCH(protectionActive);
+    WATCH(repairRoutesInstalled);
+    WATCH(repairRouteCount);
     WATCH(positiveDecisionStreak);
     WATCH(protectionActivationTime);
     WATCH(lastRiskScore);
     WATCH(lastDecisionPositive);
 
     protectionActiveVector.record(0);
+    repairRoutesInstalledVector.record(0);
 
     // The first evaluation is scheduled one interval after startTime so each
     // controller cycle summarizes a full observation window.
@@ -171,6 +199,9 @@ void AiMrceController::finish()
 
     recordScalar("protectionActivated", protectionActive);
     recordScalar("protectionActivationTime", protectionActivationTime >= SIMTIME_ZERO ? protectionActivationTime.dbl() : -1);
+    recordScalar("protectionActionCode", protectionAction == ProtectionAction::LOCAL_REPAIR_STATIC_ROUTES ? 1 : 0);
+    recordScalar("repairRoutesInstalled", repairRoutesInstalled);
+    recordScalar("repairRouteCount", repairRouteCount);
     recordScalar("lastRiskScore", lastRiskScore);
     recordScalar("lastDecisionPositive", lastDecisionPositive);
 }
@@ -207,12 +238,59 @@ AiMrceController::DecisionMode AiMrceController::parseDecisionMode(const char *v
     throw cRuntimeError("Unsupported decisionMode '%s'", value);
 }
 
+AiMrceController::ProtectionAction AiMrceController::parseProtectionAction(const char *value) const
+{
+    auto mode = toLower(value);
+    if (mode == "adminwithdrawal")
+        return ProtectionAction::ADMIN_WITHDRAWAL;
+    if (mode == "localrepairstaticroutes")
+        return ProtectionAction::LOCAL_REPAIR_STATIC_ROUTES;
+    throw cRuntimeError("Unsupported protectionAction '%s'", value);
+}
+
+std::vector<AiMrceController::LocalRepairRouteSpec> AiMrceController::parseLocalRepairRouteSpecs(const std::string& rawValue) const
+{
+    std::vector<LocalRepairRouteSpec> routeSpecs;
+    for (const auto& rawItem : splitSemicolonList(rawValue)) {
+        auto fields = splitCsvLine(rawItem);
+        if (fields.size() != 4)
+            throw cRuntimeError("Each localRepairRouteSpecs item must have 4 comma-separated fields: routerModule,outputInterfaceModule,gatewayInterfaceModule,destinationInterfaceModule");
+
+        LocalRepairRouteSpec spec;
+        spec.routerModule = fields[0];
+        spec.outputInterfaceModule = fields[1];
+        spec.gatewayInterfaceModule = fields[2];
+        spec.destinationInterfaceModule = fields[3];
+        routeSpecs.push_back(spec);
+    }
+    return routeSpecs;
+}
+
 inet::NetworkInterface *AiMrceController::resolveInterface(const char *modulePath) const
 {
     auto module = getModuleByPath(modulePath);
     if (module == nullptr)
         throw cRuntimeError("Cannot find target interface module '%s'", modulePath);
     return check_and_cast<inet::NetworkInterface *>(module);
+}
+
+inet::IIpv4RoutingTable *AiMrceController::resolveIpv4RoutingTable(const char *modulePath) const
+{
+    auto module = resolveModule(modulePath, "repair-router module");
+    return inet::L3AddressResolver().getIpv4RoutingTableOf(module);
+}
+
+inet::Ipv4Address AiMrceController::resolveInterfaceIpv4Address(const char *modulePath) const
+{
+    auto networkInterface = resolveInterface(modulePath);
+    auto ipv4Data = networkInterface->findProtocolData<inet::Ipv4InterfaceData>();
+    if (ipv4Data == nullptr)
+        throw cRuntimeError("Interface '%s' has no IPv4 protocol data", modulePath);
+
+    auto address = ipv4Data->getIPAddress();
+    if (address.isUnspecified())
+        throw cRuntimeError("Interface '%s' has an unspecified IPv4 address", modulePath);
+    return address;
 }
 
 inet::queueing::IPacketCollection *AiMrceController::resolveQueue(const char *modulePath) const
@@ -551,12 +629,18 @@ void AiMrceController::activateProtection()
     protectionActive = true;
     protectionActivationTime = simTime();
 
-    // The first protective action is deliberately conservative: ordinary
-    // administrative interface withdrawal on the preferred corridor. This is a
-    // project-local control mechanism, not a deep routing protocol extension.
     EV_INFO << "AI-MRCE activating protection on the monitored corridor at " << protectionActivationTime << endl;
-    administrativelyWithdraw(par("firstInterfaceModule"));
-    administrativelyWithdraw(par("secondInterfaceModule"));
+    switch (protectionAction) {
+        case ProtectionAction::ADMIN_WITHDRAWAL:
+            // Retained for reference and debugging: ordinary administrative
+            // interface-down semantics that OSPF can react to in the simulation.
+            administrativelyWithdraw(par("firstInterfaceModule"));
+            administrativelyWithdraw(par("secondInterfaceModule"));
+            break;
+        case ProtectionAction::LOCAL_REPAIR_STATIC_ROUTES:
+            activateLocalRepairStaticRoutes();
+            break;
+    }
 }
 
 void AiMrceController::administrativelyWithdraw(const char *modulePath)
@@ -570,6 +654,60 @@ void AiMrceController::administrativelyWithdraw(const char *modulePath)
     EV_INFO << "AI-MRCE administratively withdrawing interface " << networkInterface->getInterfaceFullPath() << endl;
     cMethodCallContextSwitcher contextSwitcher(networkInterface);
     networkInterface->setState(inet::NetworkInterface::DOWN);
+}
+
+void AiMrceController::activateLocalRepairStaticRoutes()
+{
+    repairRouteCount = 0;
+
+    // This dissertation-core action represents an AI-MRCE warning that tells
+    // affected routers to activate a prearranged local protection path. It is
+    // intentionally implemented as explicit host-specific manual IPv4 routes:
+    // scientifically auditable, project-local, and not a claim of standards-
+    // compliant IP/LFA/TI-LFA behavior.
+    for (const auto& spec : localRepairRouteSpecs) {
+        if (installLocalRepairRoute(spec))
+            repairRouteCount++;
+    }
+
+    repairRoutesInstalled = repairRouteCount > 0;
+    if (!repairRoutesInstalled)
+        throw cRuntimeError("AI-MRCE local repair action did not install any repair routes");
+
+    EV_INFO << "AI-MRCE installed " << repairRouteCount << " local-repair static routes at " << simTime() << endl;
+}
+
+bool AiMrceController::installLocalRepairRoute(const LocalRepairRouteSpec& spec)
+{
+    auto routingTable = resolveIpv4RoutingTable(spec.routerModule.c_str());
+    auto outputInterface = resolveInterface(spec.outputInterfaceModule.c_str());
+    auto gatewayAddress = resolveInterfaceIpv4Address(spec.gatewayInterfaceModule.c_str());
+    auto destinationAddress = resolveInterfaceIpv4Address(spec.destinationInterfaceModule.c_str());
+
+    auto route = new inet::Ipv4Route();
+    route->setSourceType(inet::IRoute::MANUAL);
+    route->setSource(this);
+    route->setDestination(destinationAddress);
+    route->setNetmask(inet::Ipv4Address::ALLONES_ADDRESS);
+    route->setGateway(gatewayAddress);
+    route->setInterface(outputInterface);
+    route->setAdminDist(inet::IRoute::dStatic);
+    route->setMetric(par("localRepairRouteMetric").intValue());
+
+    auto routingTableComponent = dynamic_cast<cComponent *>(routingTable);
+    if (routingTableComponent == nullptr)
+        throw cRuntimeError("Routing table for '%s' is not an OMNeT++ component", spec.routerModule.c_str());
+
+    // addRoute() notifies the standard INET IPv4 routing table. The route is a
+    // host-specific manual entry, so it is intended to override the broader
+    // OSPF route without modifying OSPF internals or link-state behavior.
+    EV_INFO << "AI-MRCE local repair route on " << spec.routerModule
+            << ": " << destinationAddress
+            << "/32 via " << gatewayAddress
+            << " out " << outputInterface->getInterfaceFullPath() << endl;
+    cMethodCallContextSwitcher contextSwitcher(routingTableComponent);
+    routingTable->addRoute(route);
+    return true;
 }
 
 void AiMrceController::resetIntervalTelemetry()
@@ -594,6 +732,7 @@ void AiMrceController::recordVectors(const FeatureSnapshot& snapshot, double ris
     decisionPositiveVector.record(decisionPositive ? 1 : 0);
     positiveDecisionStreakVector.record(positiveDecisionStreak);
     protectionActiveVector.record(protectionActive ? 1 : 0);
+    repairRoutesInstalledVector.record(repairRoutesInstalled ? 1 : 0);
 }
 
 } // namespace dissertationsim::controller

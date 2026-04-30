@@ -13,6 +13,18 @@ Assumptions:
   measurement layer derived from observable receiver-side telemetry plus known
   scripted event times. They are not protocol-standard fields and they are not
   replacements for the supervision labels.
+- Packet-continuity diagnostics use receiver-observed sequence numbers and
+  receive timestamps. They are intended to reveal short packet-loss/reordering
+  symptoms that may not produce a full one-second zero-progress window.
+- Packet-continuity outputs are split by reference point. The historical
+  after_reference fields follow the operational service-interruption reference
+  (protection activation for protected runs, hard failure for reactive runs);
+  separate after_hard_failure and between_activation_and_failure fields avoid
+  hiding activation transition cost or overstating post-failure benefit.
+- Mixed UDP/TCP regional runs use standard INET TCP applications and summarize
+  application packet-byte vectors as a conservative useful-goodput proxy.
+  This deliberately avoids protocol-internal TCP instrumentation or claims
+  about carrier-grade transport recovery.
 - Receiver-side metrics may be absent in some runs; missing values are left
   blank where possible.
 - State-like vectors and event/sample-like vectors are summarized separately so
@@ -66,12 +78,25 @@ REGIONAL_CONGESTION_CRITICAL_END_SECONDS = 125.0
 REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS = 125.0
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SCENARIO = "linkdegradation"
+OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
+DATASETS_DIR = OUTPUT_ROOT / "datasets"
+DEFAULT_SCENARIO = "regionalbackbone"
 BOTTLE_NECK_QUEUE_MODULE_SUFFIX = ".r2.eth[1].queue"
 REGIONAL_BOTTLENECK_QUEUE_MODULE_SUFFIX = ".coreNW.eth[1].queue"
 HOSTB_APP_RE = re.compile(r".*\.hostB\.app\[(\d+)\]$")
-TARGET_CONTROLLER_SCALAR_NAMES = {"protectionActivated", "protectionActivationTime"}
-REGIONALBACKBONE_FAMILY_SCENARIOS = {"regionalbackbone", "regionalbackbone_congestion_protection"}
+HOSTA_TCP_REPLY_APP_RE = re.compile(r".*\.hostA\.app\[(3|4)\]$")
+TARGET_CONTROLLER_SCALAR_NAMES = {
+    "protectionActivated",
+    "protectionActivationTime",
+    "protectionActionCode",
+    "repairRoutesInstalled",
+    "repairRouteCount",
+}
+REGIONALBACKBONE_FAMILY_SCENARIOS = {
+    "regionalbackbone",
+    "regionalbackbone_congestion_protection",
+    "regionalbackbone_mixed_traffic_protection",
+}
 
 REGIONALBACKBONE_DATASET_CONFIGS = {
     "RegionalBackboneBaseline",
@@ -85,12 +110,18 @@ REGIONALBACKBONE_OPTIONAL_RUNTIME_CONFIGS = {
     "RegionalBackboneAiMrceLinearSvm",
     "RegionalBackboneAiMrceShallowTree",
 }
+REGIONALBACKBONE_MIXED_TRAFFIC_CONFIGS = {
+    "RegionalBackboneMixedTrafficCongestionDegradation",
+    "RegionalBackboneAiMrceRuleBasedMixedTraffic",
+    "RegionalBackboneAiMrceLogRegMixedTraffic",
+}
 REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS = {
     "RegionalBackboneCongestionDegradation",
     "RegionalBackboneAiMrceRuleBased",
     "RegionalBackboneAiMrceLogReg",
     "RegionalBackboneAiMrceLinearSvm",
     "RegionalBackboneAiMrceShallowTree",
+    *REGIONALBACKBONE_MIXED_TRAFFIC_CONFIGS,
 }
 
 
@@ -104,12 +135,17 @@ class OutcomeProfile:
     flow_start_time_s: float
     protection_expected: bool = False
     scheduled_protection_time_s: float | None = None
+    traffic_profile: str = "udp_only"
+    tcp_app_indices: tuple[int, ...] = ()
+    tcp_flow_start_time_s: float | None = None
+    tcp_useful_goodput_floor_bps: float | None = None
+    packet_continuity_critical_start_time_s: float | None = None
 
 
 SCENARIO_PRESETS = {
     "linkdegradation": {
         "results_dir": PROJECT_ROOT / "results" / "linkdegradation" / "eval",
-        "output_file": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_dataset.csv",
+        "output_file": DATASETS_DIR / "linkdegradation_dataset.csv",
         "supported_configs": {"MildLinear", "StrongLinear", "UnstableLinear", "StagedRealistic"},
         "config_aliases": {
             "LinkDegradation": "MildLinear",
@@ -118,28 +154,28 @@ SCENARIO_PRESETS = {
     },
     "congestiondegradation": {
         "results_dir": PROJECT_ROOT / "results" / "congestiondegradation" / "eval",
-        "output_file": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_dataset.csv",
+        "output_file": DATASETS_DIR / "congestiondegradation_dataset.csv",
         "supported_configs": {"CongestionDegradation", "CongestionDegradationMild"},
         "config_aliases": {},
         "default_sim_time_limit": 180.0,
     },
     "reactivefailure": {
         "results_dir": PROJECT_ROOT / "results" / "reactivefailure" / "eval",
-        "output_file": PROJECT_ROOT / "analysis" / "output" / "reactivefailure_dataset.csv",
+        "output_file": DATASETS_DIR / "reactivefailure_dataset.csv",
         "supported_configs": {"ReactiveFailure"},
         "config_aliases": {},
         "default_sim_time_limit": 60.0,
     },
     "proactiveswitch": {
         "results_dir": PROJECT_ROOT / "results" / "proactiveswitch" / "eval",
-        "output_file": PROJECT_ROOT / "analysis" / "output" / "proactiveswitch_dataset.csv",
+        "output_file": DATASETS_DIR / "proactiveswitch_dataset.csv",
         "supported_configs": {"ProactiveSwitch"},
         "config_aliases": {},
         "default_sim_time_limit": 60.0,
     },
     "regionalbackbone": {
         "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "eval",
-        "output_file": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_dataset.csv",
+        "output_file": DATASETS_DIR / "regionalbackbone_dataset.csv",
         "supported_configs": REGIONALBACKBONE_DATASET_CONFIGS,
         "optional_runtime_configs": REGIONALBACKBONE_OPTIONAL_RUNTIME_CONFIGS,
         "config_aliases": {},
@@ -157,7 +193,7 @@ SCENARIO_PRESETS = {
     },
     "regionalbackbone_congestion_protection": {
         "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "congestion_protection_cohort",
-        "output_file": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_congestion_protection_multirun_dataset.csv",
+        "output_file": DATASETS_DIR / "regionalbackbone_congestion_protection_multirun_dataset.csv",
         "supported_configs": {
             "RegionalBackboneCongestionDegradation",
             "RegionalBackboneAiMrceRuleBased",
@@ -179,6 +215,22 @@ SCENARIO_PRESETS = {
             "RegionalBackboneAiMrceLogReg": 150.0,
             "RegionalBackboneAiMrceLinearSvm": 150.0,
             "RegionalBackboneAiMrceShallowTree": 150.0,
+        },
+    },
+    "regionalbackbone_mixed_traffic_protection": {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "mixed_traffic_protection_cohort",
+        "output_file": DATASETS_DIR / "regionalbackbone_mixed_traffic_protection_multirun_dataset.csv",
+        "supported_configs": REGIONALBACKBONE_MIXED_TRAFFIC_CONFIGS,
+        "config_aliases": {
+            "RegionalBackboneMixedTrafficCongestionDegradationCohort": "RegionalBackboneMixedTrafficCongestionDegradation",
+            "RegionalBackboneAiMrceRuleBasedMixedTrafficCohort": "RegionalBackboneAiMrceRuleBasedMixedTraffic",
+            "RegionalBackboneAiMrceLogRegMixedTrafficCohort": "RegionalBackboneAiMrceLogRegMixedTraffic",
+        },
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            "RegionalBackboneMixedTrafficCongestionDegradation": 150.0,
+            "RegionalBackboneAiMrceRuleBasedMixedTraffic": 150.0,
+            "RegionalBackboneAiMrceLogRegMixedTraffic": 150.0,
         },
     },
 }
@@ -209,7 +261,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        help="Output CSV path. Defaults to analysis/output/<scenario>_dataset.csv.",
+        help="Output CSV path. Defaults to analysis/output/datasets/<scenario>_dataset.csv.",
     )
     parser.add_argument(
         "--include-runtime-protection-configs",
@@ -408,6 +460,7 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 packet_size_bits=256.0 * 8.0,
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
             "RegionalBackboneAiMrceRuleBased": OutcomeProfile(
                 hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
@@ -417,6 +470,7 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
                 protection_expected=True,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
             "RegionalBackboneAiMrceLogReg": OutcomeProfile(
                 hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
@@ -426,6 +480,7 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
                 protection_expected=True,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
             "RegionalBackboneAiMrceLinearSvm": OutcomeProfile(
                 hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
@@ -435,6 +490,7 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
                 protection_expected=True,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
             "RegionalBackboneAiMrceShallowTree": OutcomeProfile(
                 hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
@@ -444,6 +500,48 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
                 protection_expected=True,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneMixedTrafficCongestionDegradation": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="reactive_only",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                traffic_profile="mixed_udp_tcp",
+                tcp_app_indices=(3, 4),
+                tcp_flow_start_time_s=45.0,
+                tcp_useful_goodput_floor_bps=50_000.0,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneAiMrceRuleBasedMixedTraffic": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_rule_based",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                traffic_profile="mixed_udp_tcp",
+                tcp_app_indices=(3, 4),
+                tcp_flow_start_time_s=45.0,
+                tcp_useful_goodput_floor_bps=50_000.0,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneAiMrceLogRegMixedTraffic": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_logistic_regression",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                traffic_profile="mixed_udp_tcp",
+                tcp_app_indices=(3, 4),
+                tcp_flow_start_time_s=45.0,
+                tcp_useful_goodput_floor_bps=50_000.0,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
         }
         profile = profiles.get(config_name)
@@ -567,6 +665,26 @@ def sequence_summary(series: list[tuple[float, float]], window_start: float, win
     }
 
 
+def packet_bytes_summary(series: list[tuple[float, float]], window_start: float, window_end: float) -> dict[str, float | int | str]:
+    if not series:
+        return {"count": 0, "bytes": "", "goodput_bps": ""}
+
+    values = [max(0.0, value) for timestamp, value in series if window_start <= timestamp < window_end]
+    if not values:
+        return {"count": 0, "bytes": 0.0, "goodput_bps": 0.0}
+
+    duration = window_end - window_start
+    if duration <= 0:
+        return {"count": len(values), "bytes": sum(values), "goodput_bps": ""}
+
+    total_bytes = sum(values)
+    return {
+        "count": len(values),
+        "bytes": total_bytes,
+        "goodput_bps": (total_bytes * 8.0) / duration,
+    }
+
+
 def init_run_data(scenario: str) -> dict:
     run_data = {
         "receiver_apps": {},
@@ -605,6 +723,7 @@ def ensure_receiver_app(run_data: dict, app_index: int) -> dict:
         "throughput": [],
         "endToEndDelay": [],
         "rcvdPkSeqNo": [],
+        "packetBytes": [],
     })
 
 
@@ -630,8 +749,28 @@ def register_vector_target(
         return ("bottleneck_queue", name)
 
     match = HOSTB_APP_RE.match(module)
-    if match and name in {"throughput", "endToEndDelay", "rcvdPkSeqNo"}:
-        return (name, int(match.group(1)))
+    if match:
+        app_index = int(match.group(1))
+        if name in {"throughput", "endToEndDelay", "rcvdPkSeqNo"}:
+            return (name, app_index)
+        if name == "packetReceived" or name.startswith("packetReceived:"):
+            # INET TCP applications expose received payload through
+            # packetReceived byte vectors when enabled. We summarize those
+            # endpoint-observable bytes as a project-local useful-goodput proxy.
+            return ("packetBytes", app_index)
+
+    match = HOSTA_TCP_REPLY_APP_RE.match(module)
+    if scenario == "regionalbackbone_mixed_traffic_protection" and match:
+        app_index = int(match.group(1))
+        if name == "endToEndDelay":
+            return (name, app_index)
+        if name == "packetReceived" or name.startswith("packetReceived:"):
+            # In the mixed TCP branch hostA is the TCP client and receives
+            # small server replies. The forward-direction service proxy is
+            # dominated by hostB-side request bytes when present, but retaining
+            # this client-side byte vector keeps the parser compatible with
+            # earlier smoke outputs and records both application endpoints.
+            return ("packetBytes", app_index)
 
     return None
 
@@ -869,6 +1008,222 @@ def zero_progress_gap_metrics(rows: list[dict[str, object]], monitored_app_index
     return zero_progress_count, max_streak
 
 
+def service_gap_metrics(
+    rows: list[dict[str, object]],
+    availability_column: str,
+    reference_time_s: float | None,
+) -> tuple[float | None, float | None, float | None, int | None, int | None]:
+    if reference_time_s is None:
+        return None, None, None, None, None
+
+    interruption_start_time_s = None
+    interruption_end_time_s = None
+    zero_window_count = 0
+    max_zero_streak = 0
+    current_zero_streak = 0
+    interruption_started = False
+
+    for row in rows:
+        window_start_s = float(row["window_start_s"])
+        if window_start_s < reference_time_s:
+            continue
+
+        service_available = parse_int_cell(row.get(availability_column))
+        if service_available == 0:
+            zero_window_count += 1
+            current_zero_streak += 1
+            max_zero_streak = max(max_zero_streak, current_zero_streak)
+            if not interruption_started:
+                interruption_start_time_s = window_start_s
+                interruption_started = True
+            continue
+
+        current_zero_streak = 0
+        if interruption_started and service_available == 1 and window_start_s > interruption_start_time_s:
+            interruption_end_time_s = window_start_s
+            break
+
+    interruption_duration_s = None
+    if interruption_start_time_s is not None and interruption_end_time_s is not None:
+        interruption_duration_s = interruption_end_time_s - interruption_start_time_s
+
+    return (
+        interruption_start_time_s,
+        interruption_end_time_s,
+        interruption_duration_s,
+        zero_window_count,
+        max_zero_streak,
+    )
+
+
+def packet_continuity_metrics(
+    series: list[tuple[float, float]],
+    reference_time_s: float | None,
+    expected_send_interval_s: float,
+    flow_start_time_s: float,
+    end_time_s: float | None = None,
+) -> dict[str, float | int | bool | None]:
+    # Receiver sequence numbers expose short packet-continuity disruptions that
+    # can be hidden by the coarser one-second availability windows. The
+    # interarrival threshold is deliberately transparent: three nominal probe
+    # send intervals, not a protocol restoration target or literature claim.
+    if reference_time_s is None or not series:
+        return {
+            "packet_sequence_gap_observed_after_reference": None,
+            "packet_sequence_gap_count_after_reference": None,
+            "packet_sequence_gap_total_missing_after_reference": None,
+            "max_packet_sequence_gap_after_reference": None,
+            "max_packet_interarrival_gap_after_reference_s": None,
+            "packet_interarrival_nominal_gap_threshold_s": None,
+            "packet_interarrival_gap_exceedance_count_after_reference": None,
+            "packet_interarrival_gap_exceeded_nominal_threshold": None,
+            "first_packet_after_reference_delay_s": None,
+        }
+
+    threshold_s = 3.0 * expected_send_interval_s
+    if end_time_s is not None and end_time_s <= reference_time_s:
+        return {
+            "packet_sequence_gap_observed_after_reference": False,
+            "packet_sequence_gap_count_after_reference": 0,
+            "packet_sequence_gap_total_missing_after_reference": 0,
+            "max_packet_sequence_gap_after_reference": 0,
+            "max_packet_interarrival_gap_after_reference_s": 0.0,
+            "packet_interarrival_nominal_gap_threshold_s": threshold_s,
+            "packet_interarrival_gap_exceedance_count_after_reference": 0,
+            "packet_interarrival_gap_exceeded_nominal_threshold": False,
+            "first_packet_after_reference_delay_s": None,
+        }
+
+    samples = sorted(
+        (timestamp, value)
+        for timestamp, value in series
+        if timestamp >= flow_start_time_s and (end_time_s is None or timestamp <= end_time_s)
+    )
+    if len(samples) < 2:
+        first_after = next((timestamp for timestamp, _ in samples if timestamp >= reference_time_s), None)
+        return {
+            "packet_sequence_gap_observed_after_reference": False,
+            "packet_sequence_gap_count_after_reference": 0,
+            "packet_sequence_gap_total_missing_after_reference": 0,
+            "max_packet_sequence_gap_after_reference": 0,
+            "max_packet_interarrival_gap_after_reference_s": 0.0,
+            "packet_interarrival_nominal_gap_threshold_s": threshold_s,
+            "packet_interarrival_gap_exceedance_count_after_reference": 0,
+            "packet_interarrival_gap_exceeded_nominal_threshold": False,
+            "first_packet_after_reference_delay_s": (
+                first_after - reference_time_s if first_after is not None else None
+            ),
+        }
+
+    sequence_gap_count = 0
+    total_missing_packets = 0
+    max_sequence_gap = 0
+    max_interarrival_gap_s = 0.0
+    interarrival_exceedance_count = 0
+
+    previous_timestamp, previous_value = samples[0]
+    for timestamp, value in samples[1:]:
+        overlaps_reference_interval = previous_timestamp < reference_time_s <= timestamp
+        if timestamp < reference_time_s and not overlaps_reference_interval:
+            previous_timestamp, previous_value = timestamp, value
+            continue
+
+        interarrival_gap_s = timestamp - previous_timestamp
+        max_interarrival_gap_s = max(max_interarrival_gap_s, interarrival_gap_s)
+        if interarrival_gap_s > threshold_s:
+            interarrival_exceedance_count += 1
+
+        sequence_jump = max(0, int(round(value - previous_value)))
+        if sequence_jump > 1:
+            sequence_gap_count += 1
+            total_missing_packets += sequence_jump - 1
+            max_sequence_gap = max(max_sequence_gap, sequence_jump - 1)
+
+        previous_timestamp, previous_value = timestamp, value
+
+    first_packet_after_reference = next((timestamp for timestamp, _ in samples if timestamp >= reference_time_s), None)
+
+    return {
+        "packet_sequence_gap_observed_after_reference": sequence_gap_count > 0,
+        "packet_sequence_gap_count_after_reference": sequence_gap_count,
+        "packet_sequence_gap_total_missing_after_reference": total_missing_packets,
+        "max_packet_sequence_gap_after_reference": max_sequence_gap,
+        "max_packet_interarrival_gap_after_reference_s": max_interarrival_gap_s,
+        "packet_interarrival_nominal_gap_threshold_s": threshold_s,
+        "packet_interarrival_gap_exceedance_count_after_reference": interarrival_exceedance_count,
+        "packet_interarrival_gap_exceeded_nominal_threshold": interarrival_exceedance_count > 0,
+        "first_packet_after_reference_delay_s": (
+            first_packet_after_reference - reference_time_s
+            if first_packet_after_reference is not None
+            else None
+        ),
+    }
+
+
+def add_packet_continuity_outcome_fields(
+    output_fields: dict[str, object],
+    suffix: str,
+    metrics: dict[str, float | int | bool | None],
+) -> None:
+    output_fields[f"packet_sequence_gap_observed_{suffix}"] = bool_flag(metrics["packet_sequence_gap_observed_after_reference"])
+    output_fields[f"packet_sequence_gap_count_{suffix}"] = optional_numeric(metrics["packet_sequence_gap_count_after_reference"])
+    output_fields[f"packet_sequence_gap_total_missing_{suffix}"] = optional_numeric(metrics["packet_sequence_gap_total_missing_after_reference"])
+    output_fields[f"max_packet_sequence_gap_{suffix}"] = optional_numeric(metrics["max_packet_sequence_gap_after_reference"])
+    output_fields[f"max_packet_interarrival_gap_{suffix}_s"] = optional_numeric(metrics["max_packet_interarrival_gap_after_reference_s"])
+    output_fields[f"packet_interarrival_gap_exceedance_count_{suffix}"] = optional_numeric(metrics["packet_interarrival_gap_exceedance_count_after_reference"])
+    output_fields[f"packet_interarrival_gap_exceeded_nominal_threshold_{suffix}"] = bool_flag(metrics["packet_interarrival_gap_exceeded_nominal_threshold"])
+    output_fields[f"first_packet_{suffix}_delay_s"] = optional_numeric(metrics["first_packet_after_reference_delay_s"])
+
+
+def endpoint_receive_gap_metrics(
+    receiver_apps: dict[int, dict[str, list[tuple[float, float]]]],
+    app_indices: tuple[int, ...],
+    reference_time_s: float | None,
+    flow_start_time_s: float | None,
+) -> dict[str, float | int | None]:
+    # Mixed TCP evaluation remains endpoint-observable only. This helper uses
+    # application packet-byte timestamps as a useful-goodput continuity proxy;
+    # it does not inspect TCP retransmission, congestion-window, or RTO internals.
+    if reference_time_s is None or not app_indices:
+        return {
+            "tcp_endpoint_receive_event_count_after_reference": None,
+            "tcp_first_endpoint_receive_delay_after_reference_s": None,
+            "tcp_max_endpoint_receive_gap_after_reference_s": None,
+        }
+
+    start_time_s = flow_start_time_s if flow_start_time_s is not None else 0.0
+    samples: list[tuple[float, float]] = []
+    for app_index in app_indices:
+        samples.extend(receiver_apps.get(app_index, {}).get("packetBytes", []))
+
+    samples = sorted((timestamp, value) for timestamp, value in samples if timestamp >= start_time_s)
+    if not samples:
+        return {
+            "tcp_endpoint_receive_event_count_after_reference": 0,
+            "tcp_first_endpoint_receive_delay_after_reference_s": None,
+            "tcp_max_endpoint_receive_gap_after_reference_s": None,
+        }
+
+    receive_event_count_after_reference = sum(1 for timestamp, _ in samples if timestamp >= reference_time_s)
+    first_after = next((timestamp for timestamp, _ in samples if timestamp >= reference_time_s), None)
+    max_gap_s = 0.0
+
+    previous_timestamp, _ = samples[0]
+    for timestamp, value in samples[1:]:
+        overlaps_reference_interval = previous_timestamp < reference_time_s <= timestamp
+        if timestamp >= reference_time_s or overlaps_reference_interval:
+            max_gap_s = max(max_gap_s, timestamp - previous_timestamp)
+        previous_timestamp = timestamp
+
+    return {
+        "tcp_endpoint_receive_event_count_after_reference": receive_event_count_after_reference,
+        "tcp_first_endpoint_receive_delay_after_reference_s": (
+            first_after - reference_time_s if first_after is not None else None
+        ),
+        "tcp_max_endpoint_receive_gap_after_reference_s": max_gap_s,
+    }
+
+
 def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, scenario: str) -> None:
     if not rows:
         return
@@ -881,6 +1236,9 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         profile,
         run_data["scalars"],
     )
+    protection_action_code = run_data["scalars"].get("protectionActionCode")
+    repair_routes_installed = run_data["scalars"].get("repairRoutesInstalled")
+    repair_route_count = run_data["scalars"].get("repairRouteCount")
     hard_failure_time_s = profile.hard_failure_time_s
     protection_activated_before_failure = (
         protection_activated
@@ -952,10 +1310,77 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
             if throughput_mean_bps is not None and throughput_mean_bps >= throughput_floor_bps:
                 throughput_restored_after_failure = True
 
+    tcp_reference_time_s = None
+    if profile.tcp_app_indices and reference_time_s is not None:
+        tcp_reference_time_s = reference_time_s
+        if profile.tcp_flow_start_time_s is not None:
+            tcp_reference_time_s = max(reference_time_s, profile.tcp_flow_start_time_s)
+
+    (
+        tcp_service_interruption_start_time_s,
+        tcp_service_interruption_end_time_s,
+        tcp_service_interruption_duration_s,
+        tcp_zero_goodput_window_count_after_reference,
+        tcp_max_zero_goodput_window_streak_after_reference,
+    ) = service_gap_metrics(
+        rows,
+        "tcp_service_available_operational",
+        tcp_reference_time_s,
+    )
+
+    tcp_useful_goodput_restored_after_failure: bool | None = None
+    if profile.tcp_app_indices and hard_failure_time_s is not None:
+        tcp_useful_goodput_restored_after_failure = False
+        for row in rows:
+            window_start_s = float(row["window_start_s"])
+            if window_start_s < hard_failure_time_s:
+                continue
+            if parse_int_cell(row.get("tcp_service_available_operational")) == 1:
+                tcp_useful_goodput_restored_after_failure = True
+                break
+
     zero_progress_window_count_after_reference, max_zero_progress_window_streak_after_reference = zero_progress_gap_metrics(
         rows,
         profile.monitored_app_index,
         reference_time_s,
+    )
+    monitored_sequence_series = run_data["receiver_apps"].get(profile.monitored_app_index, {}).get("rcvdPkSeqNo", [])
+    packet_continuity = packet_continuity_metrics(
+        monitored_sequence_series,
+        reference_time_s,
+        profile.send_interval_s,
+        profile.flow_start_time_s,
+    )
+    packet_continuity_after_hard_failure = packet_continuity_metrics(
+        monitored_sequence_series,
+        hard_failure_time_s,
+        profile.send_interval_s,
+        profile.flow_start_time_s,
+    )
+    packet_continuity_after_protection_activation = packet_continuity_metrics(
+        monitored_sequence_series,
+        protection_activation_time_s if protection_activated else None,
+        profile.send_interval_s,
+        profile.flow_start_time_s,
+    )
+    packet_continuity_between_activation_and_failure = packet_continuity_metrics(
+        monitored_sequence_series,
+        protection_activation_time_s if protection_activated_before_failure else None,
+        profile.send_interval_s,
+        profile.flow_start_time_s,
+        end_time_s=hard_failure_time_s,
+    )
+    packet_continuity_after_critical_start = packet_continuity_metrics(
+        monitored_sequence_series,
+        profile.packet_continuity_critical_start_time_s,
+        profile.send_interval_s,
+        profile.flow_start_time_s,
+    )
+    tcp_endpoint_receive_gaps = endpoint_receive_gap_metrics(
+        run_data["receiver_apps"],
+        profile.tcp_app_indices,
+        tcp_reference_time_s,
+        profile.tcp_flow_start_time_s,
     )
 
     unnecessary_protection = protection_activated and hard_failure_time_s is None
@@ -969,6 +1394,9 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         "protection_activated": bool_flag(protection_activated),
         "protection_activation_time_s": optional_numeric(protection_activation_time_s),
         "protection_activation_source": protection_activation_source,
+        "protection_action_code": optional_numeric(protection_action_code),
+        "repair_routes_installed": bool_flag(repair_routes_installed > 0.5) if repair_routes_installed is not None else "",
+        "repair_route_count": optional_numeric(repair_route_count),
         "hard_failure_time_s": optional_numeric(hard_failure_time_s),
         "protection_activated_before_failure": bool_flag(protection_activated_before_failure) if hard_failure_time_s is not None else "",
         "protection_lead_time_before_failure_s": optional_numeric(protection_lead_time_before_failure_s),
@@ -983,9 +1411,40 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         "zero_progress_window_count_after_reference": optional_numeric(zero_progress_window_count_after_reference),
         "max_zero_progress_window_streak_after_reference": optional_numeric(max_zero_progress_window_streak_after_reference),
         "throughput_restored_after_failure": bool_flag(throughput_restored_after_failure),
+        "packet_sequence_gap_observed_after_reference": bool_flag(packet_continuity["packet_sequence_gap_observed_after_reference"]),
+        "packet_sequence_gap_count_after_reference": optional_numeric(packet_continuity["packet_sequence_gap_count_after_reference"]),
+        "packet_sequence_gap_total_missing_after_reference": optional_numeric(packet_continuity["packet_sequence_gap_total_missing_after_reference"]),
+        "max_packet_sequence_gap_after_reference": optional_numeric(packet_continuity["max_packet_sequence_gap_after_reference"]),
+        "max_packet_interarrival_gap_after_reference_s": optional_numeric(packet_continuity["max_packet_interarrival_gap_after_reference_s"]),
+        "packet_interarrival_nominal_gap_threshold_s": optional_numeric(packet_continuity["packet_interarrival_nominal_gap_threshold_s"]),
+        "packet_interarrival_gap_exceedance_count_after_reference": optional_numeric(packet_continuity["packet_interarrival_gap_exceedance_count_after_reference"]),
+        "packet_interarrival_gap_exceeded_nominal_threshold": bool_flag(packet_continuity["packet_interarrival_gap_exceeded_nominal_threshold"]),
+        "first_packet_after_reference_delay_s": optional_numeric(packet_continuity["first_packet_after_reference_delay_s"]),
+        "tcp_service_interruption_observed": (
+            bool_flag(tcp_service_interruption_start_time_s is not None)
+            if profile.tcp_app_indices and tcp_reference_time_s is not None
+            else ""
+        ),
+        "tcp_service_interruption_start_time_s": optional_numeric(tcp_service_interruption_start_time_s),
+        "tcp_service_interruption_end_time_s": optional_numeric(tcp_service_interruption_end_time_s),
+        "tcp_service_interruption_duration_s": optional_numeric(tcp_service_interruption_duration_s),
+        "tcp_zero_goodput_window_count_after_reference": optional_numeric(tcp_zero_goodput_window_count_after_reference),
+        "tcp_max_zero_goodput_window_streak_after_reference": optional_numeric(tcp_max_zero_goodput_window_streak_after_reference),
+        "tcp_useful_goodput_restored_after_failure": bool_flag(tcp_useful_goodput_restored_after_failure),
+        "tcp_endpoint_receive_event_count_after_reference": optional_numeric(tcp_endpoint_receive_gaps["tcp_endpoint_receive_event_count_after_reference"]),
+        "tcp_first_endpoint_receive_delay_after_reference_s": optional_numeric(tcp_endpoint_receive_gaps["tcp_first_endpoint_receive_delay_after_reference_s"]),
+        "tcp_max_endpoint_receive_gap_after_reference_s": optional_numeric(tcp_endpoint_receive_gaps["tcp_max_endpoint_receive_gap_after_reference_s"]),
         "unnecessary_protection": bool_flag(unnecessary_protection),
         "missed_protection": bool_flag(missed_protection),
     }
+    add_packet_continuity_outcome_fields(run_outcome_fields, "after_hard_failure", packet_continuity_after_hard_failure)
+    add_packet_continuity_outcome_fields(run_outcome_fields, "after_protection_activation", packet_continuity_after_protection_activation)
+    add_packet_continuity_outcome_fields(
+        run_outcome_fields,
+        "between_activation_and_failure",
+        packet_continuity_between_activation_and_failure,
+    )
+    add_packet_continuity_outcome_fields(run_outcome_fields, "after_critical_start", packet_continuity_after_critical_start)
 
     for row in rows:
         row.update(run_outcome_fields)
@@ -1012,11 +1471,14 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             "window_end_s": window_end,
             "label": label_for_window(scenario, metadata["configname"], window_start),
             "protection_mode": outcome_profile.protection_mode,
+            "traffic_profile": outcome_profile.traffic_profile,
             "monitored_flow_app_index": outcome_profile.monitored_app_index,
             "monitored_flow_expected_packets_per_window": expected_packets_per_window,
             "monitored_flow_expected_throughput_bps": expected_throughput_bps,
             "service_availability_packet_progress_floor": packet_progress_floor,
             "service_availability_throughput_floor_bps": throughput_floor_bps,
+            "tcp_receiver_app_indices": ";".join(str(app_index) for app_index in outcome_profile.tcp_app_indices),
+            "tcp_useful_goodput_floor_bps": optional_numeric(outcome_profile.tcp_useful_goodput_floor_bps),
         }
 
         if scenario in {"linkdegradation", *REGIONALBACKBONE_FAMILY_SCENARIOS}:
@@ -1050,22 +1512,45 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             raise SystemExit(f"Unsupported scenario '{scenario}' for dataset row generation")
 
         total_packets = 0
+        tcp_total_received_bytes = 0.0
+        tcp_total_goodput_bps = 0.0
+        tcp_active_app_count = 0
         for app_index in sorted(receiver_apps.keys()):
             metrics = receiver_apps[app_index]
             seq = sequence_summary(metrics["rcvdPkSeqNo"], window_start, window_end)
             delay = sample_summary(metrics["endToEndDelay"], window_start, window_end)
             throughput = sample_summary(metrics["throughput"], window_start, window_end, nonnegative_only=True)
+            packet_bytes = packet_bytes_summary(metrics["packetBytes"], window_start, window_end)
+            packet_count = int(seq["count"]) if int(seq["count"]) > 0 else int(packet_bytes["count"])
 
-            total_packets += int(seq["count"])
-            row[f"receiver_app{app_index}_packet_count"] = seq["count"]
+            total_packets += packet_count
+            row[f"receiver_app{app_index}_packet_count"] = packet_count
             row[f"receiver_app{app_index}_seq_progress"] = seq["progress"]
             row[f"receiver_app{app_index}_last_seq"] = seq["last"]
             row[f"receiver_app{app_index}_e2e_delay_mean_s"] = delay["mean"]
             row[f"receiver_app{app_index}_e2e_delay_max_s"] = delay["max"]
             row[f"receiver_app{app_index}_throughput_mean_bps"] = throughput["mean"]
             row[f"receiver_app{app_index}_throughput_last_bps"] = throughput["last"]
+            row[f"receiver_app{app_index}_received_bytes"] = packet_bytes["bytes"]
+            row[f"receiver_app{app_index}_goodput_mean_bps"] = packet_bytes["goodput_bps"]
+
+            if app_index in outcome_profile.tcp_app_indices:
+                received_bytes = parse_numeric_cell(packet_bytes["bytes"]) or 0.0
+                goodput_bps = parse_numeric_cell(packet_bytes["goodput_bps"]) or 0.0
+                tcp_total_received_bytes += received_bytes
+                tcp_total_goodput_bps += goodput_bps
+                if received_bytes > 0.0 or goodput_bps > 0.0:
+                    tcp_active_app_count += 1
 
         row["receiver_total_packet_count"] = total_packets
+        if outcome_profile.tcp_app_indices:
+            row["receiver_tcp_total_received_bytes"] = tcp_total_received_bytes
+            row["receiver_tcp_goodput_mean_bps"] = tcp_total_goodput_bps
+            row["receiver_tcp_active_app_count"] = tcp_active_app_count
+        else:
+            row["receiver_tcp_total_received_bytes"] = ""
+            row["receiver_tcp_goodput_mean_bps"] = ""
+            row["receiver_tcp_active_app_count"] = ""
 
         monitored_seq_progress = parse_int_cell(row.get(f"receiver_app{outcome_profile.monitored_app_index}_seq_progress"))
         monitored_throughput_bps = parse_numeric_cell(row.get(f"receiver_app{outcome_profile.monitored_app_index}_throughput_mean_bps"))
@@ -1084,6 +1569,24 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             )
             row["service_available_operational"] = bool_flag(service_available)
             row["service_materially_degraded_operational"] = bool_flag(not service_available)
+
+        if not outcome_profile.tcp_app_indices or outcome_profile.tcp_useful_goodput_floor_bps is None:
+            row["tcp_service_available_operational"] = ""
+            row["tcp_service_materially_degraded_operational"] = ""
+        elif outcome_profile.tcp_flow_start_time_s is not None and window_start < outcome_profile.tcp_flow_start_time_s:
+            row["tcp_service_available_operational"] = ""
+            row["tcp_service_materially_degraded_operational"] = ""
+        else:
+            # TCP visibility is intentionally application-endpoint only: this
+            # is a useful-goodput proxy for dissertation evaluation, not a
+            # TCP-stack retransmission or congestion-control measurement.
+            tcp_goodput_bps = parse_numeric_cell(row.get("receiver_tcp_goodput_mean_bps"))
+            tcp_service_available = (
+                tcp_goodput_bps is not None
+                and tcp_goodput_bps >= outcome_profile.tcp_useful_goodput_floor_bps
+            )
+            row["tcp_service_available_operational"] = bool_flag(tcp_service_available)
+            row["tcp_service_materially_degraded_operational"] = bool_flag(not tcp_service_available)
 
         rows.append(row)
 

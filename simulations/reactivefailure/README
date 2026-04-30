@@ -13,4 +13,6 @@ Expected behavior
 - After the link failure and OSPF reconvergence, traffic should continue over the backup path via r1-r4-r3.
 
 Goal
-- Provide the first reactive rerouting experiment for the dissertation using only built-in INET 4.5 mechanisms.
+- Archival small-topology reactive rerouting reference using built-in INET behavior.
+- The regional backbone reactive and congestion-protection branches are now the dissertation-grade comparison context.
+- Keep this scenario stable for debugging and historical comparison; do not expand it as a main workflow branch.

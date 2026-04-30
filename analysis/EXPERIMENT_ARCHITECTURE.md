@@ -1,183 +1,163 @@
 # Experiment Architecture
 
-This note defines the current active experiment architecture and the proposed next topology step.
+This note records the consolidated experiment architecture after aligning the repository with the dissertation framing document for **Intelligent Fast Network Recovery**.
 
-The goal is to keep the project defensible as a research workflow, not just as a set of runnable simulations.
+The project should be read as one dissertation prototype, not as a growing collection of unrelated OMNeT++ examples.
 
-## Current Scenario Classification
+## Research Center
 
-### Core active scenarios
-- `simulations/linkdegradation`
-  - Role: controlled synthetic data-generation branch.
-  - Purpose: produce interpretable pre-failure telemetry from deterministic delay and packet-error-rate profiles.
-  - Current configs: `MildLinear`, `StrongLinear`, `UnstableLinear`, `StagedRealistic`.
-  - Status: actively maintained for dataset/report generation.
-- `simulations/congestiondegradation`
-  - Role: traffic-driven data-generation branch.
-  - Purpose: produce pre-failure telemetry from offered-load pressure and bottleneck queue buildup.
-  - Current configs: `CongestionDegradation`, `CongestionDegradationMild`.
-  - Status: actively maintained for dataset/report generation.
+The active research question is whether a project-local AI-MRCE element can use monitored network indicators and offline-trained, auditable models to trigger a protective reroute action before selected hard outages, then improve practical recovery/protection outcomes relative to reactive behavior.
 
-### Auxiliary / transitional scenarios
-- `simulations/dualpathbaseline`
-  - Role: minimal OSPF sanity baseline.
-  - Purpose: verify the preferred primary path and backup path on the smallest topology.
-  - Status: keep stable; do not actively extend unless needed for validation.
-- `simulations/reactivefailure`
-  - Role: minimal reactive rerouting reference.
-  - Purpose: verify OSPF reconvergence after hard failure in the small topology.
-  - Status: keep stable; use as a comparison reference, not as the main data-generation branch.
-- `simulations/proactiveswitch`
-  - Role: first protective-reroute prototype.
-  - Purpose: demonstrate administrative withdrawal before hard failure using a small local controller.
-  - Status: keep stable; avoid expanding the controller until the medium topology research question is fixed.
+The simulator contribution is therefore:
 
-### Archival / reference-only scenarios
-- `simulations/simpletest`
-  - Role: original INET OSPF reference material.
-  - Purpose: useful for checking INET OSPF behavior and configuration style.
-  - Status: keep as reference-only; do not include in active batches, datasets, or dissertation result tables unless explicitly needed.
+- a regional IP/OSPF-like topology,
+- controlled degradation and congestion branches with observable symptoms,
+- runtime AI-MRCE decision candidates,
+- conservative project-local FRR-like repair-route protection action,
+- offline training/export,
+- run-level recovery/protection outcome comparison.
+- receiver-observed packet-continuity diagnostics that complement coarse
+  one-second availability windows when rerouting effects are short.
 
-## Active Research Core
+The simulator does not attempt to implement every FRR mechanism from the literature. FRR and BFD remain literature and technical-comparison baselines unless they are explicitly represented by a project-local scenario branch.
 
-The active dissertation workflow should currently focus on two complementary data-generation branches:
+## Core Active Scenario
 
-- `linkdegradation`: controlled channel-quality degradation.
-- `congestiondegradation`: traffic-driven congestion degradation.
+### `simulations/regionalbackbone`
 
-These branches are complementary:
+Role: main dissertation topology.
 
-- `linkdegradation` isolates delay and packet-error-rate progression directly on the primary link.
-- `congestiondegradation` produces emergent symptoms through traffic pressure, queueing, and delivery effects.
+Purpose:
 
-The small routing scenarios remain valuable, but they should support interpretation rather than continue growing independently.
+- validate baseline OSPF-like behavior,
+- compare reactive behavior after hard failure,
+- model selected pre-failure degradation/congestion classes,
+- evaluate AI-MRCE runtime candidates under one consistent topology,
+- support multi-run practical outcome comparison.
 
-## Medium-Scale Topology Recommendation
+Core configs:
 
-### Proposed name
-- `regionalbackbone`
+- `RegionalBackboneBaseline`
+- `RegionalBackboneReactiveFailure`
+- `RegionalBackboneControlledDegradation`
+- `RegionalBackboneCongestionDegradation`
 
-This should be designed first and implemented only after reviewing the OSPF costs and experiment hypotheses.
+Runtime AI-MRCE configs:
 
-### Target scale
-- About 12 routers.
-- Two endpoint hosts for the main monitored flow.
-- Optional background traffic hosts can be added later only if needed.
+- `RegionalBackboneAiMrceRuleBased`
+- `RegionalBackboneAiMrceLogReg`
+- `RegionalBackboneAiMrceLinearSvm`
+- `RegionalBackboneAiMrceShallowTree`
 
-### Proposed router roles
-- Access routers:
-  - `accessA`
-  - `accessB`
-- West provider-edge / aggregation routers:
-  - `west1`
-  - `west2`
-- East provider-edge / aggregation routers:
-  - `east1`
-  - `east2`
-- Backbone core routers:
-  - `coreNW`
-  - `coreNE`
-  - `coreSW`
-  - `coreSE`
-  - `coreC1`
-  - `coreC2`
+Focused mixed UDP/TCP configs:
 
-### Proposed structure
+- `RegionalBackboneMixedTrafficCongestionDegradation`
+- `RegionalBackboneAiMrceRuleBasedMixedTraffic`
+- `RegionalBackboneAiMrceLogRegMixedTraffic`
 
-The topology should resemble a small regional provider backbone with two main corridors and cross-core alternatives:
+Dedicated multi-run cohort wrappers:
 
-```text
-hostA
-  |
-accessA
-  |\
-  | \
-west1 west2
-  |     |
-coreNW coreSW
-  | \   | \
-  |  \  |  \
-coreNE coreSE
-  |     |
-east1 east2
-  \     |
-   \    |
-   accessB
-      |
-    hostB
-```
+- `RegionalBackboneCongestionDegradationCohort`
+- `RegionalBackboneAiMrceRuleBasedCohort`
+- `RegionalBackboneAiMrceLogRegCohort`
+- `RegionalBackboneAiMrceLinearSvmCohort`
+- `RegionalBackboneAiMrceShallowTreeCohort`
+- `RegionalBackboneMixedTrafficCongestionDegradationCohort`
+- `RegionalBackboneAiMrceRuleBasedMixedTrafficCohort`
+- `RegionalBackboneAiMrceLogRegMixedTrafficCohort`
 
-Additional backbone cross-links should make the network meaningfully different from the toy dual-path case:
+This is the scenario family that should appear in main dissertation result tables.
 
-- `coreNW <-> coreNE`: preferred northern corridor.
-- `coreSW <-> coreSE`: southern alternative corridor.
-- `coreNW <-> coreSW`: west-side vertical interconnect.
-- `coreNE <-> coreSE`: east-side vertical interconnect.
-- `coreNW <-> coreC1 <-> coreSE`: diagonal alternative.
-- `coreSW <-> coreC2 <-> coreNE`: diagonal alternative.
+The mixed UDP/TCP branch is intentionally smaller than the full runtime family. It compares the reactive congestion baseline against the existing rule-based and logistic-regression AI-MRCE candidates while adding standard INET TCP application traffic whose larger request direction follows the monitored hostA -> hostB corridor. TCP useful-goodput remains an application-endpoint proxy, not a TCP-internal restoration counter. The logistic-regression mixed run intentionally reuses the UDP-dominant regional runtime export, so missed protection there should be interpreted as deployment-compatibility evidence rather than tuned away. This keeps the transport-impact evidence focused without creating many weak variants.
 
-### OSPF cost intent
+## Auxiliary Data Scenarios
 
-The first version should use deterministic OSPF costs with a clear preferred path:
+### `simulations/linkdegradation`
 
-- Preferred path: `hostA -> accessA -> west1 -> coreNW -> coreNE -> east1 -> accessB -> hostB`.
-- Secondary alternatives:
-  - southern corridor via `west2 -> coreSW -> coreSE -> east2`.
-  - diagonal alternatives through `coreC1` and `coreC2`.
-- Avoid equal-cost multipath at first unless it is intentionally studied.
+Role: auxiliary controlled synthetic data branch.
 
-This makes rerouting behavior easier to interpret because one can identify the primary path, the next-best path, and longer fallback paths.
+Purpose:
 
-### Experiment roles
+- isolate delay, delay variation, and packet-error-rate symptoms,
+- provide optional sanity checks and cross-topology training evidence,
+- retain the staged intermittent brownout-style profile as a clearly synthetic approximation.
 
-The medium topology should support four experiment families:
+This branch is useful but secondary. It should not be presented as the main validation topology.
 
-- Baseline routing:
-  - confirm the preferred path and stable OSPF state.
-- Reactive failure:
-  - fail a preferred backbone span and observe whether traffic moves to a plausible alternate corridor.
-- Controlled degradation:
-  - apply staged delay/PER degradation to a preferred backbone span before hard failure.
-- Congestion-driven degradation:
-  - create offered-load pressure on one preferred backbone span and observe queueing before reroute/failure.
+### `simulations/congestiondegradation`
 
-### Candidate monitored links
+Role: auxiliary traffic-driven congestion branch.
 
-Good first monitored links:
+Purpose:
 
-- `coreNW <-> coreNE`
-  - best first choice because it is a central preferred-corridor span.
-- `west1 <-> coreNW`
-  - useful later for ingress-side degradation.
-- `coreNE <-> east1`
-  - useful later for egress-side degradation.
+- isolate queue buildup and delivery impact in the small topology,
+- provide optional sanity checks and cross-topology training evidence,
+- validate that congestion symptoms can be generated through traffic pressure instead of direct channel impairment.
 
-Start with `coreNW <-> coreNE` because it is easy to explain and has multiple plausible alternatives.
+This branch is useful but secondary.
 
-## Implementation Recommendation
+## Archival Reference Scenarios
 
-Do not implement `regionalbackbone` in this step.
+### `simulations/dualpathbaseline`
 
-The safest next step is documentation-only because:
+Role: archival minimal OSPF sanity reference.
 
-- the current small-topology data branches are still being stabilized;
-- OSPF cost choices in a medium topology are research-methodology decisions, not just code details;
-- adding NED and ASConfig files too early risks locking in arbitrary path behavior;
-- the current dataset builders are scenario-specific and should not be expanded before the topology's labels and metrics are defined.
+Use only when a tiny topology is needed to check basic routing behavior.
 
-The next implementation step should be a small scenario skeleton only after this design is accepted:
+### `simulations/reactivefailure`
 
-- `simulations/regionalbackbone/RegionalBackbone.ned`
-- `simulations/regionalbackbone/ASConfig.xml`
-- `simulations/regionalbackbone/omnetpp.ini`
-- `simulations/regionalbackbone/README`
+Role: archival small-topology reactive failure reference.
 
-No new C++ controller should be added for the first medium-topology skeleton.
+Regional backbone reactive branches now provide the dissertation-grade comparison context.
 
-## Hygiene Rules
+### `simulations/proactiveswitch`
 
-- Keep `linkdegradation` and `congestiondegradation` as active data branches.
-- Keep `dualpathbaseline`, `reactivefailure`, and `proactiveswitch` stable as validation/prototype references.
-- Keep `simpletest` as reference-only.
-- Do not add new dataset presets for a medium topology until the scenario has a stable metric and label design.
-- Do not commit generated outputs from `results/`, `out/`, or `analysis/output/`.
+Role: archival small-topology deterministic proactive switch prototype.
+
+The active dissertation path now compares runtime AI-MRCE candidates in the regional congestion protection cohort.
+
+### `simulations/simpletest`
+
+Role: external/reference INET material.
+
+Do not include in active batches, datasets, or dissertation result tables.
+
+## Active Analysis Artifacts
+
+The main analysis outputs are:
+
+- datasets under `analysis/output/datasets/`,
+- reports under `analysis/output/reports/`,
+- outcome summaries and comparisons under `analysis/output/outcomes/`,
+- offline ML evaluation outputs under `analysis/output/training/`,
+- verbose helper/debug CSVs under `analysis/output/debug/`,
+- batch logs under `analysis/output/experiment_logs/`.
+
+## Methodological Guardrails
+
+- Keep scenario-phase labels separate from operational outcome metrics.
+- Keep runtime deployment artifacts separate from offline methodological evaluation.
+- Keep AI-MRCE action semantics conservative: sustained positive decision followed by project-local activation of explicit host-specific repair routes on the configured backup corridor.
+- Treat this as an auditable local-protection abstraction, not as a standards-compliant IP FRR/LFA/TI-LFA implementation.
+- Do not modify INET or OSPF internals in the current prototype.
+- Do not claim that all failures are predictable.
+- Do not claim carrier-calibrated restoration from the current operational metrics.
+- Treat packet sequence gaps and endpoint receive gaps as descriptive
+  application-delivery evidence, not as RFC-standard recovery timers.
+- Keep packet-continuity reference points explicit. The operational
+  after-reference view may include AI-MRCE activation transition cost, while
+  the after-hard-failure view is the cleaner post-failure protection comparison.
+- Treat small-topology branches as optional support, not as the dissertation core.
+
+## Current Default Workflow
+
+Default dissertation commands should favor:
+
+- `run_experiments.bat dataset-batch --scenario regionalbackbone`
+- `run_analysis.bat train-risk-model`
+- `run_analysis.bat export-runtime-models --configs RegionalBackboneCongestionDegradation`
+- `run_experiments.bat regional-congestion-protection-batch`
+- `run_experiments.bat regional-mixed-traffic-protection-batch`
+- `run_analysis.bat compare-outcomes`
+
+Use auxiliary or archival scenarios only when they answer a specific methodological question.

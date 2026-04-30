@@ -160,7 +160,8 @@ network RegionalBackbone
         }
         aiMrceController: AiMrceController if enableAiMrceController {
             // Current runtime AI-MRCE prototype family. It observes telemetry
-            // and uses administrative withdrawal as its protective action.
+            // and, in the active regional configs, activates an explicit
+            // project-local repair-route abstraction for the backup corridor.
             @display("p=300,460;is=s");
         }
     connections:

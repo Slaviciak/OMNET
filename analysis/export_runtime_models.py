@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from train_risk_model import (
-    OUTPUT_DIR,
+    DATASETS_DIR,
     SUPPORTED_SCENARIOS,
     collect_training_rows,
     parse_float,
@@ -119,7 +119,7 @@ def parse_args(
     parser.add_argument(
         "--input-dir",
         type=Path,
-        default=OUTPUT_DIR,
+        default=DATASETS_DIR,
         help="Directory containing <scenario>_dataset.csv files.",
     )
     parser.add_argument(

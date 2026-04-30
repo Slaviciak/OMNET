@@ -22,7 +22,13 @@ $projectRoot = (Resolve-Path (Join-Path $analysisDir "..")).Path
 $simulationsDir = Join-Path $projectRoot "simulations"
 $srcDir = Join-Path $projectRoot "src"
 $runAnalysisScript = Join-Path $analysisDir "run_analysis.ps1"
-$logsRoot = Join-Path $analysisDir "output\experiment_logs"
+$outputRoot = Join-Path $analysisDir "output"
+$datasetsDir = Join-Path $outputRoot "datasets"
+$reportsDir = Join-Path $outputRoot "reports"
+$trainingDir = Join-Path $outputRoot "training"
+$outcomesDir = Join-Path $outputRoot "outcomes"
+$debugOutputDir = Join-Path $outputRoot "debug"
+$logsRoot = Join-Path $outputRoot "experiment_logs"
 $powerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 $script:ExplorerExe = Join-Path $env:SystemRoot "explorer.exe"
 if (-not (Test-Path $script:ExplorerExe)) {
@@ -35,8 +41,11 @@ $script:ScenarioPresets = [ordered]@{
         Description = "Controlled synthetic degradation proxy dataset batch"
         ScenarioDir = Join-Path $simulationsDir "linkdegradation"
         EvalDir = Join-Path $projectRoot "results\linkdegradation\eval"
-        DatasetPath = Join-Path $analysisDir "output\linkdegradation_dataset.csv"
-        ReportPath = Join-Path $analysisDir "output\linkdegradation_report.txt"
+        DatasetPath = Join-Path $datasetsDir "linkdegradation_dataset.csv"
+        ReportPath = Join-Path $reportsDir "linkdegradation_report.txt"
+        MissingCsvPath = Join-Path $debugOutputDir "linkdegradation_missing_values.csv"
+        PerConfigCsvPath = Join-Path $debugOutputDir "linkdegradation_per_config_summary.csv"
+        OutcomeSummaryPath = Join-Path $outcomesDir "linkdegradation_outcome_summary.csv"
         EvalConfigs = @("MildLinear", "StrongLinear", "UnstableLinear", "StagedRealistic")
         AiMrceConfigs = @()
     }
@@ -45,8 +54,11 @@ $script:ScenarioPresets = [ordered]@{
         Description = "Traffic-driven congestion approximation dataset batch"
         ScenarioDir = Join-Path $simulationsDir "congestiondegradation"
         EvalDir = Join-Path $projectRoot "results\congestiondegradation\eval"
-        DatasetPath = Join-Path $analysisDir "output\congestiondegradation_dataset.csv"
-        ReportPath = Join-Path $analysisDir "output\congestiondegradation_report.txt"
+        DatasetPath = Join-Path $datasetsDir "congestiondegradation_dataset.csv"
+        ReportPath = Join-Path $reportsDir "congestiondegradation_report.txt"
+        MissingCsvPath = Join-Path $debugOutputDir "congestiondegradation_missing_values.csv"
+        PerConfigCsvPath = Join-Path $debugOutputDir "congestiondegradation_per_config_summary.csv"
+        OutcomeSummaryPath = Join-Path $outcomesDir "congestiondegradation_outcome_summary.csv"
         EvalConfigs = @("CongestionDegradation", "CongestionDegradationMild")
         AiMrceConfigs = @()
     }
@@ -55,8 +67,11 @@ $script:ScenarioPresets = [ordered]@{
         Description = "Regional backbone dataset batch with baseline, reactive failure, controlled synthetic degradation proxy, and traffic-driven congestion approximation"
         ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
         EvalDir = Join-Path $projectRoot "results\regionalbackbone\eval"
-        DatasetPath = Join-Path $analysisDir "output\regionalbackbone_dataset.csv"
-        ReportPath = Join-Path $analysisDir "output\regionalbackbone_report.txt"
+        DatasetPath = Join-Path $datasetsDir "regionalbackbone_dataset.csv"
+        ReportPath = Join-Path $reportsDir "regionalbackbone_report.txt"
+        MissingCsvPath = Join-Path $debugOutputDir "regionalbackbone_missing_values.csv"
+        PerConfigCsvPath = Join-Path $debugOutputDir "regionalbackbone_per_config_summary.csv"
+        OutcomeSummaryPath = Join-Path $outcomesDir "regionalbackbone_outcome_summary.csv"
         EvalConfigs = @(
             "RegionalBackboneBaseline",
             "RegionalBackboneReactiveFailure",
@@ -77,15 +92,15 @@ $script:RegionalBackboneCongestionProtectionCohortPreset = [pscustomobject]@{
     Description = "Regional backbone congestion protection cohort with repeated reactive-baseline and AI-MRCE runtime comparison runs"
     ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
     EvalDir = Join-Path $projectRoot "results\regionalbackbone\congestion_protection_cohort"
-    DatasetPath = Join-Path $analysisDir "output\regionalbackbone_congestion_protection_multirun_dataset.csv"
-    ReportPath = Join-Path $analysisDir "output\regionalbackbone_congestion_protection_multirun_report.txt"
-    MissingCsvPath = Join-Path $analysisDir "output\regionalbackbone_congestion_protection_multirun_missing_values.csv"
-    PerConfigCsvPath = Join-Path $analysisDir "output\regionalbackbone_congestion_protection_multirun_per_config_summary.csv"
-    OutcomeSummaryPath = Join-Path $analysisDir "output\regionalbackbone_congestion_protection_multirun_outcome_summary.csv"
-    ComparisonOutputPrefix = Join-Path $analysisDir "output\regionalbackbone_congestion_protection_multirun_comparison"
-    ComparisonRunsPath = Join-Path $analysisDir "output\regionalbackbone_congestion_protection_multirun_comparison_runs.csv"
-    ComparisonSummaryPath = Join-Path $analysisDir "output\regionalbackbone_congestion_protection_multirun_comparison_summary.csv"
-    ComparisonReportPath = Join-Path $analysisDir "output\regionalbackbone_congestion_protection_multirun_comparison_report.txt"
+    DatasetPath = Join-Path $datasetsDir "regionalbackbone_congestion_protection_multirun_dataset.csv"
+    ReportPath = Join-Path $reportsDir "regionalbackbone_congestion_protection_multirun_report.txt"
+    MissingCsvPath = Join-Path $debugOutputDir "regionalbackbone_congestion_protection_multirun_missing_values.csv"
+    PerConfigCsvPath = Join-Path $debugOutputDir "regionalbackbone_congestion_protection_multirun_per_config_summary.csv"
+    OutcomeSummaryPath = Join-Path $outcomesDir "regionalbackbone_congestion_protection_multirun_outcome_summary.csv"
+    ComparisonOutputPrefix = Join-Path $outcomesDir "regionalbackbone_congestion_protection_multirun_comparison"
+    ComparisonRunsPath = Join-Path $outcomesDir "regionalbackbone_congestion_protection_multirun_comparison_runs.csv"
+    ComparisonSummaryPath = Join-Path $outcomesDir "regionalbackbone_congestion_protection_multirun_comparison_summary.csv"
+    ComparisonReportPath = Join-Path $outcomesDir "regionalbackbone_congestion_protection_multirun_comparison_report.txt"
     EvalConfigs = @(
         "RegionalBackboneCongestionDegradationCohort",
         "RegionalBackboneAiMrceRuleBasedCohort",
@@ -96,12 +111,32 @@ $script:RegionalBackboneCongestionProtectionCohortPreset = [pscustomobject]@{
     DefaultRunNumbers = @(0, 1, 2, 3, 4)
 }
 
-$script:ActiveDatasetScenarios = @("linkdegradation", "congestiondegradation", "regionalbackbone")
+$script:RegionalBackboneMixedTrafficProtectionCohortPreset = [pscustomobject]@{
+    Name = "regionalbackbone_mixed_traffic_protection"
+    Description = "Regional backbone mixed UDP/TCP protection cohort with repeated reactive-baseline and focused AI-MRCE comparison runs"
+    ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
+    EvalDir = Join-Path $projectRoot "results\regionalbackbone\mixed_traffic_protection_cohort"
+    DatasetPath = Join-Path $datasetsDir "regionalbackbone_mixed_traffic_protection_multirun_dataset.csv"
+    ReportPath = Join-Path $reportsDir "regionalbackbone_mixed_traffic_protection_multirun_report.txt"
+    MissingCsvPath = Join-Path $debugOutputDir "regionalbackbone_mixed_traffic_protection_multirun_missing_values.csv"
+    PerConfigCsvPath = Join-Path $debugOutputDir "regionalbackbone_mixed_traffic_protection_multirun_per_config_summary.csv"
+    OutcomeSummaryPath = Join-Path $outcomesDir "regionalbackbone_mixed_traffic_protection_multirun_outcome_summary.csv"
+    ComparisonOutputPrefix = Join-Path $outcomesDir "regionalbackbone_mixed_traffic_protection_multirun_comparison"
+    ComparisonRunsPath = Join-Path $outcomesDir "regionalbackbone_mixed_traffic_protection_multirun_comparison_runs.csv"
+    ComparisonSummaryPath = Join-Path $outcomesDir "regionalbackbone_mixed_traffic_protection_multirun_comparison_summary.csv"
+    ComparisonReportPath = Join-Path $outcomesDir "regionalbackbone_mixed_traffic_protection_multirun_comparison_report.txt"
+    EvalConfigs = @(
+        "RegionalBackboneMixedTrafficCongestionDegradationCohort",
+        "RegionalBackboneAiMrceRuleBasedMixedTrafficCohort",
+        "RegionalBackboneAiMrceLogRegMixedTrafficCohort"
+    )
+    DefaultRunNumbers = @(0, 1, 2, 3, 4)
+}
+
+$script:ActiveDatasetScenarios = @("regionalbackbone")
 $script:StrongerEvaluationModes = @(
     "grouped_run_holdout",
-    "leave_one_config_out",
-    "topology_transfer_small_to_regional",
-    "topology_transfer_regional_to_small"
+    "leave_one_config_out"
 )
 $script:ToolEnvironmentInitialized = $false
 $script:OmnetppRoot = $null
@@ -114,6 +149,7 @@ $script:IgnoredOmnetppConfigOverride = $null
 $script:SimulationExecutable = $null
 $script:TrainingArtifactNames = @(
     "risk_model_report.txt",
+    "risk_model_class_distribution.csv",
     "risk_model_split_summary.csv",
     "risk_model_evaluation_summary.csv",
     "risk_model_per_class_metrics.csv",
@@ -135,15 +171,17 @@ Usage:
 
 Commands:
   help             Show this help text.
-  dataset-batch    Run one active scenario's eval configs sequentially, validate outputs, and optionally build the dataset and report.
+  dataset-batch    Run one supported scenario's eval configs sequentially, validate outputs, and optionally build the dataset and report.
   training-batch   Verify datasets, optionally rebuild missing dataset artifacts from existing raw results, then run offline training.
   aimrce-batch     Optionally export the runtime deployment artifacts, then run the regional AI-MRCE runtime configs.
   regional-congestion-protection-batch
                    Run the dedicated multi-run regional congestion protection cohort, rebuild its dataset/report, and generate its focused comparison artifacts.
+  regional-mixed-traffic-protection-batch
+                   Run the dedicated mixed UDP/TCP regional protection cohort, rebuild its dataset/report, and generate its focused comparison artifacts.
   full-pipeline    Run selected dataset batches, optional analysis, optional training, and optional AI-MRCE runtime configs.
 
 Common options:
-  --scenario <name...>              Scenario selection. For dataset-batch exactly one active scenario is required.
+  --scenario <name...>              Scenario selection. For dataset-batch exactly one supported scenario is required. Defaults favor the regionalbackbone dissertation core.
   --configs <config...>             Optional subset of non-debug configs for dataset-batch or aimrce-batch.
   --runs <runNumber...>             Explicit OMNeT++ run numbers. Current configs normally expose run 0 unless repeat or iteration variables are added later.
   --clean                           Clean generated eval artifacts before running.
@@ -162,17 +200,25 @@ Common options:
 
 Examples:
   run_experiments.bat help
-  run_experiments.bat dataset-batch --scenario linkdegradation --clean --yes
+  run_experiments.bat dataset-batch --scenario regionalbackbone --clean --yes
   run_experiments.bat dataset-batch --scenario regionalbackbone --dry-run
   run_experiments.bat training-batch --stronger-evaluations-only
   run_experiments.bat aimrce-batch --skip-runtime-export --dry-run
   run_experiments.bat regional-congestion-protection-batch --dry-run
   run_experiments.bat regional-congestion-protection-batch --runs 0 1 --clean --yes --skip-build
-  run_experiments.bat dataset-batch --scenario congestiondegradation --open-output-folder
+  run_experiments.bat regional-mixed-traffic-protection-batch --runs 0 --skip-build --skip-runtime-export
+  run_experiments.bat dataset-batch --scenario linkdegradation --open-output-folder
   run_experiments.bat full-pipeline --clean --yes --include-aimrce
 
 Generated logs:
   analysis\output\experiment_logs\<timestamp>-<command>\...
+
+Default analysis artifacts:
+  analysis\output\datasets\       dataset CSV files
+  analysis\output\reports\        human-readable reports
+  analysis\output\outcomes\       recovery/protection summaries and comparisons
+  analysis\output\training\       offline ML evaluation artifacts
+  analysis\output\debug\          verbose helper CSVs
 
 Notes:
   - Simulation runs use standard OMNeT++ Cmdenv express mode from the command line.
@@ -180,7 +226,7 @@ Notes:
   - It prepares generated artifacts and methodological outputs; it is not runtime decision logic itself.
   - The optional folder opening is Windows-only workflow usability help; it is not part of the experiment methodology.
   - When --configs selects only a subset of dataset configs, keep --skip-analysis enabled so the workflow does not silently produce a partial dataset export.
-  - regional-congestion-protection-batch defaults to runs 0,1,2,3,4 when --runs is omitted.
+  - regional-congestion-protection-batch and regional-mixed-traffic-protection-batch default to runs 0,1,2,3,4 when --runs is omitted.
 "@ | Write-Host
 }
 
@@ -292,7 +338,7 @@ function Resolve-DatasetScenarios {
 
     foreach ($scenario in $RequestedScenarios) {
         if (-not $script:ScenarioPresets.Contains($scenario)) {
-            throw "Unsupported scenario '$scenario'. Supported scenarios: $($script:ActiveDatasetScenarios -join ', ')"
+            throw "Unsupported scenario '$scenario'. Supported dataset-batch scenarios: $($script:ScenarioPresets.Keys -join ', ')"
         }
     }
 
@@ -365,6 +411,26 @@ function Resolve-RegionalCongestionProtectionRunNumbers {
     foreach ($runNumber in $selectedRunNumbers) {
         if ($allowedRunNumbers -notcontains $runNumber) {
             throw "regional-congestion-protection-batch supports only run numbers $($allowedRunNumbers -join ', ') because the dedicated cohort wrappers expose five repeated runs."
+        }
+    }
+
+    return $selectedRunNumbers
+}
+
+function Resolve-RegionalMixedTrafficProtectionRunNumbers {
+    param(
+        $Options
+    )
+
+    $allowedRunNumbers = @($script:RegionalBackboneMixedTrafficProtectionCohortPreset.DefaultRunNumbers)
+    if (-not $Options.RunsSpecified) {
+        return $allowedRunNumbers
+    }
+
+    $selectedRunNumbers = @($Options.Runs | Select-Object -Unique)
+    foreach ($runNumber in $selectedRunNumbers) {
+        if ($allowedRunNumbers -notcontains $runNumber) {
+            throw "regional-mixed-traffic-protection-batch supports only run numbers $($allowedRunNumbers -join ', ') because the dedicated mixed UDP/TCP cohort wrappers expose five repeated runs."
         }
     }
 
@@ -984,7 +1050,8 @@ function Build-Project {
         $script:SimulationExecutable = Resolve-SimulationExecutable
     }
 
-    Add-StepResult -Context $Context -Step "build" -Status "OK" -Details "Project build completed."
+    $buildDetails = if ($DryRun) { "Dry run only; project build not executed." } else { "Project build completed." }
+    Add-StepResult -Context $Context -Step "build" -Status "OK" -Details $buildDetails
 }
 
 function Get-CleanTargets {
@@ -1276,7 +1343,8 @@ function Invoke-DatasetBatchCore {
             -Heading "Created or updated dataset artifacts" `
             -Artifacts $datasetArtifacts
     }
-    Add-StepResult -Context $Context -Step $datasetStepName -Status "OK" -Details "Dataset build completed."
+    $datasetDetails = if ($Options.DryRun) { "Dry run only; dataset build not executed." } else { "Dataset build completed." }
+    Add-StepResult -Context $Context -Step $datasetStepName -Status "OK" -Details $datasetDetails
 
     $reportStepName = ("dataset-report-{0}" -f $Preset.Name)
     $reportCommandResult = Invoke-RunAnalysisCommand `
@@ -1313,13 +1381,14 @@ function Invoke-DatasetBatchCore {
             -Heading "Created or updated dataset report artifacts" `
             -Artifacts $reportArtifacts
     }
-    Add-StepResult -Context $Context -Step $reportStepName -Status "OK" -Details "Dataset report completed."
+    $reportDetails = if ($Options.DryRun) { "Dry run only; dataset report not executed." } else { "Dataset report completed." }
+    Add-StepResult -Context $Context -Step $reportStepName -Status "OK" -Details $reportDetails
 
     Request-OutputFolderOpen `
         -Context $Context `
         -Options $Options `
-        -FolderPath (Join-Path $analysisDir "output") `
-        -Reason "analysis output artifacts"
+        -FolderPath $reportsDir `
+        -Reason "dataset reports and analysis artifacts"
 
     return $true
 }
@@ -1387,7 +1456,8 @@ function Ensure-DatasetArtifacts {
                 -Artifacts $rebuiltReportArtifacts
         }
 
-        Add-StepResult -Context $Context -Step $datasetStepName -Status "OK" -Details "Dataset and report rebuild completed."
+        $rebuildDetails = if ($Options.DryRun) { "Dry run only; dataset/report rebuild not executed." } else { "Dataset and report rebuild completed." }
+        Add-StepResult -Context $Context -Step $datasetStepName -Status "OK" -Details $rebuildDetails
     }
 }
 
@@ -1420,7 +1490,7 @@ function Invoke-TrainingBatchCore {
     if (-not $Options.DryRun) {
         $trainingArtifacts = @()
         foreach ($artifactName in $script:TrainingArtifactNames) {
-            $artifactPath = Join-Path $analysisDir ("output\{0}" -f $artifactName)
+        $artifactPath = Join-Path $trainingDir $artifactName
             $artifact = Get-ArtifactMetadata -Path $artifactPath -Category ("Training artifact ({0})" -f $artifactName) -SourceStep $trainingStepName
             if ($null -ne $artifact) {
                 $trainingArtifacts += $artifact
@@ -1434,13 +1504,14 @@ function Invoke-TrainingBatchCore {
             -Artifacts $trainingArtifacts
     }
 
-    Add-StepResult -Context $Context -Step $trainingStepName -Status "OK" -Details "Offline training completed."
+    $trainingDetails = if ($Options.DryRun) { "Dry run only; offline training not executed." } else { "Offline training completed." }
+    Add-StepResult -Context $Context -Step $trainingStepName -Status "OK" -Details $trainingDetails
 
     Request-OutputFolderOpen `
         -Context $Context `
         -Options $Options `
-        -FolderPath (Join-Path $analysisDir "output") `
-        -Reason "analysis output artifacts"
+        -FolderPath $trainingDir `
+        -Reason "training analysis artifacts"
 }
 
 function Invoke-AiMrceBatchCore {
@@ -1496,7 +1567,8 @@ function Invoke-AiMrceBatchCore {
         }
 
         $runtimeExportPerformed = $true
-        Add-StepResult -Context $Context -Step "export-runtime-models" -Status "OK" -Details "Runtime deployment artifact export completed."
+        $runtimeExportDetails = if ($Options.DryRun) { "Dry run only; runtime deployment artifact export not executed." } else { "Runtime deployment artifact export completed." }
+        Add-StepResult -Context $Context -Step "export-runtime-models" -Status "OK" -Details $runtimeExportDetails
     }
     else {
         Add-StepResult -Context $Context -Step "export-runtime-models" -Status "OK" -Details "Skipped runtime export by request."
@@ -1585,7 +1657,8 @@ function Invoke-RegionalCongestionProtectionBatchCore {
         }
 
         $runtimeExportPerformed = $true
-        Add-StepResult -Context $Context -Step $runtimeExportStepName -Status "OK" -Details "Runtime deployment artifact export completed."
+        $runtimeExportDetails = if ($Options.DryRun) { "Dry run only; runtime deployment artifact export not executed." } else { "Runtime deployment artifact export completed." }
+        Add-StepResult -Context $Context -Step $runtimeExportStepName -Status "OK" -Details $runtimeExportDetails
     }
     else {
         Add-StepResult -Context $Context -Step "export-runtime-models" -Status "OK" -Details "Skipped runtime export by request."
@@ -1631,7 +1704,8 @@ function Invoke-RegionalCongestionProtectionBatchCore {
             -Artifacts $comparisonArtifacts
     }
 
-    Add-StepResult -Context $Context -Step $comparisonStepName -Status "OK" -Details "Focused regional congestion protection cohort comparison completed."
+    $comparisonDetails = if ($Options.DryRun) { "Dry run only; focused regional congestion protection comparison not executed." } else { "Focused regional congestion protection cohort comparison completed." }
+    Add-StepResult -Context $Context -Step $comparisonStepName -Status "OK" -Details $comparisonDetails
 
     if ($runtimeExportPerformed) {
         Request-OutputFolderOpen `
@@ -1644,8 +1718,122 @@ function Invoke-RegionalCongestionProtectionBatchCore {
     Request-OutputFolderOpen `
         -Context $Context `
         -Options $Options `
-        -FolderPath (Join-Path $analysisDir "output") `
+        -FolderPath $outcomesDir `
         -Reason "regional congestion protection cohort analysis artifacts"
+
+    return $true
+}
+
+function Invoke-RegionalMixedTrafficProtectionBatchCore {
+    param(
+        $Context,
+        $Options
+    )
+
+    $preset = $script:RegionalBackboneMixedTrafficProtectionCohortPreset
+    $runNumbers = @(Resolve-RegionalMixedTrafficProtectionRunNumbers -Options $Options)
+    $runtimeExportPerformed = $false
+
+    Write-Host ""
+    Write-Host "Regional mixed UDP/TCP protection cohort batch"
+    Write-Host "  Purpose: $($preset.Description)"
+    Write-Host "  Configs: $($preset.EvalConfigs -join ', ')"
+    Write-Host "  Runs: $($runNumbers -join ', ')"
+    Write-Host "  Eval directory: $($preset.EvalDir)"
+
+    if (-not $Options.SkipRuntimeExport) {
+        if (-not $Options.DryRun -and -not (Test-Path $script:ScenarioPresets["regionalbackbone"].DatasetPath)) {
+            throw "regional-mixed-traffic-protection-batch requires the existing regionalbackbone dataset for runtime export: $($script:ScenarioPresets["regionalbackbone"].DatasetPath). Generate it first or rerun with --skip-runtime-export to reuse the current runtime artifacts."
+        }
+
+        $runtimeExportStepName = "export-runtime-models"
+        $runtimeExportCommandResult = Invoke-RunAnalysisCommand `
+            -Context $Context `
+            -Subcommand "export-runtime-models" `
+            -SubcommandArgs @("--configs", "RegionalBackboneCongestionDegradation") `
+            -LogName "export-runtime-models.log" `
+            -Description "Export the AI-MRCE runtime deployment artifacts for the regional mixed UDP/TCP protection cohort" `
+            -DryRun:$Options.DryRun
+
+        if (-not $Options.DryRun) {
+            $runtimeArtifacts = @()
+            foreach ($artifactPath in $script:RegionalBackboneRuntimeArtifactPaths) {
+                $artifact = Get-ArtifactMetadata -Path $artifactPath -Category "Runtime deployment artifact (.csv)" -SourceStep $runtimeExportStepName
+                if ($null -ne $artifact) {
+                    $runtimeArtifacts += $artifact
+                }
+            }
+            Publish-StepArtifacts `
+                -Context $Context `
+                -LogPath $runtimeExportCommandResult.LogPath `
+                -Heading "Created or updated runtime export artifacts" `
+                -Artifacts $runtimeArtifacts
+        }
+
+        $runtimeExportPerformed = $true
+        $runtimeExportDetails = if ($Options.DryRun) { "Dry run only; runtime deployment artifact export not executed." } else { "Runtime deployment artifact export completed." }
+        Add-StepResult -Context $Context -Step $runtimeExportStepName -Status "OK" -Details $runtimeExportDetails
+    }
+    else {
+        Add-StepResult -Context $Context -Step "export-runtime-models" -Status "OK" -Details "Skipped runtime export by request."
+    }
+
+    $batchSucceeded = Invoke-DatasetBatchCore `
+        -Context $Context `
+        -Preset $preset `
+        -ConfigNames $preset.EvalConfigs `
+        -RunNumbers $runNumbers `
+        -Options $Options
+
+    if (-not $batchSucceeded) {
+        Add-StepResult -Context $Context -Step "compare-outcomes-regional-mixed-traffic-protection" -Status "SKIPPED" -Details "Skipped cohort comparison because an earlier simulation or dataset step failed."
+        return $false
+    }
+
+    $comparisonStepName = "compare-outcomes-regional-mixed-traffic-protection"
+    $comparisonCommandResult = Invoke-RunAnalysisCommand `
+        -Context $Context `
+        -Subcommand "compare-outcomes" `
+        -SubcommandArgs @("--inputs", $preset.OutcomeSummaryPath, "--output-prefix", $preset.ComparisonOutputPrefix) `
+        -LogName ("{0}.log" -f $comparisonStepName) `
+        -Description "Build the focused practical comparison for the regional mixed UDP/TCP protection cohort" `
+        -DryRun:$Options.DryRun
+
+    if (-not $Options.DryRun) {
+        foreach ($requiredPath in @($preset.ComparisonRunsPath, $preset.ComparisonSummaryPath, $preset.ComparisonReportPath)) {
+            if (-not (Test-Path $requiredPath)) {
+                throw "regional-mixed-traffic-protection-batch comparison step did not create the expected file: $requiredPath"
+            }
+        }
+
+        $comparisonArtifacts = @(
+            (Get-ArtifactMetadata -Path $preset.ComparisonRunsPath -Category "Cohort comparison runs (.csv)" -SourceStep $comparisonStepName),
+            (Get-ArtifactMetadata -Path $preset.ComparisonSummaryPath -Category "Cohort comparison summary (.csv)" -SourceStep $comparisonStepName),
+            (Get-ArtifactMetadata -Path $preset.ComparisonReportPath -Category "Cohort comparison report (.txt)" -SourceStep $comparisonStepName)
+        )
+        Publish-StepArtifacts `
+            -Context $Context `
+            -LogPath $comparisonCommandResult.LogPath `
+            -Heading "Created or updated mixed UDP/TCP cohort comparison artifacts" `
+            -Artifacts $comparisonArtifacts
+    }
+
+    $comparisonDetails = if ($Options.DryRun) { "Dry run only; focused regional mixed UDP/TCP comparison not executed." } else { "Focused regional mixed UDP/TCP protection cohort comparison completed." }
+    Add-StepResult -Context $Context -Step $comparisonStepName -Status "OK" -Details $comparisonDetails
+
+    if ($runtimeExportPerformed) {
+        Request-OutputFolderOpen `
+            -Context $Context `
+            -Options $Options `
+            -FolderPath $preset.ScenarioDir `
+            -Reason "regionalbackbone runtime export artifacts"
+    }
+
+    Request-OutputFolderOpen `
+        -Context $Context `
+        -Options $Options `
+        -FolderPath $outcomesDir `
+        -Reason "regional mixed UDP/TCP protection cohort analysis artifacts"
 
     return $true
 }
@@ -1717,6 +1905,29 @@ function Validate-CommandOptions {
             }
             if ($Options.SkipAnalysis) {
                 throw "--skip-analysis is not supported by regional-congestion-protection-batch because dataset, outcome, and comparison artifacts are the purpose of the command."
+            }
+            if ($Options.SkipTraining) {
+                throw "--skip-training is only supported by full-pipeline."
+            }
+            if ($Options.RebuildMissingDatasets) {
+                throw "--rebuild-missing-datasets is only supported by training-batch."
+            }
+            if ($Options.StrongerEvaluationsOnly) {
+                throw "--stronger-evaluations-only is only supported by training-batch or full-pipeline."
+            }
+            if ($Options.IncludeAimrce) {
+                throw "--include-aimrce is only supported by full-pipeline."
+            }
+        }
+        "regional-mixed-traffic-protection-batch" {
+            if ($Options.Scenarios.Count -gt 0) {
+                throw "--scenario is not supported by regional-mixed-traffic-protection-batch because it is pinned to the dedicated regional backbone mixed UDP/TCP protection cohort."
+            }
+            if ($Options.Configs.Count -gt 0) {
+                throw "--configs is not supported by regional-mixed-traffic-protection-batch because it always runs the full mixed UDP/TCP comparison cohort."
+            }
+            if ($Options.SkipAnalysis) {
+                throw "--skip-analysis is not supported by regional-mixed-traffic-protection-batch because dataset, outcome, and comparison artifacts are the purpose of the command."
             }
             if ($Options.SkipTraining) {
                 throw "--skip-training is only supported by full-pipeline."
@@ -1848,6 +2059,35 @@ try {
                     }
 
                     $batchSucceeded = Invoke-RegionalCongestionProtectionBatchCore -Context $context -Options $options
+                    if (-not $batchSucceeded) {
+                        $overallStatus = "FAILED"
+                        $scriptExitCode = 1
+                    }
+                }
+                catch {
+                    $overallStatus = "FAILED"
+                    $scriptExitCode = 1
+                    Add-StepResult -Context $context -Step $Command -Status "FAILED" -Details $_.Exception.Message
+                    Write-Error $_.Exception.Message
+                }
+                finally {
+                    Write-BatchSummary -Context $context -OverallStatus $overallStatus
+                }
+            }
+
+            "regional-mixed-traffic-protection-batch" {
+                $context = New-BatchContext -BatchCommand $Command -ScenarioNames @("regionalbackbone_mixed_traffic_protection")
+                $overallStatus = "OK"
+
+                try {
+                    if (-not $options.SkipBuild) {
+                        Build-Project -Context $context -DryRun:$options.DryRun
+                    }
+                    else {
+                        Add-StepResult -Context $context -Step "build" -Status "OK" -Details "Skipped build by request."
+                    }
+
+                    $batchSucceeded = Invoke-RegionalMixedTrafficProtectionBatchCore -Context $context -Options $options
                     if (-not $batchSucceeded) {
                         $overallStatus = "FAILED"
                         $scriptExitCode = 1

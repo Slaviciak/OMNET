@@ -127,8 +127,13 @@ Examples:
   run_analysis.bat install-ml-deps
   run_analysis.bat build-dataset --scenario regionalbackbone
   run_analysis.bat dataset-report --scenario regionalbackbone
+  run_analysis.bat build-dataset --scenario regionalbackbone_congestion_protection
+  run_analysis.bat dataset-report --scenario regionalbackbone_congestion_protection
+  run_analysis.bat build-dataset --scenario regionalbackbone_mixed_traffic_protection
+  run_analysis.bat dataset-report --scenario regionalbackbone_mixed_traffic_protection
+  run_analysis.bat compare-outcomes --scenarios regionalbackbone_mixed_traffic_protection --output-prefix analysis\output\outcomes\regionalbackbone_mixed_traffic_protection_multirun_comparison
   run_analysis.bat compare-outcomes --allow-missing
-  run_analysis.bat train-risk-model --scenarios linkdegradation congestiondegradation regionalbackbone
+  run_analysis.bat train-risk-model
   run_analysis.bat export-runtime-models --configs RegionalBackboneCongestionDegradation
   run_analysis.bat export-runtime-logreg --configs RegionalBackboneCongestionDegradation
 "@ | Write-Host

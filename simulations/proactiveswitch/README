@@ -4,6 +4,7 @@ ProactiveSwitch
 Overview
 - This is a scripted proactive-switch prototype built on the same dual-path topology as the baseline and reactive failure scenarios.
 - Its purpose is to model the effect of switching away from the primary path before a hard failure occurs, using a very small project-local controller module.
+- It is now retained as an archival small-topology prototype. The active dissertation comparison path uses the regional backbone AI-MRCE runtime family and the regional congestion protection cohort.
 
 Topology
 - Primary path: hostA -> r1 -> r2 -> r3 -> hostB
@@ -21,3 +22,7 @@ Expected behavior
 - Before 18s, traffic should use r1 -> r2 -> r3.
 - After reconvergence following the 18s event, traffic should use r1 -> r4 -> r3.
 - The 20s hard failure should have little or no additional traffic impact because the primary path has already been removed from routing use.
+
+Scope
+- Keep this scenario stable for historical comparison and controller sanity checks.
+- Do not treat it as a first-class dissertation result branch unless a specific validation question requires a small topology.

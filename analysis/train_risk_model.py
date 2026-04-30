@@ -6,7 +6,7 @@ Assumptions:
 - This is an offline analysis script only; it does not modify simulations,
   controllers, INET, or OMNeT++ configuration.
 - Input datasets are produced by analysis/build_dataset.py and live under
-  analysis/output/<scenario>_dataset.csv by default.
+  analysis/output/datasets/<scenario>_dataset.csv by default.
 - Original scenario labels are mapped into a unified risk taxonomy:
   safe, warning, protect, failed.
 - Convergence rows and unsupported labels are excluded by default.
@@ -37,10 +37,12 @@ from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = PROJECT_ROOT / "analysis" / "output"
+OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
+DATASETS_DIR = OUTPUT_ROOT / "datasets"
+TRAINING_DIR = OUTPUT_ROOT / "training"
 
 SUPPORTED_SCENARIOS = ("linkdegradation", "congestiondegradation", "regionalbackbone")
-DEFAULT_SCENARIOS = SUPPORTED_SCENARIOS
+DEFAULT_SCENARIOS = ("regionalbackbone",)
 DECISION_LABELS = ["safe", "warning", "protect", "failed"]
 
 SUPPORTED_EVALUATIONS = (
@@ -50,7 +52,11 @@ SUPPORTED_EVALUATIONS = (
     "topology_transfer_small_to_regional",
     "topology_transfer_regional_to_small",
 )
-DEFAULT_EVALUATIONS = SUPPORTED_EVALUATIONS
+DEFAULT_EVALUATIONS = (
+    "baseline_random",
+    "grouped_run_holdout",
+    "leave_one_config_out",
+)
 
 EVALUATION_METADATA = {
     "baseline_random": {
@@ -134,25 +140,25 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         default=list(DEFAULT_SCENARIOS),
         choices=SUPPORTED_SCENARIOS,
-        help="Scenario datasets to include. Defaults to all supported scenarios.",
+        help="Scenario datasets to include. Defaults to the regional backbone core dataset.",
     )
     parser.add_argument(
         "--evaluations",
         nargs="+",
         default=list(DEFAULT_EVALUATIONS),
         choices=SUPPORTED_EVALUATIONS,
-        help="Evaluation schemes to run. Defaults to baseline plus grouped and transfer-style evaluations.",
+        help="Evaluation schemes to run. Defaults to the regional-core baseline, grouped, and leave-one-config-out checks.",
     )
     parser.add_argument(
         "--input-dir",
         type=Path,
-        default=OUTPUT_DIR,
+        default=DATASETS_DIR,
         help="Directory containing <scenario>_dataset.csv files.",
     )
     parser.add_argument(
         "--output-prefix",
         type=Path,
-        default=OUTPUT_DIR / "risk_model",
+        default=TRAINING_DIR / "risk_model",
         help="Output prefix for report and CSV artifacts.",
     )
     parser.add_argument(

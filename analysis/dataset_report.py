@@ -10,6 +10,16 @@ Assumptions:
 - Recovery and protection outcome fields are treated as project-local
   measurement outputs derived from receiver-side telemetry and controller
   scalars. They remain distinct from the scenario-phase supervision labels.
+- Packet-continuity fields use receiver-observed sequence numbers and receive
+  timestamps to expose short loss/gap symptoms that may not create a full
+  one-second zero-progress window.
+- Packet-continuity summaries intentionally separate gaps after the operational
+  reference event, after the hard failure, after protection activation, and
+  between activation and failure. This keeps activation transition cost visible
+  instead of mixing it with post-failure protection benefit.
+- Mixed UDP/TCP regional reports include application-endpoint TCP useful-goodput proxy
+  fields when present. These are operational simulator-side summaries, not
+  protocol-internal TCP restoration measurements.
 - Version 1 uses scenario presets and a simple CLI so the same workflow can be
   extended later without changing the reporting style.
 """
@@ -24,7 +34,12 @@ from statistics import fmean, median
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SCENARIO = "linkdegradation"
+OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
+DATASETS_DIR = OUTPUT_ROOT / "datasets"
+REPORTS_DIR = OUTPUT_ROOT / "reports"
+OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
+DEBUG_OUTPUT_DIR = OUTPUT_ROOT / "debug"
+DEFAULT_SCENARIO = "regionalbackbone"
 
 OUTCOME_COLUMNS = [
     "config_name",
@@ -33,6 +48,9 @@ OUTCOME_COLUMNS = [
     "protection_activated",
     "protection_activation_time_s",
     "protection_activation_source",
+    "protection_action_code",
+    "repair_routes_installed",
+    "repair_route_count",
     "hard_failure_time_s",
     "protection_activated_before_failure",
     "protection_lead_time_before_failure_s",
@@ -47,17 +65,68 @@ OUTCOME_COLUMNS = [
     "zero_progress_window_count_after_reference",
     "max_zero_progress_window_streak_after_reference",
     "throughput_restored_after_failure",
+    "packet_sequence_gap_observed_after_reference",
+    "packet_sequence_gap_count_after_reference",
+    "packet_sequence_gap_total_missing_after_reference",
+    "max_packet_sequence_gap_after_reference",
+    "max_packet_interarrival_gap_after_reference_s",
+    "packet_interarrival_nominal_gap_threshold_s",
+    "packet_interarrival_gap_exceedance_count_after_reference",
+    "packet_interarrival_gap_exceeded_nominal_threshold",
+    "first_packet_after_reference_delay_s",
+    "packet_sequence_gap_observed_after_hard_failure",
+    "packet_sequence_gap_count_after_hard_failure",
+    "packet_sequence_gap_total_missing_after_hard_failure",
+    "max_packet_sequence_gap_after_hard_failure",
+    "max_packet_interarrival_gap_after_hard_failure_s",
+    "packet_interarrival_gap_exceedance_count_after_hard_failure",
+    "packet_interarrival_gap_exceeded_nominal_threshold_after_hard_failure",
+    "first_packet_after_hard_failure_delay_s",
+    "packet_sequence_gap_observed_after_protection_activation",
+    "packet_sequence_gap_count_after_protection_activation",
+    "packet_sequence_gap_total_missing_after_protection_activation",
+    "max_packet_sequence_gap_after_protection_activation",
+    "max_packet_interarrival_gap_after_protection_activation_s",
+    "packet_interarrival_gap_exceedance_count_after_protection_activation",
+    "packet_interarrival_gap_exceeded_nominal_threshold_after_protection_activation",
+    "first_packet_after_protection_activation_delay_s",
+    "packet_sequence_gap_observed_between_activation_and_failure",
+    "packet_sequence_gap_count_between_activation_and_failure",
+    "packet_sequence_gap_total_missing_between_activation_and_failure",
+    "max_packet_sequence_gap_between_activation_and_failure",
+    "max_packet_interarrival_gap_between_activation_and_failure_s",
+    "packet_interarrival_gap_exceedance_count_between_activation_and_failure",
+    "packet_interarrival_gap_exceeded_nominal_threshold_between_activation_and_failure",
+    "first_packet_between_activation_and_failure_delay_s",
+    "packet_sequence_gap_observed_after_critical_start",
+    "packet_sequence_gap_count_after_critical_start",
+    "packet_sequence_gap_total_missing_after_critical_start",
+    "max_packet_sequence_gap_after_critical_start",
+    "max_packet_interarrival_gap_after_critical_start_s",
+    "packet_interarrival_gap_exceedance_count_after_critical_start",
+    "packet_interarrival_gap_exceeded_nominal_threshold_after_critical_start",
+    "first_packet_after_critical_start_delay_s",
+    "tcp_service_interruption_observed",
+    "tcp_service_interruption_start_time_s",
+    "tcp_service_interruption_end_time_s",
+    "tcp_service_interruption_duration_s",
+    "tcp_zero_goodput_window_count_after_reference",
+    "tcp_max_zero_goodput_window_streak_after_reference",
+    "tcp_useful_goodput_restored_after_failure",
+    "tcp_endpoint_receive_event_count_after_reference",
+    "tcp_first_endpoint_receive_delay_after_reference_s",
+    "tcp_max_endpoint_receive_gap_after_reference_s",
     "unnecessary_protection",
     "missed_protection",
 ]
 
 SCENARIO_PRESETS = {
     "linkdegradation": {
-        "dataset_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_dataset.csv",
-        "report_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_report.txt",
-        "missing_csv_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_missing_values.csv",
-        "per_config_csv_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_per_config_summary.csv",
-        "outcome_csv_path": PROJECT_ROOT / "analysis" / "output" / "linkdegradation_outcome_summary.csv",
+        "dataset_path": DATASETS_DIR / "linkdegradation_dataset.csv",
+        "report_path": REPORTS_DIR / "linkdegradation_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "linkdegradation_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "linkdegradation_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "linkdegradation_outcome_summary.csv",
         "report_title": "LinkDegradation Dataset Sanity Report",
         "expected_configs": ["MildLinear", "StrongLinear", "UnstableLinear", "StagedRealistic"],
         "key_numeric_columns": [
@@ -68,14 +137,16 @@ SCENARIO_PRESETS = {
             "receiver_app1_e2e_delay_mean_s",
             "service_interruption_duration_s",
             "recovery_time_after_failure_s",
+            "packet_sequence_gap_total_missing_after_reference",
+            "max_packet_interarrival_gap_after_reference_s",
         ],
     },
     "congestiondegradation": {
-        "dataset_path": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_dataset.csv",
-        "report_path": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_report.txt",
-        "missing_csv_path": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_missing_values.csv",
-        "per_config_csv_path": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_per_config_summary.csv",
-        "outcome_csv_path": PROJECT_ROOT / "analysis" / "output" / "congestiondegradation_outcome_summary.csv",
+        "dataset_path": DATASETS_DIR / "congestiondegradation_dataset.csv",
+        "report_path": REPORTS_DIR / "congestiondegradation_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "congestiondegradation_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "congestiondegradation_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "congestiondegradation_outcome_summary.csv",
         "report_title": "CongestionDegradation Dataset Sanity Report",
         "expected_configs": ["CongestionDegradation", "CongestionDegradationMild"],
         "key_numeric_columns": [
@@ -87,14 +158,16 @@ SCENARIO_PRESETS = {
             "receiver_app0_throughput_mean_bps",
             "service_interruption_duration_s",
             "recovery_time_after_failure_s",
+            "packet_sequence_gap_total_missing_after_reference",
+            "max_packet_interarrival_gap_after_reference_s",
         ],
     },
     "reactivefailure": {
-        "dataset_path": PROJECT_ROOT / "analysis" / "output" / "reactivefailure_dataset.csv",
-        "report_path": PROJECT_ROOT / "analysis" / "output" / "reactivefailure_report.txt",
-        "missing_csv_path": PROJECT_ROOT / "analysis" / "output" / "reactivefailure_missing_values.csv",
-        "per_config_csv_path": PROJECT_ROOT / "analysis" / "output" / "reactivefailure_per_config_summary.csv",
-        "outcome_csv_path": PROJECT_ROOT / "analysis" / "output" / "reactivefailure_outcome_summary.csv",
+        "dataset_path": DATASETS_DIR / "reactivefailure_dataset.csv",
+        "report_path": REPORTS_DIR / "reactivefailure_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "reactivefailure_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "reactivefailure_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "reactivefailure_outcome_summary.csv",
         "report_title": "ReactiveFailure Dataset Sanity Report",
         "expected_configs": ["ReactiveFailure"],
         "key_numeric_columns": [
@@ -103,14 +176,15 @@ SCENARIO_PRESETS = {
             "service_interruption_duration_s",
             "recovery_time_after_failure_s",
             "zero_progress_window_count_after_reference",
+            "packet_sequence_gap_total_missing_after_reference",
         ],
     },
     "proactiveswitch": {
-        "dataset_path": PROJECT_ROOT / "analysis" / "output" / "proactiveswitch_dataset.csv",
-        "report_path": PROJECT_ROOT / "analysis" / "output" / "proactiveswitch_report.txt",
-        "missing_csv_path": PROJECT_ROOT / "analysis" / "output" / "proactiveswitch_missing_values.csv",
-        "per_config_csv_path": PROJECT_ROOT / "analysis" / "output" / "proactiveswitch_per_config_summary.csv",
-        "outcome_csv_path": PROJECT_ROOT / "analysis" / "output" / "proactiveswitch_outcome_summary.csv",
+        "dataset_path": DATASETS_DIR / "proactiveswitch_dataset.csv",
+        "report_path": REPORTS_DIR / "proactiveswitch_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "proactiveswitch_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "proactiveswitch_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "proactiveswitch_outcome_summary.csv",
         "report_title": "ProactiveSwitch Dataset Sanity Report",
         "expected_configs": ["ProactiveSwitch"],
         "key_numeric_columns": [
@@ -119,14 +193,15 @@ SCENARIO_PRESETS = {
             "protection_lead_time_before_failure_s",
             "service_interruption_duration_s",
             "recovery_time_after_failure_s",
+            "packet_sequence_gap_total_missing_after_reference",
         ],
     },
     "regionalbackbone": {
-        "dataset_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_dataset.csv",
-        "report_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_report.txt",
-        "missing_csv_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_missing_values.csv",
-        "per_config_csv_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_per_config_summary.csv",
-        "outcome_csv_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_outcome_summary.csv",
+        "dataset_path": DATASETS_DIR / "regionalbackbone_dataset.csv",
+        "report_path": REPORTS_DIR / "regionalbackbone_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_outcome_summary.csv",
         "report_title": "RegionalBackbone Dataset Sanity Report",
         "expected_configs": [
             "RegionalBackboneBaseline",
@@ -146,14 +221,16 @@ SCENARIO_PRESETS = {
             "service_interruption_duration_s",
             "recovery_time_after_failure_s",
             "protection_lead_time_before_failure_s",
+            "packet_sequence_gap_total_missing_after_reference",
+            "max_packet_interarrival_gap_after_reference_s",
         ],
     },
     "regionalbackbone_congestion_protection": {
-        "dataset_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_congestion_protection_multirun_dataset.csv",
-        "report_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_congestion_protection_multirun_report.txt",
-        "missing_csv_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_congestion_protection_multirun_missing_values.csv",
-        "per_config_csv_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_congestion_protection_multirun_per_config_summary.csv",
-        "outcome_csv_path": PROJECT_ROOT / "analysis" / "output" / "regionalbackbone_congestion_protection_multirun_outcome_summary.csv",
+        "dataset_path": DATASETS_DIR / "regionalbackbone_congestion_protection_multirun_dataset.csv",
+        "report_path": REPORTS_DIR / "regionalbackbone_congestion_protection_multirun_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_congestion_protection_multirun_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_congestion_protection_multirun_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_congestion_protection_multirun_outcome_summary.csv",
         "report_title": "RegionalBackbone Congestion Protection Multi-Run Dataset Sanity Report",
         "expected_configs": [
             "RegionalBackboneCongestionDegradation",
@@ -172,6 +249,42 @@ SCENARIO_PRESETS = {
             "service_interruption_duration_s",
             "recovery_time_after_failure_s",
             "protection_lead_time_before_failure_s",
+            "packet_sequence_gap_total_missing_after_reference",
+            "max_packet_sequence_gap_after_reference",
+            "max_packet_interarrival_gap_after_reference_s",
+        ],
+    },
+    "regionalbackbone_mixed_traffic_protection": {
+        "dataset_path": DATASETS_DIR / "regionalbackbone_mixed_traffic_protection_multirun_dataset.csv",
+        "report_path": REPORTS_DIR / "regionalbackbone_mixed_traffic_protection_multirun_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_mixed_traffic_protection_multirun_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_mixed_traffic_protection_multirun_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_mixed_traffic_protection_multirun_outcome_summary.csv",
+        "report_title": "RegionalBackbone Mixed UDP/TCP Protection Multi-Run Dataset Sanity Report",
+        "expected_configs": [
+            "RegionalBackboneMixedTrafficCongestionDegradation",
+            "RegionalBackboneAiMrceRuleBasedMixedTraffic",
+            "RegionalBackboneAiMrceLogRegMixedTraffic",
+        ],
+        "key_numeric_columns": [
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+            "receiver_app3_goodput_mean_bps",
+            "receiver_app4_goodput_mean_bps",
+            "receiver_tcp_goodput_mean_bps",
+            "bottleneck_queue_length_mean_pk",
+            "bottleneck_queue_bit_length_mean_b",
+            "bottleneck_queueing_time_mean_s",
+            "service_interruption_duration_s",
+            "tcp_service_interruption_duration_s",
+            "tcp_zero_goodput_window_count_after_reference",
+            "recovery_time_after_failure_s",
+            "protection_lead_time_before_failure_s",
+            "packet_sequence_gap_total_missing_after_reference",
+            "max_packet_sequence_gap_after_reference",
+            "max_packet_interarrival_gap_after_reference_s",
+            "tcp_max_endpoint_receive_gap_after_reference_s",
         ],
     },
 }
@@ -187,22 +300,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input",
         type=Path,
-        help="Input dataset CSV path. Defaults to analysis/output/<scenario>_dataset.csv.",
+        help="Input dataset CSV path. Defaults to analysis/output/datasets/<scenario>_dataset.csv.",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        help="Report text path. Defaults to analysis/output/<scenario>_report.txt.",
+        help="Report text path. Defaults to analysis/output/reports/<scenario>_report.txt.",
     )
     parser.add_argument(
         "--missing-output",
         type=Path,
-        help="CSV path for missing-value counts. Defaults to analysis/output/<scenario>_missing_values.csv.",
+        help="CSV path for missing-value counts. Defaults to analysis/output/debug/<scenario>_missing_values.csv.",
     )
     parser.add_argument(
         "--summary-output",
         type=Path,
-        help="CSV path for per-config numeric summaries. Defaults to analysis/output/<scenario>_per_config_summary.csv.",
+        help="CSV path for per-config numeric summaries. Defaults to analysis/output/debug/<scenario>_per_config_summary.csv.",
     )
     parser.add_argument(
         "--outcome-output",
@@ -337,6 +450,43 @@ def per_config_outcome_summary(run_rows: list[dict[str, str]]) -> list[dict[str,
         "recovery_time_after_failure_s",
         "zero_progress_window_count_after_reference",
         "max_zero_progress_window_streak_after_reference",
+        "packet_sequence_gap_count_after_reference",
+        "packet_sequence_gap_total_missing_after_reference",
+        "max_packet_sequence_gap_after_reference",
+        "max_packet_interarrival_gap_after_reference_s",
+        "packet_interarrival_gap_exceedance_count_after_reference",
+        "first_packet_after_reference_delay_s",
+        "packet_sequence_gap_count_after_hard_failure",
+        "packet_sequence_gap_total_missing_after_hard_failure",
+        "max_packet_sequence_gap_after_hard_failure",
+        "max_packet_interarrival_gap_after_hard_failure_s",
+        "packet_interarrival_gap_exceedance_count_after_hard_failure",
+        "first_packet_after_hard_failure_delay_s",
+        "packet_sequence_gap_count_after_protection_activation",
+        "packet_sequence_gap_total_missing_after_protection_activation",
+        "max_packet_sequence_gap_after_protection_activation",
+        "max_packet_interarrival_gap_after_protection_activation_s",
+        "packet_interarrival_gap_exceedance_count_after_protection_activation",
+        "first_packet_after_protection_activation_delay_s",
+        "packet_sequence_gap_count_between_activation_and_failure",
+        "packet_sequence_gap_total_missing_between_activation_and_failure",
+        "max_packet_sequence_gap_between_activation_and_failure",
+        "max_packet_interarrival_gap_between_activation_and_failure_s",
+        "packet_interarrival_gap_exceedance_count_between_activation_and_failure",
+        "first_packet_between_activation_and_failure_delay_s",
+        "packet_sequence_gap_count_after_critical_start",
+        "packet_sequence_gap_total_missing_after_critical_start",
+        "max_packet_sequence_gap_after_critical_start",
+        "max_packet_interarrival_gap_after_critical_start_s",
+        "packet_interarrival_gap_exceedance_count_after_critical_start",
+        "first_packet_after_critical_start_delay_s",
+        "repair_route_count",
+        "tcp_service_interruption_duration_s",
+        "tcp_zero_goodput_window_count_after_reference",
+        "tcp_max_zero_goodput_window_streak_after_reference",
+        "tcp_endpoint_receive_event_count_after_reference",
+        "tcp_first_endpoint_receive_delay_after_reference_s",
+        "tcp_max_endpoint_receive_gap_after_reference_s",
     ]
     for config_name in sorted(grouped):
         config_rows = grouped[config_name]
@@ -346,9 +496,18 @@ def per_config_outcome_summary(run_rows: list[dict[str, str]]) -> list[dict[str,
             "run_count": len(config_rows),
             "protection_activated_runs": true_flag_count(config_rows, "protection_activated"),
             "protection_before_failure_runs": true_flag_count(config_rows, "protection_activated_before_failure"),
+            "repair_routes_installed_runs": true_flag_count(config_rows, "repair_routes_installed"),
             "service_interruption_observed_runs": true_flag_count(config_rows, "service_interruption_observed"),
             "recovery_observed_runs": true_flag_count(config_rows, "recovery_observed"),
             "throughput_restored_after_failure_runs": true_flag_count(config_rows, "throughput_restored_after_failure"),
+            "packet_sequence_gap_observed_after_reference_runs": true_flag_count(config_rows, "packet_sequence_gap_observed_after_reference"),
+            "packet_interarrival_gap_exceeded_nominal_threshold_runs": true_flag_count(config_rows, "packet_interarrival_gap_exceeded_nominal_threshold"),
+            "packet_sequence_gap_observed_after_hard_failure_runs": true_flag_count(config_rows, "packet_sequence_gap_observed_after_hard_failure"),
+            "packet_sequence_gap_observed_after_protection_activation_runs": true_flag_count(config_rows, "packet_sequence_gap_observed_after_protection_activation"),
+            "packet_sequence_gap_observed_between_activation_and_failure_runs": true_flag_count(config_rows, "packet_sequence_gap_observed_between_activation_and_failure"),
+            "packet_sequence_gap_observed_after_critical_start_runs": true_flag_count(config_rows, "packet_sequence_gap_observed_after_critical_start"),
+            "tcp_service_interruption_observed_runs": true_flag_count(config_rows, "tcp_service_interruption_observed"),
+            "tcp_useful_goodput_restored_after_failure_runs": true_flag_count(config_rows, "tcp_useful_goodput_restored_after_failure"),
             "missed_protection_runs": true_flag_count(config_rows, "missed_protection"),
             "unnecessary_protection_runs": true_flag_count(config_rows, "unnecessary_protection"),
         }
@@ -415,6 +574,10 @@ def format_outcome_summary_section(run_rows: list[dict[str, str]]) -> list[str]:
     lines.append("    Outcome fields are derived from receiver-side continuity and throughput plus")
     lines.append("    known scripted event times and shared controller scalars where available.")
     lines.append("    They are project-local operational metrics, not RFC-defined protocol fields.")
+    lines.append("    Packet sequence-gap fields expose receiver-observed packet continuity loss")
+    lines.append("    that can be hidden by coarse one-second service-availability windows.")
+    lines.append("    TCP fields, when present, are application-endpoint useful-goodput proxies from INET")
+    lines.append("    application vectors and are not protocol-internal TCP recovery counters.")
 
     for summary_row in per_config_outcome_summary(run_rows):
         config_name = summary_row["config_name"]
@@ -432,8 +595,16 @@ def format_outcome_summary_section(run_rows: list[dict[str, str]]) -> list[str]:
         lines.append(
             "    "
             f"throughput_restored_after_failure_runs={summary_row['throughput_restored_after_failure_runs']}, "
+            f"packet_sequence_gap_observed_runs={summary_row['packet_sequence_gap_observed_after_reference_runs']}, "
+            f"tcp_useful_goodput_restored_after_failure_runs={summary_row['tcp_useful_goodput_restored_after_failure_runs']}, "
             f"missed_protection_runs={summary_row['missed_protection_runs']}, "
             f"unnecessary_protection_runs={summary_row['unnecessary_protection_runs']}"
+        )
+        lines.append(
+            "    "
+            f"tcp_service_interruption_observed_runs={summary_row['tcp_service_interruption_observed_runs']}, "
+            f"tcp_service_interruption_duration_s_mean={summary_row['tcp_service_interruption_duration_s_mean']}, "
+            f"tcp_zero_goodput_window_count_after_reference_mean={summary_row['tcp_zero_goodput_window_count_after_reference_mean']}"
         )
         lines.append(
             "    "
@@ -443,8 +614,31 @@ def format_outcome_summary_section(run_rows: list[dict[str, str]]) -> list[str]:
         )
         lines.append(
             "    "
+            f"packet_sequence_gap_total_missing_after_reference_mean={summary_row['packet_sequence_gap_total_missing_after_reference_mean']}, "
+            f"max_packet_sequence_gap_after_reference_mean={summary_row['max_packet_sequence_gap_after_reference_mean']}, "
+            f"max_packet_interarrival_gap_after_reference_s_mean={summary_row['max_packet_interarrival_gap_after_reference_s_mean']}"
+        )
+        lines.append(
+            "    "
+            f"packet_sequence_gap_total_missing_after_hard_failure_mean={summary_row['packet_sequence_gap_total_missing_after_hard_failure_mean']}, "
+            f"max_packet_sequence_gap_after_hard_failure_mean={summary_row['max_packet_sequence_gap_after_hard_failure_mean']}, "
+            f"packet_sequence_gap_total_missing_between_activation_and_failure_mean={summary_row['packet_sequence_gap_total_missing_between_activation_and_failure_mean']}"
+        )
+        lines.append(
+            "    "
+            f"packet_sequence_gap_total_missing_after_protection_activation_mean={summary_row['packet_sequence_gap_total_missing_after_protection_activation_mean']}, "
+            f"packet_sequence_gap_total_missing_after_critical_start_mean={summary_row['packet_sequence_gap_total_missing_after_critical_start_mean']}, "
+            f"max_packet_sequence_gap_after_critical_start_mean={summary_row['max_packet_sequence_gap_after_critical_start_mean']}"
+        )
+        lines.append(
+            "    "
             f"zero_progress_window_count_after_reference_mean={summary_row['zero_progress_window_count_after_reference_mean']}, "
             f"max_zero_progress_window_streak_after_reference_mean={summary_row['max_zero_progress_window_streak_after_reference_mean']}"
+        )
+        lines.append(
+            "    "
+            f"packet_interarrival_gap_exceeded_nominal_threshold_runs={summary_row['packet_interarrival_gap_exceeded_nominal_threshold_runs']}, "
+            f"tcp_max_endpoint_receive_gap_after_reference_s_mean={summary_row['tcp_max_endpoint_receive_gap_after_reference_s_mean']}"
         )
     return lines
 

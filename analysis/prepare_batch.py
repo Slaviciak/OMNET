@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Prepare a clean evaluation batch for a supported data-generation scenario.
+Prepare a clean evaluation batch for a supported core or auxiliary scenario.
 
 Assumptions:
 - This helper only manages local dissertation project outputs.
@@ -21,7 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 SCENARIO_PRESETS = {
     "linkdegradation": {
-        "description": "Synthetic link degradation data-generation batch",
+        "description": "Auxiliary synthetic link degradation data-generation batch",
         "eval_dir": PROJECT_ROOT / "results" / "linkdegradation" / "eval",
         "debug_dir": PROJECT_ROOT / "results" / "linkdegradation" / "debug",
         "configs": ["MildLinear", "StrongLinear", "UnstableLinear", "StagedRealistic"],
@@ -29,7 +29,7 @@ SCENARIO_PRESETS = {
         "report_command": "run_analysis.bat dataset-report --scenario linkdegradation",
     },
     "congestiondegradation": {
-        "description": "Traffic-driven congestion data-generation batch",
+        "description": "Auxiliary traffic-driven congestion data-generation batch",
         "eval_dir": PROJECT_ROOT / "results" / "congestiondegradation" / "eval",
         "debug_dir": PROJECT_ROOT / "results" / "congestiondegradation" / "debug",
         "configs": ["CongestionDegradation", "CongestionDegradationMild"],
@@ -37,7 +37,7 @@ SCENARIO_PRESETS = {
         "report_command": "run_analysis.bat dataset-report --scenario congestiondegradation",
     },
     "regionalbackbone": {
-        "description": "Medium-scale regional backbone baseline, reactive failure, controlled degradation, and congestion batch",
+        "description": "Core regional backbone baseline, reactive failure, controlled degradation, and congestion batch",
         "eval_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "eval",
         "debug_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "debug",
         "configs": [

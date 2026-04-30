@@ -2,9 +2,10 @@ LinkDegradation
 ===============
 
 Overview
-- This scenario is dedicated to gradual and intermittent pre-failure data generation on the primary r2-r3 link.
+- This auxiliary scenario is dedicated to gradual and intermittent pre-failure data generation on the primary r2-r3 link.
 - It keeps the same dual-path topology and OSPF structure as the existing dissertation scenarios.
 - It now supports multiple degradation profiles through omnetpp.ini configs.
+- It remains useful for controlled data-generation checks, but the active dissertation topology is `regionalbackbone`.
 - The most realistic profile in this family remains a project-local approximation:
   it is meant to emulate intermittent deterioration or brownout-style behavior
   before a later hard failure, not to claim that every operational failure is
@@ -37,5 +38,6 @@ Design notes
 - The profile is deterministic so repeated runs remain reproducible for dataset generation even though it approximates intermittent behavior.
 
 Purpose
-- Provide a clean scenario for collecting time-series data before hard failure.
-- Keep the degradation mechanism simple, reproducible, and suitable for later dataset generation.
+- Provide a clean auxiliary scenario for collecting time-series data before hard failure.
+- Keep the degradation mechanism simple, reproducible, and suitable for optional sanity checks or cross-topology training evidence.
+- Do not present this small topology as the main AI-MRCE validation environment.

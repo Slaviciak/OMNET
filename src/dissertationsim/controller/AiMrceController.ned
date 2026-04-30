@@ -1,6 +1,7 @@
 // Project-local runtime prototype for AI-MRCE experiments.
-// It evaluates compact telemetry and can trigger a conservative protective
-// action through administrative withdrawal of the monitored corridor.
+// It evaluates compact telemetry and can trigger either the older conservative
+// administrative-withdrawal reference action or a project-local FRR-like
+// static repair-route abstraction for the monitored corridor.
 
 package dissertationsim.controller;
 
@@ -14,8 +15,19 @@ simple AiMrceController
         // Probe receiver application whose packetReceived signal is used for
         // runtime delay, throughput, and packet-count observations.
         string probeReceiverModule;
-        // Protective action uses ordinary administrative interface-down
-        // semantics on the preferred span, not a custom OSPF extension.
+        // Supported: adminWithdrawal, localRepairStaticRoutes.
+        // localRepairStaticRoutes is a project-local abstraction of activating
+        // a preinstalled protection path. It installs explicit manual /32 IPv4
+        // routes and is not a protocol-standard FRR implementation.
+        string protectionAction = default("adminWithdrawal");
+        // Semicolon-separated static repair route specs used when
+        // protectionAction=localRepairStaticRoutes. Each item has:
+        // routerModule,outputInterfaceModule,gatewayInterfaceModule,destinationInterfaceModule
+        // Example: ^.accessA,^.accessA.eth[2],^.west2.eth[0],^.hostB.eth[0]
+        string localRepairRouteSpecs = default("");
+        int localRepairRouteMetric = default(1);
+        // Administrative-withdrawal reference action uses ordinary interface-
+        // down semantics on the preferred span, not a custom OSPF extension.
         string firstInterfaceModule;
         string secondInterfaceModule;
         // Supported: ruleBased, logisticRegression, linearSvm, shallowTree.

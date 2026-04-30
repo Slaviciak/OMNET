@@ -2,10 +2,10 @@ RegionalBackbone
 ================
 
 Overview
-- This scenario is the first medium-scale baseline topology for the dissertation project.
+- This scenario is the consolidated medium-scale baseline topology for the dissertation project.
 - It starts with baseline validation and now includes reactive-failure, controlled-degradation, traffic-driven congestion, and a small family of AI-MRCE runtime prototype configs.
 - The AI-MRCE runtime family adds one project-local controller with several conservative decision policies, but it still avoids deep OSPF-internal modifications.
-- Its purpose is to validate a larger OSPF topology before and during the first practical predictive-protection experiments.
+- Its purpose is to act as the main IP/OSPF-like environment for practical predictive-protection experiments.
 - Controlled degradation and congestion phases should be treated as defensible approximations for supervised experimentation, not as empirically calibrated carrier-failure traces.
 - In particular, the controlled-degradation branch is meant to approximate one
   plausible pre-failure class in which delay variation and intermittent loss
@@ -52,6 +52,7 @@ OSPF cost intent
 Traffic
 - Baseline, reactive-failure, and controlled-degradation configs use one light UDP flow from hostA to hostB.
 - The traffic-driven congestion config uses one low-rate probe flow plus staged bulk UDP flows.
+- The mixed UDP/TCP protection branch keeps the UDP probe and staged UDP pressure, then adds standard INET TCP request-response sessions whose larger request direction follows hostA -> hostB over the monitored protected corridor. Transport-like service impact is described through application-endpoint useful-goodput proxies.
 - Traffic starts after an initial routing-convergence period.
 - Non-congestion configs keep load intentionally small so they validate routing, failure, or controlled impairment behavior only.
 
@@ -87,24 +88,41 @@ Configs
   - Monitors the protected `coreNW.eth[1] -> coreNE` corridor using queue occupancy plus probe-flow delay, throughput, and packet continuity.
   - Evaluates a compact hand-built protection score once per second.
   - Requires multiple consecutive positive controller cycles before action.
-  - Proactive action is a latched administrative withdrawal of `coreNW.eth[1]` and `coreNE.eth[0]`.
-  - The protective step follows ordinary administrative interface-down semantics in the simulator rather than any custom OSPF extension.
+  - Proactive action activates explicit host-specific manual repair routes over the southern backup corridor.
+  - The repair-route action is a project-local FRR-like abstraction of a prearranged protection path. It does not implement standards-compliant IP FRR/LFA/TI-LFA and does not modify OSPF internals.
   - This is experimental protection logic, not a production-grade predictive routing system.
 - `RegionalBackboneAiMrceLogReg`
   - Runtime AI-MRCE candidate using an exported binary logistic-regression runtime model.
-  - Uses the same telemetry inputs and the same conservative administrative-withdrawal action as the rule-based prototype.
+  - Uses the same telemetry inputs and the same local repair-route action as the rule-based prototype.
   - Consumes `aimrce_runtime_logreg.csv` from this scenario directory.
   - The exported model is trained from scenario-phase supervision and should be discussed as a runtime deployment artifact and proxy model, not as real-world failure-ground-truth inference.
 - `RegionalBackboneAiMrceLinearSvm`
   - Runtime AI-MRCE candidate using an exported linear-SVM deployment artifact.
-  - Uses the same telemetry inputs and the same conservative administrative-withdrawal action as the other runtime candidates.
+  - Uses the same telemetry inputs and the same local repair-route action as the other runtime candidates.
   - Consumes `aimrce_runtime_linsvm.csv` from this scenario directory.
   - Its bounded decision score is a monotonic transform of the learned margin and should not be described as a calibrated production-grade failure probability.
 - `RegionalBackboneAiMrceShallowTree`
   - Runtime AI-MRCE candidate using an exported shallow decision-tree deployment artifact.
-  - Uses the same telemetry inputs and the same conservative administrative-withdrawal action as the other runtime candidates.
+  - Uses the same telemetry inputs and the same local repair-route action as the other runtime candidates.
   - Consumes `aimrce_runtime_shallow_tree.csv` from this scenario directory.
   - The tree is intentionally kept shallow so the runtime policy remains auditable and publication-friendly.
+- `RegionalBackboneMixedTrafficCongestionDegradation`
+  - Focused mixed UDP/TCP reactive congestion baseline.
+  - Uses the same 10 Mbps preferred-span bottleneck and 125s hard failure as `RegionalBackboneCongestionDegradation`.
+  - Adds two repeated INET TCP client/server request-response flows to the UDP probe and staged UDP load.
+  - The TCP request payload is deliberately larger than the reply so TCP load contributes to the same forward `coreNW.eth[1]` queue that the AI-MRCE controller monitors.
+  - TCP measurements are application-endpoint useful-goodput proxies from packet-byte vectors, not protocol-internal TCP retransmission metrics.
+- `RegionalBackboneAiMrceRuleBasedMixedTraffic`
+  - Mixed UDP/TCP branch with the existing rule-based AI-MRCE decision policy.
+  - Uses the same monitored UDP probe, same sustained-decision requirement, and same local repair-route action as the UDP-only rule-based runtime config.
+- `RegionalBackboneAiMrceLogRegMixedTraffic`
+  - Mixed UDP/TCP branch with the exported logistic-regression runtime model.
+  - Reuses `aimrce_runtime_logreg.csv` and the same conservative local repair-route protection action.
+  - This is an explicit deployment-compatibility stress check: the current
+    artifact is exported from the regional UDP-dominant congestion dataset, so
+    missed protection under mixed UDP/TCP traffic should be interpreted as a
+    possible out-of-distribution runtime result, not hidden by threshold tuning.
+  - The focused mixed branch intentionally does not multiply every runtime model variant into a TCP/UDP version; it is a transport-impact extension, not a separate model-family expansion.
 - Debug variants enable eventlog recording for manual path inspection.
 
 Congestion timeline
@@ -115,12 +133,38 @@ Congestion timeline
 - 125s: physical disconnect of `coreNW <-> coreNE` by ScenarioManager.
 - 125s-150s: post-failure observation and reactive rerouting.
 
+Mixed UDP/TCP cohort timeline
+- 0s-20s: routing convergence, no traffic.
+- 20s: UDP probe flow starts.
+- 35s and 65s: staged UDP load flows start.
+- 45s: first repeated TCP request-response flow starts.
+- 73s-77s: second repeated TCP request-response flow starts in the five-run cohort wrappers.
+- 125s: physical disconnect of `coreNW <-> coreNE` by ScenarioManager.
+- 125s-150s: post-failure observation, rerouting, and useful-goodput recovery proxy measurement.
+
 Measurements
 - Sender packet count.
 - Receiver packet count.
 - Receiver throughput vector.
 - Receiver end-to-end delay vector.
 - Receiver received sequence-number vector.
+- Receiver-observed sequence-gap and interarrival-gap outcome diagnostics:
+  these expose short packet-continuity disruptions that can be hidden by
+  one-second availability windows and are not protocol-standard restoration
+  timers.
+  - `after_reference` follows the operational event used for each run
+    (`hard_failure` for reactive runs, `protection_activation` for protected
+    runs).
+  - `after_hard_failure` provides the cleaner post-failure continuity view for
+    reactive-vs-protected comparison.
+  - `between_activation_and_failure` exposes pre-failure switch penalty when a
+    protection action moves traffic while the primary path is still alive.
+  - `after_critical_start` uses the same congestion-phase reference across the
+    regional congestion cohort.
+- TCP application packet-byte vectors in the mixed UDP/TCP branch:
+  - per-app received bytes
+  - per-app useful-goodput proxy
+  - aggregate receiver-side TCP useful-goodput proxy
 - Basic IPv4 no-route and interface-down drop counters.
 - Controller-side applied delay and packet-error-rate vectors for controlled-degradation configs.
 - Bottleneck queue vectors on `coreNW.eth[1].queue` for traffic-driven congestion configs:
@@ -137,24 +181,38 @@ Measurements
   - `decisionPositive`
   - `positiveDecisionStreak`
   - `protectionActive`
+  - `repairRoutesInstalled`
 - AI-MRCE runtime prototype scalars in the AI-MRCE configs:
   - `protectionActivated`
   - `protectionActivationTime`
+  - `protectionActionCode`
+  - `repairRoutesInstalled`
+  - `repairRouteCount`
 
 Queue Assumption
 - No custom queue discipline, AQM, or vendor-specific buffer model is configured for the congestion branch.
 - The bottleneck queue metrics come from the default INET interface queue attached to `coreNW.eth[1]` in this simulator version.
 - Interpret the queue telemetry as a simple simulator-default backlog approximation rather than as a calibrated backbone-router buffer study.
 
+TCP Measurement Assumption
+- The mixed UDP/TCP branch uses INET `TcpBasicClientApp` and `TcpGenericServerApp` rather than custom transport logic.
+- The analysis layer summarizes application `packetReceived` byte vectors as useful-goodput proxies. In the active mixed branch, large client requests make the hostB-side server receive vector the dominant forward-direction TCP service indicator.
+- Direct TCP retransmission, congestion-window, and RTO counters are not required for this conservative increment, because depending on TCP internals would make the dissertation pipeline more brittle and would not be a protocol-standard restoration metric.
+- Interpret the TCP fields as transport-service impact indicators inside the controlled scenario, not as a general claim about all TCP applications or all failure classes.
+
 Purpose
-- Move beyond the tiny dual-path topology without jumping to an Internet-scale model.
-- Provide a defensible medium topology for later baseline, reactive failure, controlled degradation, and congestion-driven experiments.
-- Keep the first step small enough to debug before adding impairment or protective reroute logic.
-- Provide a first practical AI-MRCE runtime prototype that can be measured end-to-end before any deeper OSPF integration is attempted.
-- Provide a small and interpretable AI-MRCE runtime candidate family that can be compared under one consistent scenario and outcome-analysis framework.
+- Provide the main dissertation topology for baseline, reactive failure, controlled degradation, congestion-driven experiments, and AI-MRCE runtime validation.
+- Keep the model medium-scale and interpretable rather than jumping to an Internet-scale simulation.
+- Provide a practical AI-MRCE runtime prototype family that can be measured end-to-end before any deeper OSPF integration is attempted.
+- Support repeated regional congestion protection cohort runs for descriptive recovery/protection outcome comparison.
+- Support a focused mixed UDP/TCP cohort so AI-MRCE protection outcomes can be described for both packet-continuity style UDP probes and TCP-like useful-goodput behavior.
+- Keep packet-loss and packet-gap evidence visible even when the topology
+  reconverges quickly enough that coarse one-second windows show no complete
+  service outage.
 
 AI-MRCE Prototype Scope Limit
 - The current runtime AI-MRCE family is intentionally limited to the congestion-driven regional backbone branch.
 - It does not modify OSPF internals, advertise custom LSAs, or attempt any online learning.
 - It uses a compact and interpretable telemetry set plus a small family of conservative project-local decision policies.
-- Its protective action is a conservative administrative withdrawal that stands in for an early protective reroute decision on the monitored corridor.
+- Its active regional protective action is an explicit repair-route activation over the configured southern backup corridor. This is an auditable project-local FRR-like abstraction of prearranged local protection, not a protocol-standard FRR implementation.
+- The older administrative-withdrawal behavior remains available in the controller for reference/debug configs, but it should not be described as the final intended AI-MRCE protection model.
