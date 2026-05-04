@@ -188,6 +188,21 @@ Measurements
   - `protectionActionCode`
   - `repairRoutesInstalled`
   - `repairRouteCount`
+  - `repairRouteInstallTime`
+  - activation-time diagnostics: `activationRiskScore`,
+    `activationDecisionThreshold`, `activationPositiveDecisionStreak`,
+    `activationQueueLengthPk`, `activationQueueBitLengthB`,
+    `activationProbeDelayMeanS`, `activationProbeThroughputBps`, and
+    `activationProbePacketCount`
+
+Repair-Route Transition Assumption
+- The active AI-MRCE action installs host-specific static repair routes at the
+  activation event. This is an auditable local-protection abstraction, not a
+  make-before-break implementation of standards-compliant FRR.
+- If the protected bottleneck queue already contains packets at activation,
+  receiver sequence gaps between activation and hard failure should be reported
+  as pre-failure switch/transition cost rather than hidden inside a single
+  post-failure recovery metric.
 
 Queue Assumption
 - No custom queue discipline, AQM, or vendor-specific buffer model is configured for the congestion branch.

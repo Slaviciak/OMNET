@@ -18,6 +18,8 @@ The simulator contribution is therefore:
 - run-level recovery/protection outcome comparison.
 - receiver-observed packet-continuity diagnostics that complement coarse
   one-second availability windows when rerouting effects are short.
+- activation-time controller diagnostics that make the repair-route trigger
+  auditable without changing routing or AI-MRCE decision semantics.
 
 The simulator does not attempt to implement every FRR mechanism from the literature. FRR and BFD remain literature and technical-comparison baselines unless they are explicitly represented by a project-local scenario branch.
 

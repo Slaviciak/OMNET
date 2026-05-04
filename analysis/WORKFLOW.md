@@ -284,10 +284,12 @@ run_experiments.bat full-pipeline --clean --yes --include-aimrce
 - AI-MRCE runtime candidates use compact observable telemetry and sustained positive decisions before acting.
 - The active regional AI-MRCE protective action installs explicit host-specific manual IPv4 repair routes along the configured southern backup corridor. This represents activation of a prearranged local protection path and avoids changing INET or OSPF internals.
 - The repair-route action is a project-local FRR-like abstraction, not an implementation of standards-compliant IP FRR, LFA/TI-LFA, BFD, or custom OSPF extensions.
+- Current controller scalars include activation-time diagnostic telemetry (`activationRiskScore`, threshold, streak, queue state, probe delay/throughput/count) and `repairRouteInstallTime`. These are audit signals only; they do not change the decision or routing semantics.
 - Outcome improvements are scenario-conditioned. They should be described descriptively unless enough independent runs are available for stronger statistical analysis.
 - A run may show no one-second service interruption while still showing packet sequence loss or endpoint receive gaps. Report these as packet-continuity or useful-goodput continuity impacts, not as RFC-standard restoration timers.
 - Packet-continuity reporting now separates operational `after_reference` gaps from `after_hard_failure`, `after_protection_activation`, `between_activation_and_failure`, and `after_critical_start` views. Use `after_hard_failure` for the cleanest post-failure protection comparison, and use the activation-to-failure fields to report any pre-failure switch penalty honestly.
 - The mixed UDP/TCP branch is a practical transport-impact extension using standard INET applications. TCP useful-goodput is measured from application endpoint byte vectors, not TCP-internal retransmission or congestion-control counters. It improves realism over UDP-only evidence, but it is still a controlled simulator scenario rather than an Internet traffic trace.
+- Analysis scripts resolve explicit relative CLI paths from the project root. Prefer running commands from the project root for readability, but paths such as `analysis\output\...` are no longer dependent on the caller's current directory.
 
 ## Before Committing
 

@@ -51,6 +51,15 @@ OUTCOME_COLUMNS = [
     "protection_action_code",
     "repair_routes_installed",
     "repair_route_count",
+    "repair_route_install_time_s",
+    "activation_risk_score",
+    "activation_decision_threshold",
+    "activation_positive_decision_streak",
+    "activation_queue_length_pk",
+    "activation_queue_bit_length_b",
+    "activation_probe_delay_mean_s",
+    "activation_probe_throughput_bps",
+    "activation_probe_packet_count",
     "hard_failure_time_s",
     "protection_activated_before_failure",
     "protection_lead_time_before_failure_s",
@@ -325,6 +334,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_project_path(path: Path) -> Path:
+    # User-supplied paths are interpreted relative to the project root, not the
+    # caller's current directory. Wrapper commands already run from the root;
+    # this also keeps direct calls from analysis\ reproducible.
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
 def get_scenario_preset(scenario: str) -> dict[str, object]:
     preset = SCENARIO_PRESETS.get(scenario)
     if preset is None:
@@ -450,6 +466,16 @@ def per_config_outcome_summary(run_rows: list[dict[str, str]]) -> list[dict[str,
         "recovery_time_after_failure_s",
         "zero_progress_window_count_after_reference",
         "max_zero_progress_window_streak_after_reference",
+        "repair_route_count",
+        "repair_route_install_time_s",
+        "activation_risk_score",
+        "activation_decision_threshold",
+        "activation_positive_decision_streak",
+        "activation_queue_length_pk",
+        "activation_queue_bit_length_b",
+        "activation_probe_delay_mean_s",
+        "activation_probe_throughput_bps",
+        "activation_probe_packet_count",
         "packet_sequence_gap_count_after_reference",
         "packet_sequence_gap_total_missing_after_reference",
         "max_packet_sequence_gap_after_reference",
@@ -480,7 +506,6 @@ def per_config_outcome_summary(run_rows: list[dict[str, str]]) -> list[dict[str,
         "max_packet_interarrival_gap_after_critical_start_s",
         "packet_interarrival_gap_exceedance_count_after_critical_start",
         "first_packet_after_critical_start_delay_s",
-        "repair_route_count",
         "tcp_service_interruption_duration_s",
         "tcp_zero_goodput_window_count_after_reference",
         "tcp_max_zero_goodput_window_streak_after_reference",
@@ -614,6 +639,13 @@ def format_outcome_summary_section(run_rows: list[dict[str, str]]) -> list[str]:
         )
         lines.append(
             "    "
+            f"repair_route_install_time_s_mean={summary_row['repair_route_install_time_s_mean']}, "
+            f"activation_risk_score_mean={summary_row['activation_risk_score_mean']}, "
+            f"activation_decision_threshold_mean={summary_row['activation_decision_threshold_mean']}, "
+            f"activation_queue_length_pk_mean={summary_row['activation_queue_length_pk_mean']}"
+        )
+        lines.append(
+            "    "
             f"packet_sequence_gap_total_missing_after_reference_mean={summary_row['packet_sequence_gap_total_missing_after_reference_mean']}, "
             f"max_packet_sequence_gap_after_reference_mean={summary_row['max_packet_sequence_gap_after_reference_mean']}, "
             f"max_packet_interarrival_gap_after_reference_s_mean={summary_row['max_packet_interarrival_gap_after_reference_s_mean']}"
@@ -734,11 +766,11 @@ def main() -> None:
     args = parse_args()
     preset = get_scenario_preset(args.scenario)
 
-    dataset_path = args.input if args.input is not None else preset["dataset_path"]
-    report_path = args.output if args.output is not None else preset["report_path"]
-    missing_csv_path = args.missing_output if args.missing_output is not None else preset["missing_csv_path"]
-    per_config_csv_path = args.summary_output if args.summary_output is not None else preset["per_config_csv_path"]
-    outcome_csv_path = args.outcome_output if args.outcome_output is not None else preset["outcome_csv_path"]
+    dataset_path = resolve_project_path(args.input) if args.input is not None else preset["dataset_path"]
+    report_path = resolve_project_path(args.output) if args.output is not None else preset["report_path"]
+    missing_csv_path = resolve_project_path(args.missing_output) if args.missing_output is not None else preset["missing_csv_path"]
+    per_config_csv_path = resolve_project_path(args.summary_output) if args.summary_output is not None else preset["per_config_csv_path"]
+    outcome_csv_path = resolve_project_path(args.outcome_output) if args.outcome_output is not None else preset["outcome_csv_path"]
     report_title = preset["report_title"]
     expected_configs = preset["expected_configs"]
     key_numeric_columns = preset["key_numeric_columns"]

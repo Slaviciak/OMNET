@@ -91,6 +91,15 @@ TARGET_CONTROLLER_SCALAR_NAMES = {
     "protectionActionCode",
     "repairRoutesInstalled",
     "repairRouteCount",
+    "repairRouteInstallTime",
+    "activationRiskScore",
+    "activationDecisionThreshold",
+    "activationPositiveDecisionStreak",
+    "activationQueueLengthPk",
+    "activationQueueBitLengthB",
+    "activationProbeDelayMeanS",
+    "activationProbeThroughputBps",
+    "activationProbePacketCount",
 }
 REGIONALBACKBONE_FAMILY_SCENARIOS = {
     "regionalbackbone",
@@ -274,6 +283,14 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     return parser.parse_args()
+
+
+def resolve_project_path(path: Path) -> Path:
+    # Treat explicit CLI paths as project-root relative when they are not
+    # absolute. This preserves documented root-based commands and avoids the
+    # common Windows mistake where running from analysis\ turns
+    # analysis\output\... into analysis\analysis\output\...
+    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 def get_scenario_preset(scenario: str) -> dict[str, object]:
@@ -1239,6 +1256,15 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
     protection_action_code = run_data["scalars"].get("protectionActionCode")
     repair_routes_installed = run_data["scalars"].get("repairRoutesInstalled")
     repair_route_count = run_data["scalars"].get("repairRouteCount")
+    repair_route_install_time_s = run_data["scalars"].get("repairRouteInstallTime")
+    activation_risk_score = run_data["scalars"].get("activationRiskScore")
+    activation_decision_threshold = run_data["scalars"].get("activationDecisionThreshold")
+    activation_positive_decision_streak = run_data["scalars"].get("activationPositiveDecisionStreak")
+    activation_queue_length_pk = run_data["scalars"].get("activationQueueLengthPk")
+    activation_queue_bit_length_b = run_data["scalars"].get("activationQueueBitLengthB")
+    activation_probe_delay_mean_s = run_data["scalars"].get("activationProbeDelayMeanS")
+    activation_probe_throughput_bps = run_data["scalars"].get("activationProbeThroughputBps")
+    activation_probe_packet_count = run_data["scalars"].get("activationProbePacketCount")
     hard_failure_time_s = profile.hard_failure_time_s
     protection_activated_before_failure = (
         protection_activated
@@ -1397,6 +1423,15 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         "protection_action_code": optional_numeric(protection_action_code),
         "repair_routes_installed": bool_flag(repair_routes_installed > 0.5) if repair_routes_installed is not None else "",
         "repair_route_count": optional_numeric(repair_route_count),
+        "repair_route_install_time_s": optional_numeric(repair_route_install_time_s),
+        "activation_risk_score": optional_numeric(activation_risk_score),
+        "activation_decision_threshold": optional_numeric(activation_decision_threshold),
+        "activation_positive_decision_streak": optional_numeric(activation_positive_decision_streak),
+        "activation_queue_length_pk": optional_numeric(activation_queue_length_pk),
+        "activation_queue_bit_length_b": optional_numeric(activation_queue_bit_length_b),
+        "activation_probe_delay_mean_s": optional_numeric(activation_probe_delay_mean_s),
+        "activation_probe_throughput_bps": optional_numeric(activation_probe_throughput_bps),
+        "activation_probe_packet_count": optional_numeric(activation_probe_packet_count),
         "hard_failure_time_s": optional_numeric(hard_failure_time_s),
         "protection_activated_before_failure": bool_flag(protection_activated_before_failure) if hard_failure_time_s is not None else "",
         "protection_lead_time_before_failure_s": optional_numeric(protection_lead_time_before_failure_s),
@@ -1637,8 +1672,8 @@ def main() -> None:
     args = parse_args()
     preset = get_scenario_preset(args.scenario)
 
-    results_dir = args.input if args.input is not None else preset["results_dir"]
-    output_file = args.output if args.output is not None else preset["output_file"]
+    results_dir = resolve_project_path(args.input) if args.input is not None else preset["results_dir"]
+    output_file = resolve_project_path(args.output) if args.output is not None else preset["output_file"]
     supported_configs = effective_supported_configs(preset, args.include_runtime_protection_configs)
     config_aliases = preset["config_aliases"]
     default_sim_time_limit = preset["default_sim_time_limit"]

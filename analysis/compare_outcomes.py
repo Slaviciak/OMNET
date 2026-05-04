@@ -104,6 +104,15 @@ TCP_NUMERIC_METRICS = [
 
 PROTECTION_ACTION_NUMERIC_METRICS = [
     "repair_route_count",
+    "repair_route_install_time_s",
+    "activation_risk_score",
+    "activation_decision_threshold",
+    "activation_positive_decision_streak",
+    "activation_queue_length_pk",
+    "activation_queue_bit_length_b",
+    "activation_probe_delay_mean_s",
+    "activation_probe_throughput_bps",
+    "activation_probe_packet_count",
 ]
 
 NUMERIC_METRICS = BASE_NUMERIC_METRICS + PROTECTION_ACTION_NUMERIC_METRICS + PACKET_NUMERIC_METRICS + TCP_NUMERIC_METRICS
@@ -250,6 +259,13 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_project_path(path: Path) -> Path:
+    # Explicit CLI paths are treated as project-root relative when not
+    # absolute. This preserves documented commands and avoids cwd-dependent
+    # failures when invoking the script directly from analysis\.
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
 def humanize_identifier(value: str) -> str:
     return value.replace("_", " ").strip().title()
 
@@ -295,7 +311,11 @@ def load_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
 
 
 def resolve_input_paths(args: argparse.Namespace) -> tuple[list[Path], list[str]]:
-    selected_paths = list(args.inputs) if args.inputs else [SCENARIO_PRESETS[scenario] for scenario in args.scenarios]
+    selected_paths = (
+        [resolve_project_path(path) for path in args.inputs]
+        if args.inputs
+        else [SCENARIO_PRESETS[scenario] for scenario in args.scenarios]
+    )
     resolved_paths: list[Path] = []
     skipped_paths: list[str] = []
 
@@ -676,7 +696,15 @@ def render_report(
             lines.append(
                 "      "
                 f"lead_time={numeric_text(summary_row, 'protection_lead_time_before_failure_s')}, "
-                f"interruption_duration={numeric_text(summary_row, 'service_interruption_duration_s')}"
+                f"interruption_duration={numeric_text(summary_row, 'service_interruption_duration_s')}, "
+                f"repair_route_install_time={numeric_text(summary_row, 'repair_route_install_time_s')}"
+            )
+            lines.append(
+                "      "
+                f"activation_score={numeric_text(summary_row, 'activation_risk_score')}, "
+                f"activation_threshold={numeric_text(summary_row, 'activation_decision_threshold')}, "
+                f"activation_queue_pk={numeric_text(summary_row, 'activation_queue_length_pk')}, "
+                f"activation_probe_delay={numeric_text(summary_row, 'activation_probe_delay_mean_s')}"
             )
             lines.append(
                 "      "
@@ -787,7 +815,7 @@ def main() -> None:
     rows = collect_rows(input_paths)
     summary_rows = grouped_summary_rows(rows)
 
-    output_prefix = args.output_prefix
+    output_prefix = resolve_project_path(args.output_prefix)
     output_paths = {
         "runs": output_prefix.with_name(f"{output_prefix.name}_runs.csv"),
         "summary": output_prefix.with_name(f"{output_prefix.name}_summary.csv"),
