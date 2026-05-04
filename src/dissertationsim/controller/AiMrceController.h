@@ -165,8 +165,17 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     int repairRouteCount = 0;
     int positiveDecisionStreak = 0;
     omnetpp::simtime_t protectionActivationTime = omnetpp::simtime_t(-1);
+    omnetpp::simtime_t repairRouteInstallTime = omnetpp::simtime_t(-1);
     double lastRiskScore = 0;
     bool lastDecisionPositive = false;
+    double activationRiskScore = -1;
+    double activationDecisionThreshold = -1;
+    int activationPositiveDecisionStreak = 0;
+    double activationQueueLengthPackets = -1;
+    double activationQueueBitLength = -1;
+    double activationProbeDelayMeanSeconds = -1;
+    double activationProbeThroughputBps = -1;
+    double activationProbePacketCount = -1;
 
     // These vectors expose both raw runtime observations and controller state
     // transitions so later analysis can separate telemetry behavior from the
@@ -210,6 +219,7 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     double lookupFeatureValue(const FeatureSnapshot& snapshot, const std::string& featureName, bool& available) const;
     // Periodic controller cycle that applies debouncing before protection.
     void evaluateCycle();
+    void captureActivationDiagnostics(const FeatureSnapshot& snapshot, double riskScore, double decisionThreshold);
     // Protective action is selected by configuration. The dissertation-core
     // regional branch uses a project-local FRR-like local-repair abstraction;
     // administrative withdrawal remains available as a conservative reference.

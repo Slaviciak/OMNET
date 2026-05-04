@@ -171,8 +171,12 @@ void AiMrceController::initialize()
     WATCH(repairRouteCount);
     WATCH(positiveDecisionStreak);
     WATCH(protectionActivationTime);
+    WATCH(repairRouteInstallTime);
     WATCH(lastRiskScore);
     WATCH(lastDecisionPositive);
+    WATCH(activationRiskScore);
+    WATCH(activationDecisionThreshold);
+    WATCH(activationPositiveDecisionStreak);
 
     protectionActiveVector.record(0);
     repairRoutesInstalledVector.record(0);
@@ -202,6 +206,15 @@ void AiMrceController::finish()
     recordScalar("protectionActionCode", protectionAction == ProtectionAction::LOCAL_REPAIR_STATIC_ROUTES ? 1 : 0);
     recordScalar("repairRoutesInstalled", repairRoutesInstalled);
     recordScalar("repairRouteCount", repairRouteCount);
+    recordScalar("repairRouteInstallTime", repairRouteInstallTime >= SIMTIME_ZERO ? repairRouteInstallTime.dbl() : -1);
+    recordScalar("activationRiskScore", activationRiskScore);
+    recordScalar("activationDecisionThreshold", activationDecisionThreshold);
+    recordScalar("activationPositiveDecisionStreak", activationPositiveDecisionStreak);
+    recordScalar("activationQueueLengthPk", activationQueueLengthPackets);
+    recordScalar("activationQueueBitLengthB", activationQueueBitLength);
+    recordScalar("activationProbeDelayMeanS", activationProbeDelayMeanSeconds);
+    recordScalar("activationProbeThroughputBps", activationProbeThroughputBps);
+    recordScalar("activationProbePacketCount", activationProbePacketCount);
     recordScalar("lastRiskScore", lastRiskScore);
     recordScalar("lastDecisionPositive", lastDecisionPositive);
 }
@@ -612,13 +625,30 @@ void AiMrceController::evaluateCycle()
     else
         positiveDecisionStreak = 0;
 
-    if (!protectionActive && positiveDecisionStreak >= par("activationConsecutiveCycles").intValue())
+    if (!protectionActive && positiveDecisionStreak >= par("activationConsecutiveCycles").intValue()) {
+        captureActivationDiagnostics(snapshot, riskScore, decisionThreshold);
         activateProtection();
+    }
 
     lastRiskScore = riskScore;
     lastDecisionPositive = decisionPositive;
     recordVectors(snapshot, riskScore, decisionPositive);
     resetIntervalTelemetry();
+}
+
+void AiMrceController::captureActivationDiagnostics(const FeatureSnapshot& snapshot, double riskScore, double decisionThreshold)
+{
+    // These scalars are diagnostic only. They document the telemetry and
+    // decision state at the exact cycle that triggers the project-local repair
+    // action, without changing the activation semantics or route installation.
+    activationRiskScore = riskScore;
+    activationDecisionThreshold = decisionThreshold;
+    activationPositiveDecisionStreak = positiveDecisionStreak;
+    activationQueueLengthPackets = snapshot.queueLengthPackets;
+    activationQueueBitLength = snapshot.queueBitLength;
+    activationProbeDelayMeanSeconds = snapshot.hasProbeDelay ? snapshot.probeDelayMeanSeconds : -1;
+    activationProbeThroughputBps = snapshot.probeThroughputBps;
+    activationProbePacketCount = snapshot.probePacketCount;
 }
 
 void AiMrceController::activateProtection()
@@ -674,7 +704,9 @@ void AiMrceController::activateLocalRepairStaticRoutes()
     if (!repairRoutesInstalled)
         throw cRuntimeError("AI-MRCE local repair action did not install any repair routes");
 
-    EV_INFO << "AI-MRCE installed " << repairRouteCount << " local-repair static routes at " << simTime() << endl;
+    repairRouteInstallTime = simTime();
+
+    EV_INFO << "AI-MRCE installed " << repairRouteCount << " local-repair static routes at " << repairRouteInstallTime << endl;
 }
 
 bool AiMrceController::installLocalRepairRoute(const LocalRepairRouteSpec& spec)
