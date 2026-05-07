@@ -4,7 +4,9 @@
 // OSPF behavior. It periodically samples a compact telemetry set from the
 // regionalbackbone congestion scenario, computes a conservative rule-based or
 // exported runtime-model decision score, and can trigger a conservative
-// project-local protective reroute abstraction.
+// project-local protective reroute abstraction. Newer comparison configs can
+// also enable a BFD-inspired protected-span / missed-probe detector as a
+// reactive safety net.
 //
 // Important scope note:
 // - This is a runtime prototype, not a production routing stack.
@@ -41,7 +43,9 @@ namespace dissertationsim::controller {
  * Experimentally, the controller represents a compact decision point watching
  * a single protected corridor. It intentionally uses only telemetry that is
  * observable in the current platform without deep protocol modification:
- * queue occupancy plus probe-flow reception statistics.
+ * queue occupancy plus probe-flow reception statistics. The BFD-like detector
+ * below is a project-local experiment trigger abstraction, not RFC-compliant
+ * BFD session semantics or an OSPF/BFD integration.
  */
 class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListener
 {
@@ -58,6 +62,13 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     {
         ADMIN_WITHDRAWAL,
         LOCAL_REPAIR_STATIC_ROUTES,
+    };
+
+    enum class ProtectionTriggerSource
+    {
+        NONE,
+        AIMRCE,
+        BFD_LIKE,
     };
 
     // Probe-flow telemetry accumulated between controller evaluations.
@@ -151,16 +162,37 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     };
 
     omnetpp::cMessage *evaluationTimer = nullptr;
+    omnetpp::cMessage *bfdLikeTimer = nullptr;
     omnetpp::simsignal_t packetReceivedSignal = SIMSIGNAL_NULL;
     inet::queueing::IPacketCollection *protectedQueue = nullptr;
     omnetpp::cModule *probeReceiverModule = nullptr;
     DecisionMode decisionMode = DecisionMode::RULE_BASED;
     ProtectionAction protectionAction = ProtectionAction::ADMIN_WITHDRAWAL;
+    bool enableAimrceDecision = true;
+    bool enableBfdLikeDetection = false;
     RuntimeLinearModel linearModel;
     RuntimeTreeModel treeModel;
     std::vector<LocalRepairRouteSpec> localRepairRouteSpecs;
     IntervalTelemetry intervalTelemetry;
+    int bfdLikeProbePacketCount = 0;
+    int bfdLikeProbeChecks = 0;
+    int bfdLikeProbeSuccesses = 0;
+    int bfdLikeProbeMisses = 0;
+    int bfdLikeConsecutiveMissedProbeIntervals = 0;
+    int bfdLikeMaxConsecutiveMissedProbeIntervals = 0;
+    int bfdLikeMissedProbeCountAtDetection = 0;
+    double bfdLikeModeledProbeLossAccumulator = 0;
+    double bfdLikeModeledProbeLossProbabilityLast = 0;
+    double bfdLikeModeledProbeLossProbabilityMax = 0;
+    double bfdLikeModeledProbeLossProbabilityAtDetection = -1;
+    bool bfdLikeDetectionActivated = false;
+    bool bfdLikeProtectedSpanUpAtDetection = true;
+    int bfdLikeTriggerReasonCode = 0;
+    omnetpp::simtime_t bfdLikeDetectionTime = omnetpp::simtime_t(-1);
+    omnetpp::simtime_t hardFailureTime = omnetpp::simtime_t(-1);
     bool protectionActive = false;
+    ProtectionTriggerSource protectionTriggerSource = ProtectionTriggerSource::NONE;
+    int protectionTriggerSourceCode = 0;
     bool repairRoutesInstalled = false;
     int repairRouteCount = 0;
     int positiveDecisionStreak = 0;
@@ -176,6 +208,7 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     double activationProbeDelayMeanSeconds = -1;
     double activationProbeThroughputBps = -1;
     double activationProbePacketCount = -1;
+    omnetpp::simtime_t lastTelemetryLogTime = omnetpp::simtime_t(-1);
 
     // These vectors expose both raw runtime observations and controller state
     // transitions so later analysis can separate telemetry behavior from the
@@ -190,6 +223,12 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     omnetpp::cOutVector positiveDecisionStreakVector;
     omnetpp::cOutVector protectionActiveVector;
     omnetpp::cOutVector repairRoutesInstalledVector;
+    omnetpp::cOutVector protectionTriggerSourceCodeVector;
+    omnetpp::cOutVector bfdLikeMissedProbeCountVector;
+    omnetpp::cOutVector bfdLikeDetectionActiveVector;
+    omnetpp::cOutVector bfdLikeProtectedSpanUpVector;
+    omnetpp::cOutVector bfdLikeModeledProbeLossProbabilityVector;
+    omnetpp::cOutVector bfdLikeProbeMissedVector;
 
   protected:
     virtual void initialize() override;
@@ -199,6 +238,8 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
 
     DecisionMode parseDecisionMode(const char *value) const;
     ProtectionAction parseProtectionAction(const char *value) const;
+    int triggerSourceCodeForActivation(ProtectionTriggerSource source) const;
+    const char *triggerSourceNameForActivation(ProtectionTriggerSource source) const;
     std::vector<LocalRepairRouteSpec> parseLocalRepairRouteSpecs(const std::string& rawValue) const;
     inet::NetworkInterface *resolveInterface(const char *modulePath) const;
     inet::IIpv4RoutingTable *resolveIpv4RoutingTable(const char *modulePath) const;
@@ -219,16 +260,24 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     double lookupFeatureValue(const FeatureSnapshot& snapshot, const std::string& featureName, bool& available) const;
     // Periodic controller cycle that applies debouncing before protection.
     void evaluateCycle();
+    // Project-local BFD-inspired protected-span / missed-probe detector cycle.
+    // This is a reactive safety-net trigger, not a full BFD protocol implementation.
+    void evaluateBfdLikeCycle();
+    bool isBfdLikeProtectedSpanHealthy() const;
+    double currentBfdLikeModeledProbeLossProbability() const;
+    double packetErrorRateForInterface(const char *modulePath) const;
+    bool nextDeterministicModeledProbeMiss(double lossProbability);
     void captureActivationDiagnostics(const FeatureSnapshot& snapshot, double riskScore, double decisionThreshold);
     // Protective action is selected by configuration. The dissertation-core
     // regional branch uses a project-local FRR-like local-repair abstraction;
     // administrative withdrawal remains available as a conservative reference.
-    void activateProtection();
+    void activateProtection(ProtectionTriggerSource triggerSource);
     void administrativelyWithdraw(const char *modulePath);
     void activateLocalRepairStaticRoutes();
     bool installLocalRepairRoute(const LocalRepairRouteSpec& spec);
     void resetIntervalTelemetry();
     void recordVectors(const FeatureSnapshot& snapshot, double riskScore, bool decisionPositive);
+    void maybeLogTelemetry(const FeatureSnapshot& snapshot, const char *context);
 };
 
 } // namespace dissertationsim::controller

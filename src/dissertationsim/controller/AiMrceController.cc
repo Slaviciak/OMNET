@@ -1,10 +1,11 @@
 // Implementation of a small AI-MRCE runtime prototype family.
 //
 // The controller is intentionally conservative. It reuses ordinary OMNeT++ /
-// INET control points, consumes an explicit exported runtime model artifact
-// when configured for logistic regression, and avoids any deep changes to
-// OSPF internals. The goal is an experimentally useful and scientifically
-// transparent runtime prototype family rather than a full routing product.
+// INET control points, consumes explicit exported runtime model artifacts for
+// learned AI-MRCE variants, and avoids any deep changes to OSPF internals. The
+// optional BFD-like path is a local protected-span health / missed-probe
+// safety-net detector that drives the same repair-route actuator; it is not an
+// RFC-compliant BFD implementation.
 
 #include "AiMrceController.h"
 
@@ -16,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "omnetpp/cdataratechannel.h"
 #include "omnetpp/cconfiguration.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/networklayer/common/L3AddressResolver.h"
@@ -107,23 +109,41 @@ Define_Module(AiMrceController);
 
 void AiMrceController::initialize()
 {
+    enableAimrceDecision = par("enableAimrceDecision").boolValue();
+    enableBfdLikeDetection = par("enableBfdLikeDetection").boolValue();
     simtime_t startTime = par("startTime");
     simtime_t evaluationInterval = par("evaluationInterval");
     auto activationCycles = par("activationConsecutiveCycles").intValue();
+    simtime_t bfdLikeStartTime = par("bfdLikeStartTime");
+    simtime_t bfdLikeDetectionInterval = par("bfdLikeDetectionInterval");
+    auto bfdLikeDetectMultiplier = par("bfdLikeDetectMultiplier").intValue();
+    auto bfdLikeExpectedProbeCount = par("bfdLikeExpectedProbeCount").intValue();
+    hardFailureTime = par("hardFailureTime");
     simtime_t probeSendInterval = par("probeSendInterval");
     double probePacketLength = par("probePacketLength").doubleValue();
     double queueLengthThreshold = par("queueLengthThresholdPk").doubleValue();
     simtime_t delayThreshold = par("delayThreshold");
+    simtime_t telemetryLogInterval = par("telemetryLogInterval");
     auto throughputFloorRatio = par("throughputFloorRatio").doubleValue();
     auto packetCountFloorRatio = par("packetCountFloorRatio").doubleValue();
     auto ruleRiskThreshold = par("ruleRiskThreshold").doubleValue();
 
+    if (!enableAimrceDecision && !enableBfdLikeDetection)
+        throw cRuntimeError("At least one controller trigger must be enabled: enableAimrceDecision or enableBfdLikeDetection");
     if (startTime < 0)
         throw cRuntimeError("startTime must be non-negative");
     if (evaluationInterval <= 0)
         throw cRuntimeError("evaluationInterval must be positive");
     if (activationCycles <= 0)
         throw cRuntimeError("activationConsecutiveCycles must be positive");
+    if (bfdLikeStartTime < 0)
+        throw cRuntimeError("bfdLikeStartTime must be non-negative");
+    if (bfdLikeDetectionInterval <= 0)
+        throw cRuntimeError("bfdLikeDetectionInterval must be positive");
+    if (bfdLikeDetectMultiplier <= 0)
+        throw cRuntimeError("bfdLikeDetectMultiplier must be positive");
+    if (bfdLikeExpectedProbeCount < 0)
+        throw cRuntimeError("bfdLikeExpectedProbeCount must be non-negative");
     if (probeSendInterval <= 0)
         throw cRuntimeError("probeSendInterval must be positive");
     if (probePacketLength <= 0)
@@ -138,6 +158,8 @@ void AiMrceController::initialize()
         throw cRuntimeError("packetCountFloorRatio must be in the range (0, 1]");
     if (ruleRiskThreshold < 0 || ruleRiskThreshold > 1)
         throw cRuntimeError("ruleRiskThreshold must be in the range [0, 1]");
+    if (telemetryLogInterval <= 0)
+        throw cRuntimeError("telemetryLogInterval must be positive");
 
     decisionMode = parseDecisionMode(par("decisionMode"));
     protectionAction = parseProtectionAction(par("protectionAction"));
@@ -150,10 +172,12 @@ void AiMrceController::initialize()
     packetReceivedSignal = registerSignal("packetReceived");
     probeReceiverModule->subscribe(packetReceivedSignal, this);
 
-    if (decisionMode == DecisionMode::LOGISTIC_REGRESSION || decisionMode == DecisionMode::LINEAR_SVM)
-        loadRuntimeLinearModel();
-    else if (decisionMode == DecisionMode::SHALLOW_TREE)
-        loadRuntimeTreeModel();
+    if (enableAimrceDecision) {
+        if (decisionMode == DecisionMode::LOGISTIC_REGRESSION || decisionMode == DecisionMode::LINEAR_SVM)
+            loadRuntimeLinearModel();
+        else if (decisionMode == DecisionMode::SHALLOW_TREE)
+            loadRuntimeTreeModel();
+    }
 
     queueLengthVector.setName("observedQueueLengthPk");
     queueBitLengthVector.setName("observedQueueBitLengthB");
@@ -165,11 +189,24 @@ void AiMrceController::initialize()
     positiveDecisionStreakVector.setName("positiveDecisionStreak");
     protectionActiveVector.setName("protectionActive");
     repairRoutesInstalledVector.setName("repairRoutesInstalled");
+    protectionTriggerSourceCodeVector.setName("protectionTriggerSourceCode");
+    bfdLikeMissedProbeCountVector.setName("bfdLikeMissedProbeCount");
+    bfdLikeDetectionActiveVector.setName("bfdLikeDetectionActive");
+    bfdLikeProtectedSpanUpVector.setName("bfdLikeProtectedSpanUp");
+    bfdLikeModeledProbeLossProbabilityVector.setName("bfdLikeModeledProbeLossProbability");
+    bfdLikeProbeMissedVector.setName("bfdLikeProbeMissed");
 
     WATCH(protectionActive);
+    WATCH(enableAimrceDecision);
+    WATCH(enableBfdLikeDetection);
+    WATCH(protectionTriggerSourceCode);
     WATCH(repairRoutesInstalled);
     WATCH(repairRouteCount);
     WATCH(positiveDecisionStreak);
+    WATCH(bfdLikeConsecutiveMissedProbeIntervals);
+    WATCH(bfdLikeDetectionActivated);
+    WATCH(bfdLikeProtectedSpanUpAtDetection);
+    WATCH(bfdLikeDetectionTime);
     WATCH(protectionActivationTime);
     WATCH(repairRouteInstallTime);
     WATCH(lastRiskScore);
@@ -180,33 +217,109 @@ void AiMrceController::initialize()
 
     protectionActiveVector.record(0);
     repairRoutesInstalledVector.record(0);
+    protectionTriggerSourceCodeVector.record(0);
+    bfdLikeMissedProbeCountVector.record(0);
+    bfdLikeDetectionActiveVector.record(0);
+    bfdLikeProtectedSpanUpVector.record(isBfdLikeProtectedSpanHealthy() ? 1 : 0);
+    bfdLikeModeledProbeLossProbabilityVector.record(0);
+    bfdLikeProbeMissedVector.record(0);
 
-    // The first evaluation is scheduled one interval after startTime so each
-    // controller cycle summarizes a full observation window.
-    evaluationTimer = new cMessage("aiMrceEvaluationTimer");
-    scheduleAt(startTime + evaluationInterval, evaluationTimer);
+    if (enableAimrceDecision) {
+        // The first evaluation is scheduled one interval after startTime so
+        // each controller cycle summarizes a full observation window.
+        evaluationTimer = new cMessage("aiMrceEvaluationTimer");
+        scheduleAt(startTime + evaluationInterval, evaluationTimer);
+    }
+
+    if (enableBfdLikeDetection) {
+        // The BFD-like detector is intentionally separate from AI-MRCE scoring.
+        // It observes protected-span interface/carrier state and keeps a
+        // missed-probe fallback, then triggers the same local repair route
+        // actuator as a reactive safety net.
+        bfdLikeTimer = new cMessage("bfdLikeDetectionTimer");
+        scheduleAt(bfdLikeStartTime + bfdLikeDetectionInterval, bfdLikeTimer);
+    }
 }
 
 void AiMrceController::handleMessage(cMessage *message)
 {
-    if (message != evaluationTimer)
-        throw cRuntimeError("Unexpected message received by AiMrceController");
+    if (message == evaluationTimer) {
+        evaluateCycle();
+        scheduleAt(simTime() + par("evaluationInterval"), evaluationTimer);
+        return;
+    }
 
-    evaluateCycle();
-    scheduleAt(simTime() + par("evaluationInterval"), evaluationTimer);
+    if (message == bfdLikeTimer) {
+        evaluateBfdLikeCycle();
+        scheduleAt(simTime() + par("bfdLikeDetectionInterval"), bfdLikeTimer);
+        return;
+    }
+
+    throw cRuntimeError("Unexpected message received by AiMrceController");
 }
 
 void AiMrceController::finish()
 {
-    cancelAndDelete(evaluationTimer);
-    evaluationTimer = nullptr;
+    if (evaluationTimer != nullptr) {
+        cancelAndDelete(evaluationTimer);
+        evaluationTimer = nullptr;
+    }
+    if (bfdLikeTimer != nullptr) {
+        cancelAndDelete(bfdLikeTimer);
+        bfdLikeTimer = nullptr;
+    }
 
     recordScalar("protectionActivated", protectionActive);
     recordScalar("protectionActivationTime", protectionActivationTime >= SIMTIME_ZERO ? protectionActivationTime.dbl() : -1);
+    recordScalar("protectionTriggerSourceCode", protectionTriggerSourceCode);
     recordScalar("protectionActionCode", protectionAction == ProtectionAction::LOCAL_REPAIR_STATIC_ROUTES ? 1 : 0);
     recordScalar("repairRoutesInstalled", repairRoutesInstalled);
     recordScalar("repairRouteCount", repairRouteCount);
     recordScalar("repairRouteInstallTime", repairRouteInstallTime >= SIMTIME_ZERO ? repairRouteInstallTime.dbl() : -1);
+    recordScalar("enableAimrceDecision", enableAimrceDecision);
+    recordScalar("enableBfdLikeDetection", enableBfdLikeDetection);
+    recordScalar("bfdLikeDetectionActivated", bfdLikeDetectionActivated);
+    if (enableBfdLikeDetection) {
+        // BFD-like timing scalars are recorded only for configurations that
+        // actually enable this project-local reactive detector. Keeping them
+        // absent elsewhere avoids treating default NED parameters as active
+        // mechanism settings in cross-mechanism reports.
+        recordScalar("bfdLikeDetectionTime", bfdLikeDetectionTime >= SIMTIME_ZERO ? bfdLikeDetectionTime.dbl() : -1);
+        recordScalar("bfdLikeDetectMultiplier", par("bfdLikeDetectMultiplier").intValue());
+        recordScalar("bfdLikeDetectionInterval", par("bfdLikeDetectionInterval").doubleValue());
+        recordScalar("bfdLikeExpectedDetectionTime", par("bfdLikeDetectionInterval").doubleValue() * par("bfdLikeDetectMultiplier").intValue());
+        recordScalar("bfdLikeMissedProbeCount", bfdLikeMissedProbeCountAtDetection);
+        recordScalar("bfdLikeMaxMissedProbeCount", bfdLikeMaxConsecutiveMissedProbeIntervals);
+        recordScalar("bfdLikeUseModeledProbeLoss", par("bfdLikeUseModeledProbeLoss").boolValue());
+        recordScalar("bfdLikeProbeChecks", bfdLikeProbeChecks);
+        recordScalar("bfdLikeProbeSuccesses", bfdLikeProbeSuccesses);
+        recordScalar("bfdLikeProbeMisses", bfdLikeProbeMisses);
+        recordScalar("bfdLikeProbeLossRateObserved", bfdLikeProbeChecks > 0 ? static_cast<double>(bfdLikeProbeMisses) / bfdLikeProbeChecks : -1);
+        recordScalar("bfdLikeModeledProbeLossProbabilityLast", bfdLikeModeledProbeLossProbabilityLast);
+        recordScalar("bfdLikeModeledProbeLossProbabilityMax", bfdLikeModeledProbeLossProbabilityMax);
+        recordScalar("bfdLikeModeledProbeLossProbabilityAtDetection", bfdLikeModeledProbeLossProbabilityAtDetection);
+        recordScalar("bfdLikeTriggerReasonCode", bfdLikeTriggerReasonCode);
+        recordScalar(
+            "bfdLikeProtectedSpanUpAtDetection",
+            bfdLikeDetectionActivated ? (bfdLikeProtectedSpanUpAtDetection ? 1 : 0) : -1
+        );
+        auto detectionBeforeHardFailure = bfdLikeDetectionActivated
+            && bfdLikeDetectionTime >= SIMTIME_ZERO
+            && hardFailureTime >= SIMTIME_ZERO
+            && bfdLikeDetectionTime < hardFailureTime;
+        recordScalar("bfdLikeDetectionBeforeHardFailure", detectionBeforeHardFailure);
+        recordScalar(
+            "bfdLikeLeadTimeBeforeFailure",
+            detectionBeforeHardFailure ? (hardFailureTime - bfdLikeDetectionTime).dbl() : -1
+        );
+        recordScalar(
+            "hardFailureToBfdDetectionTime",
+            bfdLikeDetectionActivated && hardFailureTime >= SIMTIME_ZERO
+                ? (bfdLikeDetectionTime - hardFailureTime).dbl()
+                : -1
+        );
+    }
+    recordScalar("hardFailureTime", hardFailureTime >= SIMTIME_ZERO ? hardFailureTime.dbl() : -1);
     recordScalar("activationRiskScore", activationRiskScore);
     recordScalar("activationDecisionThreshold", activationDecisionThreshold);
     recordScalar("activationPositiveDecisionStreak", activationPositiveDecisionStreak);
@@ -235,6 +348,7 @@ void AiMrceController::receiveSignal(cComponent *source, simsignal_t signalID, c
     intervalTelemetry.probeReceivedBits += packet->getBitLength();
     intervalTelemetry.probeDelaySumSeconds += (simTime() - packet->getCreationTime()).dbl();
     intervalTelemetry.probeDelaySamples++;
+    bfdLikeProbePacketCount++;
 }
 
 AiMrceController::DecisionMode AiMrceController::parseDecisionMode(const char *value) const
@@ -259,6 +373,30 @@ AiMrceController::ProtectionAction AiMrceController::parseProtectionAction(const
     if (mode == "localrepairstaticroutes")
         return ProtectionAction::LOCAL_REPAIR_STATIC_ROUTES;
     throw cRuntimeError("Unsupported protectionAction '%s'", value);
+}
+
+int AiMrceController::triggerSourceCodeForActivation(ProtectionTriggerSource source) const
+{
+    // Codes are deliberately stable because analysis scripts map them to
+    // publication-friendly trigger-source labels. Hybrid codes distinguish the
+    // first trigger without claiming protocol-level arbitration semantics.
+    if (source == ProtectionTriggerSource::AIMRCE)
+        return enableBfdLikeDetection ? 3 : 1;
+    if (source == ProtectionTriggerSource::BFD_LIKE)
+        return enableAimrceDecision ? 4 : 2;
+    return 0;
+}
+
+const char *AiMrceController::triggerSourceNameForActivation(ProtectionTriggerSource source) const
+{
+    auto code = triggerSourceCodeForActivation(source);
+    switch (code) {
+        case 1: return "aimrce";
+        case 2: return "bfd_like";
+        case 3: return "hybrid_aimrce_first";
+        case 4: return "hybrid_bfd_like_first";
+        default: return "none";
+    }
 }
 
 std::vector<AiMrceController::LocalRepairRouteSpec> AiMrceController::parseLocalRepairRouteSpecs(const std::string& rawValue) const
@@ -598,6 +736,7 @@ double AiMrceController::lookupFeatureValue(const FeatureSnapshot& snapshot, con
 void AiMrceController::evaluateCycle()
 {
     auto snapshot = collectFeatureSnapshot();
+    maybeLogTelemetry(snapshot, "AI-MRCE evaluation");
 
     double riskScore = 0;
     double decisionThreshold = 0;
@@ -625,15 +764,182 @@ void AiMrceController::evaluateCycle()
     else
         positiveDecisionStreak = 0;
 
+    if (par("verboseDecisionLogging").boolValue()) {
+        EV_INFO << "AI-MRCE decision at " << simTime()
+                << ": score=" << riskScore
+                << ", threshold=" << decisionThreshold
+                << ", positive=" << (decisionPositive ? "true" : "false")
+                << ", streak=" << positiveDecisionStreak << endl;
+    }
+
     if (!protectionActive && positiveDecisionStreak >= par("activationConsecutiveCycles").intValue()) {
         captureActivationDiagnostics(snapshot, riskScore, decisionThreshold);
-        activateProtection();
+        activateProtection(ProtectionTriggerSource::AIMRCE);
     }
 
     lastRiskScore = riskScore;
     lastDecisionPositive = decisionPositive;
     recordVectors(snapshot, riskScore, decisionPositive);
     resetIntervalTelemetry();
+}
+
+void AiMrceController::evaluateBfdLikeCycle()
+{
+    auto expectedProbeCount = par("bfdLikeExpectedProbeCount").intValue();
+    auto detectMultiplier = par("bfdLikeDetectMultiplier").intValue();
+    auto observedProbeCount = bfdLikeProbePacketCount;
+    auto protectedSpanHealthy = isBfdLikeProtectedSpanHealthy();
+    auto probeIntervalMissed = observedProbeCount < expectedProbeCount;
+    auto modeledLossProbability = currentBfdLikeModeledProbeLossProbability();
+    auto modeledProbeMissed = protectedSpanHealthy
+        && par("bfdLikeUseModeledProbeLoss").boolValue()
+        && nextDeterministicModeledProbeMiss(modeledLossProbability);
+    auto intervalUnhealthy = probeIntervalMissed || !protectedSpanHealthy || modeledProbeMissed;
+
+    bfdLikeProbeChecks++;
+    if (intervalUnhealthy)
+        bfdLikeProbeMisses++;
+    else
+        bfdLikeProbeSuccesses++;
+
+    if (intervalUnhealthy)
+        bfdLikeConsecutiveMissedProbeIntervals++;
+    else
+        bfdLikeConsecutiveMissedProbeIntervals = 0;
+
+    bfdLikeMaxConsecutiveMissedProbeIntervals = std::max(
+        bfdLikeMaxConsecutiveMissedProbeIntervals,
+        bfdLikeConsecutiveMissedProbeIntervals
+    );
+
+    if (par("verboseBfdLikeLogging").boolValue()) {
+        EV_INFO << "BFD-like detector at " << simTime()
+                << ": observedProbes=" << observedProbeCount
+                << ", expectedMinimum=" << expectedProbeCount
+                << ", modeledProbeLossProbability=" << modeledLossProbability
+                << ", modeledProbeMissed=" << (modeledProbeMissed ? "true" : "false")
+                << ", protectedSpanUp=" << (protectedSpanHealthy ? "true" : "false")
+                << ", missedIntervals=" << bfdLikeConsecutiveMissedProbeIntervals
+                << "/" << detectMultiplier
+                << ", protectionActive=" << (protectionActive ? "true" : "false")
+                << endl;
+    }
+
+    if (!protectionActive && bfdLikeConsecutiveMissedProbeIntervals >= detectMultiplier) {
+        auto snapshot = collectFeatureSnapshot();
+        maybeLogTelemetry(snapshot, "BFD-like detection");
+
+        double riskScore = -1;
+        double decisionThreshold = -1;
+        if (enableAimrceDecision) {
+            switch (decisionMode) {
+                case DecisionMode::RULE_BASED:
+                    riskScore = computeRuleBasedRisk(snapshot);
+                    decisionThreshold = par("ruleRiskThreshold").doubleValue();
+                    break;
+                case DecisionMode::LOGISTIC_REGRESSION:
+                case DecisionMode::LINEAR_SVM:
+                    riskScore = computeLinearModelRisk(snapshot);
+                    decisionThreshold = linearModel.threshold;
+                    break;
+                case DecisionMode::SHALLOW_TREE:
+                    riskScore = computeShallowTreeRisk(snapshot);
+                    decisionThreshold = treeModel.threshold;
+                    break;
+            }
+            lastRiskScore = riskScore;
+            lastDecisionPositive = riskScore >= decisionThreshold;
+        }
+
+        bfdLikeDetectionActivated = true;
+        bfdLikeDetectionTime = simTime();
+        bfdLikeMissedProbeCountAtDetection = bfdLikeConsecutiveMissedProbeIntervals;
+        bfdLikeProtectedSpanUpAtDetection = protectedSpanHealthy;
+        bfdLikeModeledProbeLossProbabilityAtDetection = modeledLossProbability;
+        // 1 = receiver probe-reception interval below expectation,
+        // 2 = protected span interface/carrier observed down,
+        // 3 = deterministic modeled BFD-like probe miss from current channel
+        // packet-error-rate impairment. This is intentionally local
+        // simulation-side state, not negotiated BFD session state.
+        if (!protectedSpanHealthy)
+            bfdLikeTriggerReasonCode = 2;
+        else if (modeledProbeMissed)
+            bfdLikeTriggerReasonCode = 3;
+        else
+            bfdLikeTriggerReasonCode = 1;
+
+        captureActivationDiagnostics(snapshot, riskScore, decisionThreshold);
+        activateProtection(ProtectionTriggerSource::BFD_LIKE);
+    }
+
+    bfdLikeMissedProbeCountVector.record(bfdLikeConsecutiveMissedProbeIntervals);
+    bfdLikeDetectionActiveVector.record(bfdLikeDetectionActivated ? 1 : 0);
+    bfdLikeProtectedSpanUpVector.record(protectedSpanHealthy ? 1 : 0);
+    bfdLikeModeledProbeLossProbabilityVector.record(modeledLossProbability);
+    bfdLikeProbeMissedVector.record(intervalUnhealthy ? 1 : 0);
+    protectionTriggerSourceCodeVector.record(protectionTriggerSourceCode);
+
+    bfdLikeProbePacketCount = 0;
+    if (!enableAimrceDecision)
+        resetIntervalTelemetry();
+}
+
+bool AiMrceController::isBfdLikeProtectedSpanHealthy() const
+{
+    // The project-local BFD-like detector approximates a fast local failure
+    // indication for the protected span. INET's NetworkInterface::isUp()
+    // combines administrative state with carrier state, so ScenarioManager
+    // disconnect events can be observed without touching OSPF internals.
+    auto firstInterface = resolveInterface(par("firstInterfaceModule"));
+    auto secondInterface = resolveInterface(par("secondInterfaceModule"));
+    return firstInterface->isUp() && secondInterface->isUp();
+}
+
+double AiMrceController::currentBfdLikeModeledProbeLossProbability() const
+{
+    if (!par("bfdLikeUseModeledProbeLoss").boolValue())
+        return 0;
+
+    // This opt-in path lets degraded-link comparison configs expose logical
+    // BFD-like checks to the same project-local channel packet-error-rate
+    // impairment used for data traffic. It reads only current simulator state;
+    // it does not look at hardFailureTime and is not a future-failure oracle.
+    auto firstDirectionLoss = packetErrorRateForInterface(par("firstInterfaceModule"));
+    auto secondDirectionLoss = packetErrorRateForInterface(par("secondInterfaceModule"));
+    auto lossProbability = clamp01(std::max(firstDirectionLoss, secondDirectionLoss));
+    return lossProbability;
+}
+
+double AiMrceController::packetErrorRateForInterface(const char *modulePath) const
+{
+    auto networkInterface = resolveInterface(modulePath);
+    auto channel = dynamic_cast<cDatarateChannel *>(networkInterface->getTxTransmissionChannel());
+    if (channel == nullptr)
+        return 0;
+    return channel->getPacketErrorRate();
+}
+
+bool AiMrceController::nextDeterministicModeledProbeMiss(double lossProbability)
+{
+    lossProbability = clamp01(lossProbability);
+    bfdLikeModeledProbeLossProbabilityLast = lossProbability;
+    bfdLikeModeledProbeLossProbabilityMax = std::max(bfdLikeModeledProbeLossProbabilityMax, lossProbability);
+
+    if (lossProbability <= 0)
+        return false;
+    if (lossProbability >= 1)
+        return true;
+
+    // Deterministic accumulator: a packet-error-rate of p produces about p of
+    // logical checks as misses over time without adding uncontrolled random
+    // variation. Consecutive misses still require sufficiently severe current
+    // degradation, matching the detect-multiplier idea conservatively.
+    bfdLikeModeledProbeLossAccumulator += lossProbability;
+    if (bfdLikeModeledProbeLossAccumulator >= 1.0) {
+        bfdLikeModeledProbeLossAccumulator -= 1.0;
+        return true;
+    }
+    return false;
 }
 
 void AiMrceController::captureActivationDiagnostics(const FeatureSnapshot& snapshot, double riskScore, double decisionThreshold)
@@ -651,15 +957,19 @@ void AiMrceController::captureActivationDiagnostics(const FeatureSnapshot& snaps
     activationProbePacketCount = snapshot.probePacketCount;
 }
 
-void AiMrceController::activateProtection()
+void AiMrceController::activateProtection(ProtectionTriggerSource triggerSource)
 {
     if (protectionActive)
         return;
 
     protectionActive = true;
     protectionActivationTime = simTime();
+    protectionTriggerSource = triggerSource;
+    protectionTriggerSourceCode = triggerSourceCodeForActivation(triggerSource);
 
-    EV_INFO << "AI-MRCE activating protection on the monitored corridor at " << protectionActivationTime << endl;
+    EV_INFO << "Protection trigger '" << triggerSourceNameForActivation(triggerSource)
+            << "' activating project-local repair action on the monitored corridor at "
+            << protectionActivationTime << endl;
     switch (protectionAction) {
         case ProtectionAction::ADMIN_WITHDRAWAL:
             // Retained for reference and debugging: ordinary administrative
@@ -706,7 +1016,7 @@ void AiMrceController::activateLocalRepairStaticRoutes()
 
     repairRouteInstallTime = simTime();
 
-    EV_INFO << "AI-MRCE installed " << repairRouteCount << " local-repair static routes at " << repairRouteInstallTime << endl;
+    EV_INFO << "Installed " << repairRouteCount << " project-local local-repair static routes at " << repairRouteInstallTime << endl;
 }
 
 bool AiMrceController::installLocalRepairRoute(const LocalRepairRouteSpec& spec)
@@ -733,10 +1043,12 @@ bool AiMrceController::installLocalRepairRoute(const LocalRepairRouteSpec& spec)
     // addRoute() notifies the standard INET IPv4 routing table. The route is a
     // host-specific manual entry, so it is intended to override the broader
     // OSPF route without modifying OSPF internals or link-state behavior.
-    EV_INFO << "AI-MRCE local repair route on " << spec.routerModule
-            << ": " << destinationAddress
-            << "/32 via " << gatewayAddress
-            << " out " << outputInterface->getInterfaceFullPath() << endl;
+    if (par("verboseRepairRouteLogging").boolValue()) {
+        EV_INFO << "Project-local repair route on " << spec.routerModule
+                << ": " << destinationAddress
+                << "/32 via " << gatewayAddress
+                << " out " << outputInterface->getInterfaceFullPath() << endl;
+    }
     cMethodCallContextSwitcher contextSwitcher(routingTableComponent);
     routingTable->addRoute(route);
     return true;
@@ -765,6 +1077,31 @@ void AiMrceController::recordVectors(const FeatureSnapshot& snapshot, double ris
     positiveDecisionStreakVector.record(positiveDecisionStreak);
     protectionActiveVector.record(protectionActive ? 1 : 0);
     repairRoutesInstalledVector.record(repairRoutesInstalled ? 1 : 0);
+    protectionTriggerSourceCodeVector.record(protectionTriggerSourceCode);
+    if (enableBfdLikeDetection) {
+        bfdLikeMissedProbeCountVector.record(bfdLikeConsecutiveMissedProbeIntervals);
+        bfdLikeDetectionActiveVector.record(bfdLikeDetectionActivated ? 1 : 0);
+        bfdLikeProtectedSpanUpVector.record(isBfdLikeProtectedSpanHealthy() ? 1 : 0);
+    }
+}
+
+void AiMrceController::maybeLogTelemetry(const FeatureSnapshot& snapshot, const char *context)
+{
+    if (!par("verboseTelemetryLogging").boolValue())
+        return;
+
+    simtime_t telemetryLogInterval = par("telemetryLogInterval");
+    if (lastTelemetryLogTime >= SIMTIME_ZERO && simTime() - lastTelemetryLogTime < telemetryLogInterval)
+        return;
+
+    lastTelemetryLogTime = simTime();
+    EV_INFO << context << " telemetry at " << simTime()
+            << ": queuePk=" << snapshot.queueLengthPackets
+            << ", queueBits=" << snapshot.queueBitLength
+            << ", probePackets=" << snapshot.probePacketCount
+            << ", probeThroughputBps=" << snapshot.probeThroughputBps
+            << ", probeDelayMeanS=" << (snapshot.hasProbeDelay ? snapshot.probeDelayMeanSeconds : -1)
+            << endl;
 }
 
 } // namespace dissertationsim::controller

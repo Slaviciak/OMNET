@@ -1,7 +1,9 @@
 // Project-local runtime prototype for AI-MRCE experiments.
 // It evaluates compact telemetry and can trigger either the older conservative
 // administrative-withdrawal reference action or a project-local FRR-like
-// static repair-route abstraction for the monitored corridor.
+// static repair-route abstraction for the monitored corridor. Comparison
+// configs may also enable a BFD-inspired protected-span / missed-probe detector
+// as a reactive safety net; this is not a full RFC BFD implementation.
 
 package dissertationsim.controller;
 
@@ -32,6 +34,30 @@ simple AiMrceController
         string secondInterfaceModule;
         // Supported: ruleBased, logisticRegression, linearSvm, shallowTree.
         string decisionMode = default("ruleBased");
+        // AI-MRCE decisioning is enabled by default to preserve existing
+        // runtime configs. BFD-like detection is opt-in for the separate
+        // failure-detection comparison cohort.
+        bool enableAimrceDecision = default(true);
+        bool enableBfdLikeDetection = default(false);
+        // Project-local BFD-inspired detector parameters. The detector observes
+        // protected-span interface/carrier state and also counts probe-reception
+        // intervals with fewer than bfdLikeExpectedProbeCount packets. An
+        // opt-in modeled-probe-loss mode can additionally expose logical
+        // BFD-like checks to the current OMNeT++ channel packet error rate on
+        // the protected span. It triggers the same repair-route actuator after
+        // bfdLikeDetectMultiplier consecutive unhealthy intervals. This models
+        // a fast reactive safety net conservatively; it does not model
+        // negotiated BFD sessions, discriminator state, or OSPF/BFD signaling.
+        double bfdLikeStartTime @unit(s) = default(20s);
+        double bfdLikeDetectionInterval @unit(s) = default(1s);
+        int bfdLikeDetectMultiplier = default(3);
+        int bfdLikeExpectedProbeCount = default(1);
+        // Disabled by default to preserve existing congestion-only cohorts.
+        // Degraded-link comparison configs enable it so BFD-like checks can
+        // react to progressive packet-loss impairment before carrier-down.
+        bool bfdLikeUseModeledProbeLoss = default(false);
+        // Optional metadata recorded as a scalar for analysis diagnostics.
+        double hardFailureTime @unit(s) = default(-1s);
         // Used only in learned-model modes. This file is an exported runtime
         // deployment artifact, not the main methodological evaluation output.
         string runtimeModelFile = default("");
@@ -45,5 +71,11 @@ simple AiMrceController
         double throughputFloorRatio = default(0.85);
         double packetCountFloorRatio = default(0.85);
         double ruleRiskThreshold = default(0.6);
+        // Controlled EV logging for manual Qtenv/Cmdenv demonstration.
+        bool verboseTelemetryLogging = default(false);
+        double telemetryLogInterval @unit(s) = default(5s);
+        bool verboseDecisionLogging = default(false);
+        bool verboseRepairRouteLogging = default(false);
+        bool verboseBfdLikeLogging = default(false);
         @display("i=block/cogwheel");
 }
