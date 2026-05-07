@@ -13,6 +13,9 @@ Assumptions:
 - Packet-continuity fields use receiver-observed sequence numbers and receive
   timestamps to expose short loss/gap symptoms that may not create a full
   one-second zero-progress window.
+- Historical sequence-gap "missing" fields are forward-jump estimates kept for
+  compatibility. Reordering-aware unobserved/reordered fields separate apparent
+  packet loss from repair-path overtaking of queued packets.
 - Packet-continuity summaries intentionally separate gaps after the operational
   reference event, after the hard failure, after protection activation, and
   between activation and failure. This keeps activation transition cost visible
@@ -45,13 +48,46 @@ OUTCOME_COLUMNS = [
     "config_name",
     "run_number",
     "protection_mode",
+    "traffic_profile",
+    "monitored_flow_app_index",
+    "monitored_flow_packet_size_bytes",
+    "monitored_flow_send_interval_s",
+    "monitored_flow_expected_packet_rate_pps",
+    "monitored_flow_expected_packets_per_window",
+    "monitored_flow_expected_throughput_bps",
     "protection_activated",
     "protection_activation_time_s",
     "protection_activation_source",
+    "protection_trigger_source",
+    "protection_trigger_source_code",
     "protection_action_code",
     "repair_routes_installed",
     "repair_route_count",
     "repair_route_install_time_s",
+    "enable_aimrce_decision",
+    "enable_bfd_like_detection",
+    "bfd_like_detection_activated",
+    "bfd_like_detection_time_s",
+    "bfd_like_detect_multiplier",
+    "bfd_like_detection_interval_s",
+    "bfd_like_expected_detection_time_s",
+    "bfd_like_missed_probe_count",
+    "bfd_like_max_missed_probe_count",
+    "bfd_like_use_modeled_probe_loss",
+    "bfd_like_probe_checks",
+    "bfd_like_probe_successes",
+    "bfd_like_probe_misses",
+    "bfd_like_probe_loss_rate_observed",
+    "bfd_like_modeled_probe_loss_probability_last",
+    "bfd_like_modeled_probe_loss_probability_max",
+    "bfd_like_modeled_probe_loss_probability_at_detection",
+    "bfd_like_trigger_reason_code",
+    "bfd_like_trigger_reason_text",
+    "bfd_like_protected_span_up_at_detection",
+    "bfd_like_detection_before_hard_failure",
+    "bfd_like_lead_time_before_failure_s",
+    "hard_failure_to_bfd_detection_time_s",
+    "hard_failure_time_configured_s",
     "activation_risk_score",
     "activation_decision_threshold",
     "activation_positive_decision_streak",
@@ -77,43 +113,65 @@ OUTCOME_COLUMNS = [
     "packet_sequence_gap_observed_after_reference",
     "packet_sequence_gap_count_after_reference",
     "packet_sequence_gap_total_missing_after_reference",
+    "packet_sequence_gap_total_unobserved_after_reference",
+    "packet_sequence_gap_total_reordered_after_reference",
     "max_packet_sequence_gap_after_reference",
     "max_packet_interarrival_gap_after_reference_s",
     "packet_interarrival_nominal_gap_threshold_s",
     "packet_interarrival_gap_exceedance_count_after_reference",
     "packet_interarrival_gap_exceeded_nominal_threshold",
+    "packet_sequence_out_of_order_event_count_after_reference",
+    "packet_sequence_out_of_order_packet_count_after_reference",
     "first_packet_after_reference_delay_s",
     "packet_sequence_gap_observed_after_hard_failure",
     "packet_sequence_gap_count_after_hard_failure",
     "packet_sequence_gap_total_missing_after_hard_failure",
+    "packet_sequence_gap_total_unobserved_after_hard_failure",
+    "packet_sequence_gap_total_reordered_after_hard_failure",
     "max_packet_sequence_gap_after_hard_failure",
     "max_packet_interarrival_gap_after_hard_failure_s",
     "packet_interarrival_gap_exceedance_count_after_hard_failure",
     "packet_interarrival_gap_exceeded_nominal_threshold_after_hard_failure",
+    "packet_sequence_out_of_order_event_count_after_hard_failure",
+    "packet_sequence_out_of_order_packet_count_after_hard_failure",
     "first_packet_after_hard_failure_delay_s",
     "packet_sequence_gap_observed_after_protection_activation",
     "packet_sequence_gap_count_after_protection_activation",
     "packet_sequence_gap_total_missing_after_protection_activation",
+    "packet_sequence_gap_total_unobserved_after_protection_activation",
+    "packet_sequence_gap_total_reordered_after_protection_activation",
     "max_packet_sequence_gap_after_protection_activation",
     "max_packet_interarrival_gap_after_protection_activation_s",
     "packet_interarrival_gap_exceedance_count_after_protection_activation",
     "packet_interarrival_gap_exceeded_nominal_threshold_after_protection_activation",
+    "packet_sequence_out_of_order_event_count_after_protection_activation",
+    "packet_sequence_out_of_order_packet_count_after_protection_activation",
     "first_packet_after_protection_activation_delay_s",
     "packet_sequence_gap_observed_between_activation_and_failure",
     "packet_sequence_gap_count_between_activation_and_failure",
     "packet_sequence_gap_total_missing_between_activation_and_failure",
+    "packet_sequence_gap_total_unobserved_between_activation_and_failure",
+    "packet_sequence_gap_total_reordered_between_activation_and_failure",
     "max_packet_sequence_gap_between_activation_and_failure",
     "max_packet_interarrival_gap_between_activation_and_failure_s",
     "packet_interarrival_gap_exceedance_count_between_activation_and_failure",
     "packet_interarrival_gap_exceeded_nominal_threshold_between_activation_and_failure",
+    "packet_sequence_out_of_order_event_count_between_activation_and_failure",
+    "packet_sequence_out_of_order_packet_count_between_activation_and_failure",
     "first_packet_between_activation_and_failure_delay_s",
+    "activation_to_failure_unobserved_per_activation_queue_packet",
+    "activation_to_failure_reordered_per_activation_queue_packet",
     "packet_sequence_gap_observed_after_critical_start",
     "packet_sequence_gap_count_after_critical_start",
     "packet_sequence_gap_total_missing_after_critical_start",
+    "packet_sequence_gap_total_unobserved_after_critical_start",
+    "packet_sequence_gap_total_reordered_after_critical_start",
     "max_packet_sequence_gap_after_critical_start",
     "max_packet_interarrival_gap_after_critical_start_s",
     "packet_interarrival_gap_exceedance_count_after_critical_start",
     "packet_interarrival_gap_exceeded_nominal_threshold_after_critical_start",
+    "packet_sequence_out_of_order_event_count_after_critical_start",
+    "packet_sequence_out_of_order_packet_count_after_critical_start",
     "first_packet_after_critical_start_delay_s",
     "tcp_service_interruption_observed",
     "tcp_service_interruption_start_time_s",
@@ -296,6 +354,100 @@ SCENARIO_PRESETS = {
             "tcp_max_endpoint_receive_gap_after_reference_s",
         ],
     },
+    "regionalbackbone_failure_detection_comparison": {
+        "dataset_path": DATASETS_DIR / "regionalbackbone_failure_detection_comparison_dataset.csv",
+        "report_path": REPORTS_DIR / "regionalbackbone_failure_detection_comparison_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_comparison_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_comparison_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_failure_detection_comparison_outcome_summary.csv",
+        "report_title": "RegionalBackbone Failure-Detection Comparison Dataset Sanity Report",
+        "expected_configs": [
+            "RegionalBackboneFailureComparisonOspfOnly",
+            "RegionalBackboneFailureComparisonBfdLikeFrr",
+            "RegionalBackboneFailureComparisonAiMrceFrr",
+            "RegionalBackboneFailureComparisonHybrid",
+        ],
+        "key_numeric_columns": [
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+            "bottleneck_queue_length_mean_pk",
+            "bottleneck_queue_bit_length_mean_b",
+            "bottleneck_queueing_time_mean_s",
+            "protection_lead_time_before_failure_s",
+            "bfd_like_detection_time_s",
+            "bfd_like_expected_detection_time_s",
+            "bfd_like_missed_probe_count",
+            "activation_queue_length_pk",
+            "packet_sequence_gap_total_unobserved_after_hard_failure",
+            "packet_sequence_gap_total_reordered_between_activation_and_failure",
+            "max_packet_interarrival_gap_after_hard_failure_s",
+        ],
+    },
+    "regionalbackbone_failure_detection_comparison_ms_traffic": {
+        "dataset_path": DATASETS_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_dataset.csv",
+        "report_path": REPORTS_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_outcome_summary.csv",
+        "report_title": "RegionalBackbone Failure-Detection 2 ms Monitored-Traffic Dataset Sanity Report",
+        "expected_configs": [
+            "RegionalBackboneFailureComparisonOspfOnlyMsTraffic",
+            "RegionalBackboneFailureComparisonBfdLikeFrrMsTraffic",
+            "RegionalBackboneFailureComparisonAiMrceFrrMsTraffic",
+            "RegionalBackboneFailureComparisonHybridMsTraffic",
+        ],
+        "key_numeric_columns": [
+            "monitored_flow_send_interval_s",
+            "monitored_flow_expected_packet_rate_pps",
+            "monitored_flow_expected_packets_per_window",
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+            "bottleneck_queue_length_mean_pk",
+            "bottleneck_queue_bit_length_mean_b",
+            "bottleneck_queueing_time_mean_s",
+            "protection_lead_time_before_failure_s",
+            "bfd_like_detection_time_s",
+            "bfd_like_expected_detection_time_s",
+            "bfd_like_missed_probe_count",
+            "activation_queue_length_pk",
+            "packet_sequence_gap_total_unobserved_after_hard_failure",
+            "packet_sequence_gap_total_reordered_between_activation_and_failure",
+            "max_packet_interarrival_gap_after_hard_failure_s",
+        ],
+    },
+    "regionalbackbone_failure_detection_degraded_link": {
+        "dataset_path": DATASETS_DIR / "regionalbackbone_failure_detection_degraded_link_dataset.csv",
+        "report_path": REPORTS_DIR / "regionalbackbone_failure_detection_degraded_link_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_degraded_link_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_degraded_link_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_failure_detection_degraded_link_outcome_summary.csv",
+        "report_title": "RegionalBackbone Failure-Detection Degraded-Link Dataset Sanity Report",
+        "expected_configs": [
+            "RegionalBackboneFailureComparisonOspfOnlyDegradedLink",
+            "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLink",
+            "RegionalBackboneFailureComparisonAiMrceFrrDegradedLink",
+            "RegionalBackboneFailureComparisonHybridDegradedLink",
+        ],
+        "key_numeric_columns": [
+            "controller_packet_error_rate_mean",
+            "controller_packet_error_rate_max",
+            "monitored_flow_send_interval_s",
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+            "protection_lead_time_before_failure_s",
+            "bfd_like_detection_time_s",
+            "bfd_like_lead_time_before_failure_s",
+            "bfd_like_probe_loss_rate_observed",
+            "bfd_like_modeled_probe_loss_probability_at_detection",
+            "bfd_like_trigger_reason_code",
+            "packet_sequence_gap_total_unobserved_after_hard_failure",
+            "packet_sequence_gap_total_reordered_between_activation_and_failure",
+            "max_packet_interarrival_gap_after_hard_failure_s",
+        ],
+    },
 }
 
 
@@ -461,13 +613,37 @@ def per_config_outcome_summary(run_rows: list[dict[str, str]]) -> list[dict[str,
 
     summary_rows: list[dict[str, object]] = []
     numeric_columns = [
+        "monitored_flow_app_index",
+        "monitored_flow_packet_size_bytes",
+        "monitored_flow_send_interval_s",
+        "monitored_flow_expected_packet_rate_pps",
+        "monitored_flow_expected_packets_per_window",
+        "monitored_flow_expected_throughput_bps",
         "protection_lead_time_before_failure_s",
         "service_interruption_duration_s",
         "recovery_time_after_failure_s",
         "zero_progress_window_count_after_reference",
         "max_zero_progress_window_streak_after_reference",
+        "protection_trigger_source_code",
         "repair_route_count",
         "repair_route_install_time_s",
+        "bfd_like_detection_time_s",
+        "bfd_like_detect_multiplier",
+        "bfd_like_detection_interval_s",
+        "bfd_like_expected_detection_time_s",
+        "bfd_like_missed_probe_count",
+        "bfd_like_max_missed_probe_count",
+        "bfd_like_probe_checks",
+        "bfd_like_probe_successes",
+        "bfd_like_probe_misses",
+        "bfd_like_probe_loss_rate_observed",
+        "bfd_like_modeled_probe_loss_probability_last",
+        "bfd_like_modeled_probe_loss_probability_max",
+        "bfd_like_modeled_probe_loss_probability_at_detection",
+        "bfd_like_trigger_reason_code",
+        "bfd_like_lead_time_before_failure_s",
+        "hard_failure_to_bfd_detection_time_s",
+        "hard_failure_time_configured_s",
         "activation_risk_score",
         "activation_decision_threshold",
         "activation_positive_decision_streak",
@@ -478,33 +654,55 @@ def per_config_outcome_summary(run_rows: list[dict[str, str]]) -> list[dict[str,
         "activation_probe_packet_count",
         "packet_sequence_gap_count_after_reference",
         "packet_sequence_gap_total_missing_after_reference",
+        "packet_sequence_gap_total_unobserved_after_reference",
+        "packet_sequence_gap_total_reordered_after_reference",
         "max_packet_sequence_gap_after_reference",
         "max_packet_interarrival_gap_after_reference_s",
         "packet_interarrival_gap_exceedance_count_after_reference",
+        "packet_sequence_out_of_order_event_count_after_reference",
+        "packet_sequence_out_of_order_packet_count_after_reference",
         "first_packet_after_reference_delay_s",
         "packet_sequence_gap_count_after_hard_failure",
         "packet_sequence_gap_total_missing_after_hard_failure",
+        "packet_sequence_gap_total_unobserved_after_hard_failure",
+        "packet_sequence_gap_total_reordered_after_hard_failure",
         "max_packet_sequence_gap_after_hard_failure",
         "max_packet_interarrival_gap_after_hard_failure_s",
         "packet_interarrival_gap_exceedance_count_after_hard_failure",
+        "packet_sequence_out_of_order_event_count_after_hard_failure",
+        "packet_sequence_out_of_order_packet_count_after_hard_failure",
         "first_packet_after_hard_failure_delay_s",
         "packet_sequence_gap_count_after_protection_activation",
         "packet_sequence_gap_total_missing_after_protection_activation",
+        "packet_sequence_gap_total_unobserved_after_protection_activation",
+        "packet_sequence_gap_total_reordered_after_protection_activation",
         "max_packet_sequence_gap_after_protection_activation",
         "max_packet_interarrival_gap_after_protection_activation_s",
         "packet_interarrival_gap_exceedance_count_after_protection_activation",
+        "packet_sequence_out_of_order_event_count_after_protection_activation",
+        "packet_sequence_out_of_order_packet_count_after_protection_activation",
         "first_packet_after_protection_activation_delay_s",
         "packet_sequence_gap_count_between_activation_and_failure",
         "packet_sequence_gap_total_missing_between_activation_and_failure",
+        "packet_sequence_gap_total_unobserved_between_activation_and_failure",
+        "packet_sequence_gap_total_reordered_between_activation_and_failure",
         "max_packet_sequence_gap_between_activation_and_failure",
         "max_packet_interarrival_gap_between_activation_and_failure_s",
         "packet_interarrival_gap_exceedance_count_between_activation_and_failure",
+        "packet_sequence_out_of_order_event_count_between_activation_and_failure",
+        "packet_sequence_out_of_order_packet_count_between_activation_and_failure",
         "first_packet_between_activation_and_failure_delay_s",
+        "activation_to_failure_unobserved_per_activation_queue_packet",
+        "activation_to_failure_reordered_per_activation_queue_packet",
         "packet_sequence_gap_count_after_critical_start",
         "packet_sequence_gap_total_missing_after_critical_start",
+        "packet_sequence_gap_total_unobserved_after_critical_start",
+        "packet_sequence_gap_total_reordered_after_critical_start",
         "max_packet_sequence_gap_after_critical_start",
         "max_packet_interarrival_gap_after_critical_start_s",
         "packet_interarrival_gap_exceedance_count_after_critical_start",
+        "packet_sequence_out_of_order_event_count_after_critical_start",
+        "packet_sequence_out_of_order_packet_count_after_critical_start",
         "first_packet_after_critical_start_delay_s",
         "tcp_service_interruption_duration_s",
         "tcp_zero_goodput_window_count_after_reference",
@@ -518,10 +716,27 @@ def per_config_outcome_summary(run_rows: list[dict[str, str]]) -> list[dict[str,
         summary_row: dict[str, object] = {
             "config_name": config_name,
             "protection_mode": first_nonempty(config_rows, "protection_mode"),
+            "traffic_profile": first_nonempty(config_rows, "traffic_profile"),
+            "protection_trigger_sources": "; ".join(
+                f"{source}:{count}"
+                for source, count in sorted(
+                    Counter(row.get("protection_trigger_source", "") or "none" for row in config_rows).items()
+                )
+            ),
             "run_count": len(config_rows),
             "protection_activated_runs": true_flag_count(config_rows, "protection_activated"),
             "protection_before_failure_runs": true_flag_count(config_rows, "protection_activated_before_failure"),
             "repair_routes_installed_runs": true_flag_count(config_rows, "repair_routes_installed"),
+            "bfd_like_detection_activated_runs": true_flag_count(config_rows, "bfd_like_detection_activated"),
+            "bfd_like_use_modeled_probe_loss_runs": true_flag_count(config_rows, "bfd_like_use_modeled_probe_loss"),
+            "bfd_like_detection_before_hard_failure_runs": true_flag_count(config_rows, "bfd_like_detection_before_hard_failure"),
+            "bfd_like_protected_span_up_at_detection_runs": true_flag_count(config_rows, "bfd_like_protected_span_up_at_detection"),
+            "bfd_like_trigger_reasons": "; ".join(
+                f"{reason}:{count}"
+                for reason, count in sorted(
+                    Counter(row.get("bfd_like_trigger_reason_text", "") or "none" for row in config_rows).items()
+                )
+            ),
             "service_interruption_observed_runs": true_flag_count(config_rows, "service_interruption_observed"),
             "recovery_observed_runs": true_flag_count(config_rows, "recovery_observed"),
             "throughput_restored_after_failure_runs": true_flag_count(config_rows, "throughput_restored_after_failure"),
@@ -599,8 +814,16 @@ def format_outcome_summary_section(run_rows: list[dict[str, str]]) -> list[str]:
     lines.append("    Outcome fields are derived from receiver-side continuity and throughput plus")
     lines.append("    known scripted event times and shared controller scalars where available.")
     lines.append("    They are project-local operational metrics, not RFC-defined protocol fields.")
-    lines.append("    Packet sequence-gap fields expose receiver-observed packet continuity loss")
+    lines.append("    Packet sequence-gap fields expose receiver-observed continuity effects")
     lines.append("    that can be hidden by coarse one-second service-availability windows.")
+    lines.append("    Use unobserved packet-gap fields as loss-like evidence and reordered/out-of-order")
+    lines.append("    fields as repair-route switch side-effect evidence. Legacy missing fields are")
+    lines.append("    forward sequence-jump estimates retained for compatibility, not direct loss claims.")
+    lines.append("    Queue-normalized activation-to-failure ratios are descriptive diagnostics only;")
+    lines.append("    they do not imply a runtime control threshold or seamless make-before-break behavior.")
+    lines.append("    BFD-like fields describe a project-local reactive detector. When modeled")
+    lines.append("    probe loss is enabled, logical checks are exposed to current channel packet")
+    lines.append("    error rate; this remains an auditable abstraction, not RFC BFD.")
     lines.append("    TCP fields, when present, are application-endpoint useful-goodput proxies from INET")
     lines.append("    application vectors and are not protocol-internal TCP recovery counters.")
 
@@ -608,12 +831,23 @@ def format_outcome_summary_section(run_rows: list[dict[str, str]]) -> list[str]:
         config_name = summary_row["config_name"]
         lines.append(
             f"  {config_name} "
-            f"(mode={summary_row['protection_mode']}, runs={summary_row['run_count']})"
+            f"(mode={summary_row['protection_mode']}, traffic={summary_row['traffic_profile']}, runs={summary_row['run_count']})"
+        )
+        lines.append(
+            "    "
+            f"monitored_send_interval_s_mean={summary_row['monitored_flow_send_interval_s_mean']}, "
+            f"monitored_expected_packet_rate_pps_mean={summary_row['monitored_flow_expected_packet_rate_pps_mean']}, "
+            f"monitored_expected_packets_per_window_mean={summary_row['monitored_flow_expected_packets_per_window_mean']}"
+        )
+        lines.append(
+            "    "
+            f"protection_trigger_sources={summary_row['protection_trigger_sources']}"
         )
         lines.append(
             "    "
             f"protection_activated_runs={summary_row['protection_activated_runs']}, "
             f"protection_before_failure_runs={summary_row['protection_before_failure_runs']}, "
+            f"bfd_like_detection_activated_runs={summary_row['bfd_like_detection_activated_runs']}, "
             f"service_interruption_observed_runs={summary_row['service_interruption_observed_runs']}, "
             f"recovery_observed_runs={summary_row['recovery_observed_runs']}"
         )
@@ -646,20 +880,57 @@ def format_outcome_summary_section(run_rows: list[dict[str, str]]) -> list[str]:
         )
         lines.append(
             "    "
+            f"bfd_like_detection_time_s_mean={summary_row['bfd_like_detection_time_s_mean']}, "
+            f"bfd_like_detection_interval_s_mean={summary_row['bfd_like_detection_interval_s_mean']}, "
+            f"bfd_like_expected_detection_time_s_mean={summary_row['bfd_like_expected_detection_time_s_mean']}, "
+            f"bfd_like_detect_multiplier_mean={summary_row['bfd_like_detect_multiplier_mean']}, "
+            f"bfd_like_missed_probe_count_mean={summary_row['bfd_like_missed_probe_count_mean']}, "
+            f"bfd_like_detection_before_hard_failure_runs={summary_row['bfd_like_detection_before_hard_failure_runs']}, "
+            f"bfd_like_lead_time_before_failure_s_mean={summary_row['bfd_like_lead_time_before_failure_s_mean']}, "
+            f"bfd_like_protected_span_up_at_detection_runs={summary_row['bfd_like_protected_span_up_at_detection_runs']}"
+        )
+        lines.append(
+            "    "
+            f"bfd_like_use_modeled_probe_loss_runs={summary_row['bfd_like_use_modeled_probe_loss_runs']}, "
+            f"bfd_like_probe_checks_mean={summary_row['bfd_like_probe_checks_mean']}, "
+            f"bfd_like_probe_misses_mean={summary_row['bfd_like_probe_misses_mean']}, "
+            f"bfd_like_probe_loss_rate_observed_mean={summary_row['bfd_like_probe_loss_rate_observed_mean']}, "
+            f"bfd_like_modeled_probe_loss_probability_at_detection_mean={summary_row['bfd_like_modeled_probe_loss_probability_at_detection_mean']}, "
+            f"bfd_like_trigger_reasons={summary_row['bfd_like_trigger_reasons']}"
+        )
+        lines.append(
+            "    "
+            f"packet_sequence_gap_total_unobserved_after_reference_mean={summary_row['packet_sequence_gap_total_unobserved_after_reference_mean']}, "
+            f"packet_sequence_gap_total_reordered_after_reference_mean={summary_row['packet_sequence_gap_total_reordered_after_reference_mean']}, "
             f"packet_sequence_gap_total_missing_after_reference_mean={summary_row['packet_sequence_gap_total_missing_after_reference_mean']}, "
             f"max_packet_sequence_gap_after_reference_mean={summary_row['max_packet_sequence_gap_after_reference_mean']}, "
             f"max_packet_interarrival_gap_after_reference_s_mean={summary_row['max_packet_interarrival_gap_after_reference_s_mean']}"
         )
         lines.append(
             "    "
+            f"packet_sequence_gap_total_unobserved_after_hard_failure_mean={summary_row['packet_sequence_gap_total_unobserved_after_hard_failure_mean']}, "
+            f"packet_sequence_gap_total_reordered_after_hard_failure_mean={summary_row['packet_sequence_gap_total_reordered_after_hard_failure_mean']}, "
             f"packet_sequence_gap_total_missing_after_hard_failure_mean={summary_row['packet_sequence_gap_total_missing_after_hard_failure_mean']}, "
-            f"max_packet_sequence_gap_after_hard_failure_mean={summary_row['max_packet_sequence_gap_after_hard_failure_mean']}, "
+            f"max_packet_sequence_gap_after_hard_failure_mean={summary_row['max_packet_sequence_gap_after_hard_failure_mean']}"
+        )
+        lines.append(
+            "    "
+            f"packet_sequence_gap_total_unobserved_between_activation_and_failure_mean={summary_row['packet_sequence_gap_total_unobserved_between_activation_and_failure_mean']}, "
+            f"packet_sequence_gap_total_reordered_between_activation_and_failure_mean={summary_row['packet_sequence_gap_total_reordered_between_activation_and_failure_mean']}, "
+            f"packet_sequence_out_of_order_event_count_between_activation_and_failure_mean={summary_row['packet_sequence_out_of_order_event_count_between_activation_and_failure_mean']}, "
             f"packet_sequence_gap_total_missing_between_activation_and_failure_mean={summary_row['packet_sequence_gap_total_missing_between_activation_and_failure_mean']}"
         )
         lines.append(
             "    "
-            f"packet_sequence_gap_total_missing_after_protection_activation_mean={summary_row['packet_sequence_gap_total_missing_after_protection_activation_mean']}, "
-            f"packet_sequence_gap_total_missing_after_critical_start_mean={summary_row['packet_sequence_gap_total_missing_after_critical_start_mean']}, "
+            f"activation_to_failure_unobserved_per_activation_queue_packet_mean={summary_row['activation_to_failure_unobserved_per_activation_queue_packet_mean']}, "
+            f"activation_to_failure_reordered_per_activation_queue_packet_mean={summary_row['activation_to_failure_reordered_per_activation_queue_packet_mean']}"
+        )
+        lines.append(
+            "    "
+            f"packet_sequence_gap_total_unobserved_after_protection_activation_mean={summary_row['packet_sequence_gap_total_unobserved_after_protection_activation_mean']}, "
+            f"packet_sequence_gap_total_reordered_after_protection_activation_mean={summary_row['packet_sequence_gap_total_reordered_after_protection_activation_mean']}, "
+            f"packet_sequence_gap_total_unobserved_after_critical_start_mean={summary_row['packet_sequence_gap_total_unobserved_after_critical_start_mean']}, "
+            f"packet_sequence_gap_total_reordered_after_critical_start_mean={summary_row['packet_sequence_gap_total_reordered_after_critical_start_mean']}, "
             f"max_packet_sequence_gap_after_critical_start_mean={summary_row['max_packet_sequence_gap_after_critical_start_mean']}"
         )
         lines.append(

@@ -18,16 +18,33 @@
 *.vci
 *.elog
 *.anf
+*.pcap
+*.pcapng
 
 # Generated analysis outputs
 /analysis/output/
 /analysis/sklearn-env/
 /analysis/.venv/
 
+# Runtime deployment CSVs under simulations/regionalbackbone/ are intentionally
+# source-controlled examples; regenerate them with the documented export command
+# when the regional training dataset or export code changes.
+
 # Python caches
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Local OMNeT++ / Qtenv state
 .qtenvrc
 /simulations/**/.qtenvrc
+
+# Local editor, shell, and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo

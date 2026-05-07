@@ -133,6 +133,75 @@ $script:RegionalBackboneMixedTrafficProtectionCohortPreset = [pscustomobject]@{
     DefaultRunNumbers = @(0, 1, 2, 3, 4)
 }
 
+$script:RegionalBackboneFailureDetectionComparisonPreset = [pscustomobject]@{
+    Name = "regionalbackbone_failure_detection_comparison"
+    Description = "Regional backbone failure-detection comparison cohort: OSPF only, BFD-like + FRR, AI-MRCE + FRR, and hybrid trigger families"
+    ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
+    EvalDir = Join-Path $projectRoot "results\regionalbackbone\failure_detection_comparison"
+    DatasetPath = Join-Path $datasetsDir "regionalbackbone_failure_detection_comparison_dataset.csv"
+    ReportPath = Join-Path $reportsDir "regionalbackbone_failure_detection_comparison_report.txt"
+    MissingCsvPath = Join-Path $debugOutputDir "regionalbackbone_failure_detection_comparison_missing_values.csv"
+    PerConfigCsvPath = Join-Path $debugOutputDir "regionalbackbone_failure_detection_comparison_per_config_summary.csv"
+    OutcomeSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_comparison_outcome_summary.csv"
+    ComparisonOutputPrefix = Join-Path $outcomesDir "regionalbackbone_failure_detection_comparison"
+    ComparisonRunsPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_comparison_runs.csv"
+    ComparisonSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_comparison_summary.csv"
+    ComparisonReportPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_comparison_report.txt"
+    EvalConfigs = @(
+        "RegionalBackboneFailureComparisonOspfOnlyCohort",
+        "RegionalBackboneFailureComparisonBfdLikeFrrCohort",
+        "RegionalBackboneFailureComparisonAiMrceFrrCohort",
+        "RegionalBackboneFailureComparisonHybridCohort"
+    )
+    DefaultRunNumbers = @(0, 1, 2, 3, 4)
+}
+
+$script:RegionalBackboneFailureDetectionMsTrafficPreset = [pscustomobject]@{
+    Name = "regionalbackbone_failure_detection_comparison_ms_traffic"
+    Description = "Regional backbone failure-detection comparison cohort with a 2 ms monitored UDP probe for higher-resolution packet-continuity observation"
+    ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
+    EvalDir = Join-Path $projectRoot "results\regionalbackbone\failure_detection_comparison_ms_traffic"
+    DatasetPath = Join-Path $datasetsDir "regionalbackbone_failure_detection_comparison_ms_traffic_dataset.csv"
+    ReportPath = Join-Path $reportsDir "regionalbackbone_failure_detection_comparison_ms_traffic_report.txt"
+    MissingCsvPath = Join-Path $debugOutputDir "regionalbackbone_failure_detection_comparison_ms_traffic_missing_values.csv"
+    PerConfigCsvPath = Join-Path $debugOutputDir "regionalbackbone_failure_detection_comparison_ms_traffic_per_config_summary.csv"
+    OutcomeSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_comparison_ms_traffic_outcome_summary.csv"
+    ComparisonOutputPrefix = Join-Path $outcomesDir "regionalbackbone_failure_detection_comparison_ms_traffic"
+    ComparisonRunsPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_comparison_ms_traffic_runs.csv"
+    ComparisonSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_comparison_ms_traffic_summary.csv"
+    ComparisonReportPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_comparison_ms_traffic_report.txt"
+    EvalConfigs = @(
+        "RegionalBackboneFailureComparisonOspfOnlyMsTrafficCohort",
+        "RegionalBackboneFailureComparisonBfdLikeFrrMsTrafficCohort",
+        "RegionalBackboneFailureComparisonAiMrceFrrMsTrafficCohort",
+        "RegionalBackboneFailureComparisonHybridMsTrafficCohort"
+    )
+    DefaultRunNumbers = @(0, 1, 2, 3, 4)
+}
+
+$script:RegionalBackboneFailureDetectionDegradedLinkPreset = [pscustomobject]@{
+    Name = "regionalbackbone_failure_detection_degraded_link"
+    Description = "Regional backbone failure-detection comparison with progressive protected-span packet-loss degradation exposed to BFD-like probe checks"
+    ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
+    EvalDir = Join-Path $projectRoot "results\regionalbackbone\failure_detection_degraded_link"
+    DatasetPath = Join-Path $datasetsDir "regionalbackbone_failure_detection_degraded_link_dataset.csv"
+    ReportPath = Join-Path $reportsDir "regionalbackbone_failure_detection_degraded_link_report.txt"
+    MissingCsvPath = Join-Path $debugOutputDir "regionalbackbone_failure_detection_degraded_link_missing_values.csv"
+    PerConfigCsvPath = Join-Path $debugOutputDir "regionalbackbone_failure_detection_degraded_link_per_config_summary.csv"
+    OutcomeSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_outcome_summary.csv"
+    ComparisonOutputPrefix = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link"
+    ComparisonRunsPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_runs.csv"
+    ComparisonSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_summary.csv"
+    ComparisonReportPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_report.txt"
+    EvalConfigs = @(
+        "RegionalBackboneFailureComparisonOspfOnlyDegradedLinkCohort",
+        "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLinkCohort",
+        "RegionalBackboneFailureComparisonAiMrceFrrDegradedLinkCohort",
+        "RegionalBackboneFailureComparisonHybridDegradedLinkCohort"
+    )
+    DefaultRunNumbers = @(0, 1, 2, 3, 4)
+}
+
 $script:ActiveDatasetScenarios = @("regionalbackbone")
 $script:StrongerEvaluationModes = @(
     "grouped_run_holdout",
@@ -178,6 +247,12 @@ Commands:
                    Run the dedicated multi-run regional congestion protection cohort, rebuild its dataset/report, and generate its focused comparison artifacts.
   regional-mixed-traffic-protection-batch
                    Run the dedicated mixed UDP/TCP regional protection cohort, rebuild its dataset/report, and generate its focused comparison artifacts.
+  regional-failure-detection-comparison-batch
+                   Run the dedicated regional OSPF/BFD-like/AI-MRCE/hybrid failure-detection comparison cohort.
+  regional-failure-detection-ms-traffic-batch
+                   Run the same failure-detection comparison with a 2 ms monitored UDP probe for higher-resolution packet-continuity observation.
+  regional-failure-detection-degraded-link-batch
+                   Run the failure-detection comparison with progressive protected-span packet-loss degradation exposed to BFD-like probe checks.
   full-pipeline    Run selected dataset batches, optional analysis, optional training, and optional AI-MRCE runtime configs.
 
 Common options:
@@ -207,6 +282,9 @@ Examples:
   run_experiments.bat regional-congestion-protection-batch --dry-run
   run_experiments.bat regional-congestion-protection-batch --runs 0 1 --clean --yes --skip-build
   run_experiments.bat regional-mixed-traffic-protection-batch --runs 0 --skip-build --skip-runtime-export
+  run_experiments.bat regional-failure-detection-comparison-batch --runs 0 --skip-build --skip-runtime-export
+  run_experiments.bat regional-failure-detection-ms-traffic-batch --runs 0 --skip-build --skip-runtime-export
+  run_experiments.bat regional-failure-detection-degraded-link-batch --runs 0 --skip-build --skip-runtime-export
   run_experiments.bat dataset-batch --scenario linkdegradation --open-output-folder
   run_experiments.bat full-pipeline --clean --yes --include-aimrce
 
@@ -226,7 +304,7 @@ Notes:
   - It prepares generated artifacts and methodological outputs; it is not runtime decision logic itself.
   - The optional folder opening is Windows-only workflow usability help; it is not part of the experiment methodology.
   - When --configs selects only a subset of dataset configs, keep --skip-analysis enabled so the workflow does not silently produce a partial dataset export.
-  - regional-congestion-protection-batch and regional-mixed-traffic-protection-batch default to runs 0,1,2,3,4 when --runs is omitted.
+  - regional-congestion-protection-batch, regional-mixed-traffic-protection-batch, regional-failure-detection-comparison-batch, regional-failure-detection-ms-traffic-batch, and regional-failure-detection-degraded-link-batch default to runs 0,1,2,3,4 when --runs is omitted.
 "@ | Write-Host
 }
 
@@ -431,6 +509,28 @@ function Resolve-RegionalMixedTrafficProtectionRunNumbers {
     foreach ($runNumber in $selectedRunNumbers) {
         if ($allowedRunNumbers -notcontains $runNumber) {
             throw "regional-mixed-traffic-protection-batch supports only run numbers $($allowedRunNumbers -join ', ') because the dedicated mixed UDP/TCP cohort wrappers expose five repeated runs."
+        }
+    }
+
+    return $selectedRunNumbers
+}
+
+function Resolve-RegionalFailureDetectionComparisonRunNumbers {
+    param(
+        $Options,
+        $Preset = $script:RegionalBackboneFailureDetectionComparisonPreset,
+        [string]$CommandName = "regional-failure-detection-comparison-batch"
+    )
+
+    $allowedRunNumbers = @($Preset.DefaultRunNumbers)
+    if (-not $Options.RunsSpecified) {
+        return $allowedRunNumbers
+    }
+
+    $selectedRunNumbers = @($Options.Runs | Select-Object -Unique)
+    foreach ($runNumber in $selectedRunNumbers) {
+        if ($allowedRunNumbers -notcontains $runNumber) {
+            throw "$CommandName supports only run numbers $($allowedRunNumbers -join ', ') because the dedicated comparison wrappers expose five repeated runs."
         }
     }
 
@@ -1838,6 +1938,124 @@ function Invoke-RegionalMixedTrafficProtectionBatchCore {
     return $true
 }
 
+function Invoke-RegionalFailureDetectionComparisonBatchCore {
+    param(
+        $Context,
+        $Options,
+        $Preset = $script:RegionalBackboneFailureDetectionComparisonPreset,
+        [string]$CommandName = "regional-failure-detection-comparison-batch",
+        [string]$ComparisonStepName = "compare-outcomes-regional-failure-detection-comparison",
+        [string]$ArtifactHeading = "Created or updated failure-detection comparison artifacts",
+        [string]$OutputFolderReason = "regional failure-detection comparison artifacts"
+    )
+
+    $preset = $Preset
+    $runNumbers = @(Resolve-RegionalFailureDetectionComparisonRunNumbers -Options $Options -Preset $preset -CommandName $CommandName)
+    $runtimeExportPerformed = $false
+
+    Write-Host ""
+    Write-Host "Regional failure-detection comparison cohort batch"
+    Write-Host "  Purpose: $($preset.Description)"
+    Write-Host "  Configs: $($preset.EvalConfigs -join ', ')"
+    Write-Host "  Runs: $($runNumbers -join ', ')"
+    Write-Host "  Eval directory: $($preset.EvalDir)"
+
+    if (-not $Options.SkipRuntimeExport) {
+        if (-not $Options.DryRun -and -not (Test-Path $script:ScenarioPresets["regionalbackbone"].DatasetPath)) {
+            throw "$CommandName requires the existing regionalbackbone dataset for runtime export: $($script:ScenarioPresets["regionalbackbone"].DatasetPath). Generate it first or rerun with --skip-runtime-export to reuse the current runtime artifacts."
+        }
+
+        $runtimeExportStepName = "export-runtime-models"
+        $runtimeExportCommandResult = Invoke-RunAnalysisCommand `
+            -Context $Context `
+            -Subcommand "export-runtime-models" `
+            -SubcommandArgs @("--configs", "RegionalBackboneCongestionDegradation") `
+            -LogName "export-runtime-models.log" `
+            -Description "Export the AI-MRCE runtime deployment artifacts for $CommandName" `
+            -DryRun:$Options.DryRun
+
+        if (-not $Options.DryRun) {
+            $runtimeArtifacts = @()
+            foreach ($artifactPath in $script:RegionalBackboneRuntimeArtifactPaths) {
+                $artifact = Get-ArtifactMetadata -Path $artifactPath -Category "Runtime deployment artifact (.csv)" -SourceStep $runtimeExportStepName
+                if ($null -ne $artifact) {
+                    $runtimeArtifacts += $artifact
+                }
+            }
+            Publish-StepArtifacts `
+                -Context $Context `
+                -LogPath $runtimeExportCommandResult.LogPath `
+                -Heading "Created or updated runtime export artifacts" `
+                -Artifacts $runtimeArtifacts
+        }
+
+        $runtimeExportPerformed = $true
+        $runtimeExportDetails = if ($Options.DryRun) { "Dry run only; runtime deployment artifact export not executed." } else { "Runtime deployment artifact export completed." }
+        Add-StepResult -Context $Context -Step $runtimeExportStepName -Status "OK" -Details $runtimeExportDetails
+    }
+    else {
+        Add-StepResult -Context $Context -Step "export-runtime-models" -Status "OK" -Details "Skipped runtime export by request."
+    }
+
+    $batchSucceeded = Invoke-DatasetBatchCore `
+        -Context $Context `
+        -Preset $preset `
+        -ConfigNames $preset.EvalConfigs `
+        -RunNumbers $runNumbers `
+        -Options $Options
+
+    if (-not $batchSucceeded) {
+        Add-StepResult -Context $Context -Step $ComparisonStepName -Status "SKIPPED" -Details "Skipped cohort comparison because an earlier simulation or dataset step failed."
+        return $false
+    }
+
+    $comparisonCommandResult = Invoke-RunAnalysisCommand `
+        -Context $Context `
+        -Subcommand "compare-outcomes" `
+        -SubcommandArgs @("--inputs", $preset.OutcomeSummaryPath, "--output-prefix", $preset.ComparisonOutputPrefix) `
+        -LogName ("{0}.log" -f $ComparisonStepName) `
+        -Description "Build the focused practical comparison for the regional failure-detection comparison cohort" `
+        -DryRun:$Options.DryRun
+
+    if (-not $Options.DryRun) {
+        foreach ($requiredPath in @($preset.ComparisonRunsPath, $preset.ComparisonSummaryPath, $preset.ComparisonReportPath)) {
+            if (-not (Test-Path $requiredPath)) {
+                throw "$CommandName comparison step did not create the expected file: $requiredPath"
+            }
+        }
+
+        $comparisonArtifacts = @(
+            (Get-ArtifactMetadata -Path $preset.ComparisonRunsPath -Category "Cohort comparison runs (.csv)" -SourceStep $ComparisonStepName),
+            (Get-ArtifactMetadata -Path $preset.ComparisonSummaryPath -Category "Cohort comparison summary (.csv)" -SourceStep $ComparisonStepName),
+            (Get-ArtifactMetadata -Path $preset.ComparisonReportPath -Category "Cohort comparison report (.txt)" -SourceStep $ComparisonStepName)
+        )
+        Publish-StepArtifacts `
+            -Context $Context `
+            -LogPath $comparisonCommandResult.LogPath `
+            -Heading $ArtifactHeading `
+            -Artifacts $comparisonArtifacts
+    }
+
+    $comparisonDetails = if ($Options.DryRun) { "Dry run only; focused regional failure-detection comparison not executed." } else { "Focused regional failure-detection comparison completed." }
+    Add-StepResult -Context $Context -Step $ComparisonStepName -Status "OK" -Details $comparisonDetails
+
+    if ($runtimeExportPerformed) {
+        Request-OutputFolderOpen `
+            -Context $Context `
+            -Options $Options `
+            -FolderPath $preset.ScenarioDir `
+            -Reason "regionalbackbone runtime export artifacts"
+    }
+
+    Request-OutputFolderOpen `
+        -Context $Context `
+        -Options $Options `
+        -FolderPath $outcomesDir `
+        -Reason $OutputFolderReason
+
+    return $true
+}
+
 function Require-CleanConfirmation {
     param(
         $Options
@@ -1928,6 +2146,75 @@ function Validate-CommandOptions {
             }
             if ($Options.SkipAnalysis) {
                 throw "--skip-analysis is not supported by regional-mixed-traffic-protection-batch because dataset, outcome, and comparison artifacts are the purpose of the command."
+            }
+            if ($Options.SkipTraining) {
+                throw "--skip-training is only supported by full-pipeline."
+            }
+            if ($Options.RebuildMissingDatasets) {
+                throw "--rebuild-missing-datasets is only supported by training-batch."
+            }
+            if ($Options.StrongerEvaluationsOnly) {
+                throw "--stronger-evaluations-only is only supported by training-batch or full-pipeline."
+            }
+            if ($Options.IncludeAimrce) {
+                throw "--include-aimrce is only supported by full-pipeline."
+            }
+        }
+        "regional-failure-detection-comparison-batch" {
+            if ($Options.Scenarios.Count -gt 0) {
+                throw "--scenario is not supported by regional-failure-detection-comparison-batch because it is pinned to the dedicated regional backbone failure-detection comparison cohort."
+            }
+            if ($Options.Configs.Count -gt 0) {
+                throw "--configs is not supported by regional-failure-detection-comparison-batch because it always runs the full OSPF/BFD-like/AI-MRCE/hybrid comparison cohort."
+            }
+            if ($Options.SkipAnalysis) {
+                throw "--skip-analysis is not supported by regional-failure-detection-comparison-batch because dataset, outcome, and comparison artifacts are the purpose of the command."
+            }
+            if ($Options.SkipTraining) {
+                throw "--skip-training is only supported by full-pipeline."
+            }
+            if ($Options.RebuildMissingDatasets) {
+                throw "--rebuild-missing-datasets is only supported by training-batch."
+            }
+            if ($Options.StrongerEvaluationsOnly) {
+                throw "--stronger-evaluations-only is only supported by training-batch or full-pipeline."
+            }
+            if ($Options.IncludeAimrce) {
+                throw "--include-aimrce is only supported by full-pipeline."
+            }
+        }
+        "regional-failure-detection-ms-traffic-batch" {
+            if ($Options.Scenarios.Count -gt 0) {
+                throw "--scenario is not supported by regional-failure-detection-ms-traffic-batch because it is pinned to the dedicated regional backbone 2 ms monitored-traffic failure-detection cohort."
+            }
+            if ($Options.Configs.Count -gt 0) {
+                throw "--configs is not supported by regional-failure-detection-ms-traffic-batch because it always runs the full OSPF/BFD-like/AI-MRCE/hybrid comparison cohort."
+            }
+            if ($Options.SkipAnalysis) {
+                throw "--skip-analysis is not supported by regional-failure-detection-ms-traffic-batch because dataset, outcome, and comparison artifacts are the purpose of the command."
+            }
+            if ($Options.SkipTraining) {
+                throw "--skip-training is only supported by full-pipeline."
+            }
+            if ($Options.RebuildMissingDatasets) {
+                throw "--rebuild-missing-datasets is only supported by training-batch."
+            }
+            if ($Options.StrongerEvaluationsOnly) {
+                throw "--stronger-evaluations-only is only supported by training-batch or full-pipeline."
+            }
+            if ($Options.IncludeAimrce) {
+                throw "--include-aimrce is only supported by full-pipeline."
+            }
+        }
+        "regional-failure-detection-degraded-link-batch" {
+            if ($Options.Scenarios.Count -gt 0) {
+                throw "--scenario is not supported by regional-failure-detection-degraded-link-batch because it is pinned to the dedicated regional backbone degraded-link failure-detection cohort."
+            }
+            if ($Options.Configs.Count -gt 0) {
+                throw "--configs is not supported by regional-failure-detection-degraded-link-batch because it always runs the full OSPF/BFD-like/AI-MRCE/hybrid comparison cohort."
+            }
+            if ($Options.SkipAnalysis) {
+                throw "--skip-analysis is not supported by regional-failure-detection-degraded-link-batch because dataset, outcome, and comparison artifacts are the purpose of the command."
             }
             if ($Options.SkipTraining) {
                 throw "--skip-training is only supported by full-pipeline."
@@ -2088,6 +2375,107 @@ try {
                     }
 
                     $batchSucceeded = Invoke-RegionalMixedTrafficProtectionBatchCore -Context $context -Options $options
+                    if (-not $batchSucceeded) {
+                        $overallStatus = "FAILED"
+                        $scriptExitCode = 1
+                    }
+                }
+                catch {
+                    $overallStatus = "FAILED"
+                    $scriptExitCode = 1
+                    Add-StepResult -Context $context -Step $Command -Status "FAILED" -Details $_.Exception.Message
+                    Write-Error $_.Exception.Message
+                }
+                finally {
+                    Write-BatchSummary -Context $context -OverallStatus $overallStatus
+                }
+            }
+
+            "regional-failure-detection-comparison-batch" {
+                $context = New-BatchContext -BatchCommand $Command -ScenarioNames @("regionalbackbone_failure_detection_comparison")
+                $overallStatus = "OK"
+
+                try {
+                    if (-not $options.SkipBuild) {
+                        Build-Project -Context $context -DryRun:$options.DryRun
+                    }
+                    else {
+                        Add-StepResult -Context $context -Step "build" -Status "OK" -Details "Skipped build by request."
+                    }
+
+                    $batchSucceeded = Invoke-RegionalFailureDetectionComparisonBatchCore -Context $context -Options $options
+                    if (-not $batchSucceeded) {
+                        $overallStatus = "FAILED"
+                        $scriptExitCode = 1
+                    }
+                }
+                catch {
+                    $overallStatus = "FAILED"
+                    $scriptExitCode = 1
+                    Add-StepResult -Context $context -Step $Command -Status "FAILED" -Details $_.Exception.Message
+                    Write-Error $_.Exception.Message
+                }
+                finally {
+                    Write-BatchSummary -Context $context -OverallStatus $overallStatus
+                }
+            }
+
+            "regional-failure-detection-ms-traffic-batch" {
+                $context = New-BatchContext -BatchCommand $Command -ScenarioNames @("regionalbackbone_failure_detection_comparison_ms_traffic")
+                $overallStatus = "OK"
+
+                try {
+                    if (-not $options.SkipBuild) {
+                        Build-Project -Context $context -DryRun:$options.DryRun
+                    }
+                    else {
+                        Add-StepResult -Context $context -Step "build" -Status "OK" -Details "Skipped build by request."
+                    }
+
+                    $batchSucceeded = Invoke-RegionalFailureDetectionComparisonBatchCore `
+                        -Context $context `
+                        -Options $options `
+                        -Preset $script:RegionalBackboneFailureDetectionMsTrafficPreset `
+                        -CommandName "regional-failure-detection-ms-traffic-batch" `
+                        -ComparisonStepName "compare-outcomes-regional-failure-detection-ms-traffic" `
+                        -ArtifactHeading "Created or updated 2 ms monitored-traffic failure-detection comparison artifacts" `
+                        -OutputFolderReason "regional 2 ms monitored-traffic failure-detection comparison artifacts"
+                    if (-not $batchSucceeded) {
+                        $overallStatus = "FAILED"
+                        $scriptExitCode = 1
+                    }
+                }
+                catch {
+                    $overallStatus = "FAILED"
+                    $scriptExitCode = 1
+                    Add-StepResult -Context $context -Step $Command -Status "FAILED" -Details $_.Exception.Message
+                    Write-Error $_.Exception.Message
+                }
+                finally {
+                    Write-BatchSummary -Context $context -OverallStatus $overallStatus
+                }
+            }
+
+            "regional-failure-detection-degraded-link-batch" {
+                $context = New-BatchContext -BatchCommand $Command -ScenarioNames @("regionalbackbone_failure_detection_degraded_link")
+                $overallStatus = "OK"
+
+                try {
+                    if (-not $options.SkipBuild) {
+                        Build-Project -Context $context -DryRun:$options.DryRun
+                    }
+                    else {
+                        Add-StepResult -Context $context -Step "build" -Status "OK" -Details "Skipped build by request."
+                    }
+
+                    $batchSucceeded = Invoke-RegionalFailureDetectionComparisonBatchCore `
+                        -Context $context `
+                        -Options $options `
+                        -Preset $script:RegionalBackboneFailureDetectionDegradedLinkPreset `
+                        -CommandName "regional-failure-detection-degraded-link-batch" `
+                        -ComparisonStepName "compare-outcomes-regional-failure-detection-degraded-link" `
+                        -ArtifactHeading "Created or updated degraded-link failure-detection comparison artifacts" `
+                        -OutputFolderReason "regional degraded-link failure-detection comparison artifacts"
                     if (-not $batchSucceeded) {
                         $overallStatus = "FAILED"
                         $scriptExitCode = 1

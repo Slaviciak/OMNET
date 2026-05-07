@@ -11,7 +11,8 @@ For the scenario classification, see `analysis/EXPERIMENT_ARCHITECTURE.md`.
 - The simulation validates a conservative AI-assisted protection concept, not a production FRR implementation.
 - INET and OSPF internals are treated as external behavior and are not modified by the project.
 - AI-MRCE runtime candidates use observable telemetry, scenario-phase supervision, and simple deployment artifacts.
-- Existing FRR and BFD mechanisms are discussed through literature and technical comparison; the simulator does not hard-code every FRR variant.
+- Standards-compliant FRR and BFD mechanisms are discussed through literature and technical comparison. The simulator includes only a clearly named project-local FRR-like repair-route actuator and, in one separate cohort, a BFD-inspired protected-span detector abstraction.
+- The regional OSPF baseline uses INET OSPFv2 defaults unless explicitly stated. In INET 4.5 this means hello interval 10s and router dead interval 40s, applied consistently through `ASConfig.xml`; these defaults are kept as a normal OSPF reference rather than tuned to favor or weaken any candidate.
 - The project does not claim universal failure prediction. It studies selected degradation and congestion classes where observable pre-failure symptoms may exist.
 - Outcome metrics are operational simulator-side definitions, not RFC-standard restoration measurements.
 
@@ -40,6 +41,21 @@ For the scenario classification, see `analysis/EXPERIMENT_ARCHITECTURE.md`.
   - `RegionalBackboneMixedTrafficCongestionDegradationCohort`
   - `RegionalBackboneAiMrceRuleBasedMixedTrafficCohort`
   - `RegionalBackboneAiMrceLogRegMixedTrafficCohort`
+- Focused failure-detection comparison wrappers:
+  - `RegionalBackboneFailureComparisonOspfOnlyCohort`
+  - `RegionalBackboneFailureComparisonBfdLikeFrrCohort`
+  - `RegionalBackboneFailureComparisonAiMrceFrrCohort`
+  - `RegionalBackboneFailureComparisonHybridCohort`
+- Higher-resolution monitored-traffic failure-detection wrappers:
+  - `RegionalBackboneFailureComparisonOspfOnlyMsTrafficCohort`
+  - `RegionalBackboneFailureComparisonBfdLikeFrrMsTrafficCohort`
+  - `RegionalBackboneFailureComparisonAiMrceFrrMsTrafficCohort`
+  - `RegionalBackboneFailureComparisonHybridMsTrafficCohort`
+- Degraded-link failure-detection wrappers:
+  - `RegionalBackboneFailureComparisonOspfOnlyDegradedLinkCohort`
+  - `RegionalBackboneFailureComparisonBfdLikeFrrDegradedLinkCohort`
+  - `RegionalBackboneFailureComparisonAiMrceFrrDegradedLinkCohort`
+  - `RegionalBackboneFailureComparisonHybridDegradedLinkCohort`
 
 ### Active Controllers
 
@@ -49,6 +65,7 @@ For the scenario classification, see `analysis/EXPERIMENT_ARCHITECTURE.md`.
 - `src/dissertationsim/controller/AiMrceController.*`
   - Runs the current AI-MRCE runtime prototype family.
   - Uses sustained positive decisions before activating a project-local FRR-like static repair-route abstraction in the regional dissertation configs.
+  - Can optionally run a BFD-inspired protected-span detector in the separate failure-detection comparison cohort. In degraded-link variants, logical BFD-like probe checks can be exposed to the current channel packet-error-rate impairment. This is a reactive safety-net trigger abstraction, not full RFC BFD.
   - The older administrative-withdrawal action remains available as an explicit reference/debug mode, but it is no longer the intended active AI-MRCE protection abstraction.
 - `src/dissertationsim/controller/InterfaceWithdrawController.*`
   - Retained as a reusable deterministic administrative-withdrawal helper.
@@ -207,7 +224,80 @@ This command runs the reactive congestion baseline and all current AI-MRCE runti
 
 The cohort comparison is descriptive. It reports run counts, pre-failure activation, lead time, interruption occurrence/duration, recovery time, packet-continuity gaps, and throughput restoration under the project's operational definitions.
 
-The packet-continuity fields are intentionally separate from the coarse one-second service-interruption fields. They use receiver-observed UDP sequence-number jumps and receive-timestamp gaps to expose short delivery disruptions that can be real service impact even when every one-second window still contains enough packets to be marked available.
+The packet-continuity fields are intentionally separate from the coarse one-second service-interruption fields. They use receiver-observed UDP sequence-number jumps and receive-timestamp gaps to expose short delivery disruptions that can be real service impact even when every one-second window still contains enough packets to be marked available. Use `packet_sequence_gap_total_unobserved_after_hard_failure` as the headline loss-like post-failure comparison, and use `packet_sequence_gap_total_reordered_between_activation_and_failure` plus out-of-order event counts for the pre-failure repair-route switch side effect. The optional `activation_to_failure_*_per_activation_queue_packet` ratios are descriptive diagnostics that relate transition effects to the observed queue at activation; they are not controller thresholds.
+
+## Failure-Detection Comparison Cohort
+
+Run the focused regional OSPF/BFD-like/AI-MRCE/hybrid comparison cohort:
+
+```powershell
+run_experiments.bat regional-failure-detection-comparison-batch --clean --yes
+```
+
+For a smoke test:
+
+```powershell
+run_experiments.bat regional-failure-detection-comparison-batch --runs 0 --skip-build --skip-runtime-export
+```
+
+This command runs four trigger families over the same regional congestion/failure branch and writes separate artifacts:
+
+- `analysis/output/datasets/regionalbackbone_failure_detection_comparison_dataset.csv`
+- `analysis/output/reports/regionalbackbone_failure_detection_comparison_report.txt`
+- `analysis/output/outcomes/regionalbackbone_failure_detection_comparison_outcome_summary.csv`
+- `analysis/output/outcomes/regionalbackbone_failure_detection_comparison_report.txt`
+
+Mechanism buckets are explicit: `ospf_only`, `bfd_like_frr`, `aimrce_frr`, and `hybrid_bfd_like_aimrce_frr`. The BFD-like detector observes the protected-span interface/carrier state and keeps configurable missed probe-reception intervals as a fallback diagnostic; after a detect-multiplier-style condition it activates the same project-local repair routes. The active evaluation profile uses `bfdLikeDetectionInterval = 300ms` and `bfdLikeDetectMultiplier = 3`, so the configured expected detection time is about 0.9s after the protected span is observed unhealthy. The default congestion-only branch does not expose BFD-like checks to a separate pre-failure packet-error-rate impairment, so it may still resemble OSPF-only until the protected span is down. The hybrid config records whether AI-MRCE or the BFD-like detector triggered first. Do not describe this branch as standards-compliant BFD, LFA, TI-LFA, or integrated OSPF/BFD behavior.
+
+For manual demonstration, use `RegionalBackboneFailureComparisonHybridDebug` in Qtenv or Cmdenv. It enables eventlog recording plus controlled AI-MRCE telemetry, decision, repair-route, and BFD-like detector EV logs; evaluation configs keep these logs disabled to avoid noisy batch output.
+
+### Higher-Resolution Failure-Detection Traffic
+
+The default failure-detection comparison already uses a `256B` monitored UDP probe every `10ms`, plus staged `1200B` UDP load every `4ms` on the bulk flows. That is adequate for many packet-continuity diagnostics, but a 0.9s BFD-like detection profile can be easier to interpret with a finer monitored-packet cadence. The separate ms-traffic cohort therefore changes only the monitored probe to `2ms` while keeping the same topology, staged bulk traffic, hard failure time, BFD-like timing, AI-MRCE decisions, and repair-route actuator.
+
+Run it with:
+
+```powershell
+run_experiments.bat regional-failure-detection-ms-traffic-batch --clean --yes
+```
+
+For a smoke test:
+
+```powershell
+run_experiments.bat regional-failure-detection-ms-traffic-batch --runs 0 --skip-build --skip-runtime-export
+```
+
+Generated artifacts are kept separate:
+
+- `analysis/output/datasets/regionalbackbone_failure_detection_comparison_ms_traffic_dataset.csv`
+- `analysis/output/reports/regionalbackbone_failure_detection_comparison_ms_traffic_report.txt`
+- `analysis/output/outcomes/regionalbackbone_failure_detection_comparison_ms_traffic_outcome_summary.csv`
+- `analysis/output/outcomes/regionalbackbone_failure_detection_comparison_ms_traffic_report.txt`
+
+This is a measurement-resolution sensitivity cohort, not a new mechanism. It should be used to check whether fast reactive repair becomes more visible under millisecond-level active traffic. It must not be used to hide AI-MRCE reordering or to claim standards-compliant BFD/FRR behavior.
+
+### Degraded-Link BFD-Like Failure Detection
+
+The degraded-link comparison adds deterministic progressive packet-loss brownout on the protected `coreNW`-`coreNE` span before the same hard failure at `125s`. It keeps the same trigger families and repair-route actuator, but enables `bfdLikeUseModeledProbeLoss` for BFD-like and hybrid configs so logical BFD-like checks are exposed to the current channel packet error rate. This is intended to make the reactive BFD-like safety net scientifically credible in scenarios where the link is visibly losing packets before carrier-down; it is not a prediction mechanism and not RFC BFD.
+
+Run it with:
+
+```powershell
+run_experiments.bat regional-failure-detection-degraded-link-batch --clean --yes
+```
+
+For a smoke test:
+
+```powershell
+run_experiments.bat regional-failure-detection-degraded-link-batch --runs 0 --skip-build --skip-runtime-export
+```
+
+Generated artifacts are kept separate:
+
+- `analysis/output/datasets/regionalbackbone_failure_detection_degraded_link_dataset.csv`
+- `analysis/output/reports/regionalbackbone_failure_detection_degraded_link_report.txt`
+- `analysis/output/outcomes/regionalbackbone_failure_detection_degraded_link_outcome_summary.csv`
+- `analysis/output/outcomes/regionalbackbone_failure_detection_degraded_link_report.txt`
 
 ## Mixed UDP/TCP Protection Cohort
 
@@ -258,6 +348,18 @@ Focused mixed UDP/TCP cohort comparison:
 run_analysis.bat compare-outcomes --inputs analysis\output\outcomes\regionalbackbone_mixed_traffic_protection_multirun_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_mixed_traffic_protection_multirun_comparison
 ```
 
+Focused failure-detection comparison:
+
+```powershell
+run_analysis.bat compare-outcomes --inputs analysis\output\outcomes\regionalbackbone_failure_detection_comparison_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_comparison
+```
+
+Focused 2 ms monitored-traffic failure-detection comparison:
+
+```powershell
+run_analysis.bat compare-outcomes --inputs analysis\output\outcomes\regionalbackbone_failure_detection_comparison_ms_traffic_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_comparison_ms_traffic
+```
+
 Do not mix unlike cohorts unless the report explicitly separates them.
 
 ## Batch Orchestrator
@@ -272,6 +374,7 @@ run_experiments.bat training-batch --stronger-evaluations-only
 run_experiments.bat aimrce-batch --skip-runtime-export --dry-run
 run_experiments.bat regional-congestion-protection-batch --dry-run
 run_experiments.bat regional-mixed-traffic-protection-batch --runs 0 --skip-build --skip-runtime-export --dry-run
+run_experiments.bat regional-failure-detection-ms-traffic-batch --runs 0 --skip-build --skip-runtime-export --dry-run
 run_experiments.bat full-pipeline --clean --yes --include-aimrce
 ```
 
@@ -286,8 +389,10 @@ run_experiments.bat full-pipeline --clean --yes --include-aimrce
 - The repair-route action is a project-local FRR-like abstraction, not an implementation of standards-compliant IP FRR, LFA/TI-LFA, BFD, or custom OSPF extensions.
 - Current controller scalars include activation-time diagnostic telemetry (`activationRiskScore`, threshold, streak, queue state, probe delay/throughput/count) and `repairRouteInstallTime`. These are audit signals only; they do not change the decision or routing semantics.
 - Outcome improvements are scenario-conditioned. They should be described descriptively unless enough independent runs are available for stronger statistical analysis.
-- A run may show no one-second service interruption while still showing packet sequence loss or endpoint receive gaps. Report these as packet-continuity or useful-goodput continuity impacts, not as RFC-standard restoration timers.
+- A run may show no one-second service interruption while still showing unobserved packet gaps, receiver-observed reordering, or endpoint receive gaps. Report these as packet-continuity or useful-goodput continuity impacts, not as RFC-standard restoration timers.
 - Packet-continuity reporting now separates operational `after_reference` gaps from `after_hard_failure`, `after_protection_activation`, `between_activation_and_failure`, and `after_critical_start` views. Use `after_hard_failure` for the cleanest post-failure protection comparison, and use the activation-to-failure fields to report any pre-failure switch penalty honestly.
+- The legacy `packet_sequence_gap_total_missing_*` fields are forward-jump continuity estimates retained for compatibility, not direct packet-loss claims. After a repair-route switch, newer packets on the faster repair path can overtake older packets delayed in the congested primary queue; use the `packet_sequence_gap_total_unobserved_*` and `packet_sequence_gap_total_reordered_*` fields to distinguish likely unobserved/lost packets from out-of-order delivery.
+- Queue-normalized activation-to-failure diagnostics relate reordered/unobserved counts to `activationQueueLengthPk`. They support mechanism diagnosis only and must not be reported as proof of a universal queue threshold or seamless FRR behavior.
 - The mixed UDP/TCP branch is a practical transport-impact extension using standard INET applications. TCP useful-goodput is measured from application endpoint byte vectors, not TCP-internal retransmission or congestion-control counters. It improves realism over UDP-only evidence, but it is still a controlled simulator scenario rather than an Internet traffic trace.
 - Analysis scripts resolve explicit relative CLI paths from the project root. Prefer running commands from the project root for readability, but paths such as `analysis\output\...` are no longer dependent on the caller's current directory.
 

@@ -16,11 +16,21 @@ Assumptions:
 - Packet-continuity diagnostics use receiver-observed sequence numbers and
   receive timestamps. They are intended to reveal short packet-loss/reordering
   symptoms that may not produce a full one-second zero-progress window.
+- The historical sequence-gap "missing" fields are forward-jump estimates,
+  not direct packet-loss claims. They intentionally remain for compatibility,
+  but route switches can reorder packets when a fast repair path overtakes
+  older packets delayed in the congested primary queue. Reordering-aware
+  unobserved/reordered fields are therefore exported alongside the original
+  fields and should be used for loss-like versus reordering interpretations.
 - Packet-continuity outputs are split by reference point. The historical
   after_reference fields follow the operational service-interruption reference
   (protection activation for protected runs, hard failure for reactive runs);
   separate after_hard_failure and between_activation_and_failure fields avoid
   hiding activation transition cost or overstating post-failure benefit.
+- Queue-normalized activation-to-failure diagnostics are descriptive ratios
+  only. They help relate repair-route reordering to the observed queue state at
+  activation, but they are not control thresholds and do not change runtime
+  behavior.
 - Mixed UDP/TCP regional runs use standard INET TCP applications and summarize
   application packet-byte vectors as a conservative useful-goodput proxy.
   This deliberately avoids protocol-internal TCP instrumentation or claims
@@ -88,10 +98,34 @@ HOSTA_TCP_REPLY_APP_RE = re.compile(r".*\.hostA\.app\[(3|4)\]$")
 TARGET_CONTROLLER_SCALAR_NAMES = {
     "protectionActivated",
     "protectionActivationTime",
+    "protectionTriggerSourceCode",
     "protectionActionCode",
     "repairRoutesInstalled",
     "repairRouteCount",
     "repairRouteInstallTime",
+    "enableAimrceDecision",
+    "enableBfdLikeDetection",
+    "bfdLikeDetectionActivated",
+    "bfdLikeDetectionTime",
+    "bfdLikeDetectMultiplier",
+    "bfdLikeDetectionInterval",
+    "bfdLikeExpectedDetectionTime",
+    "bfdLikeMissedProbeCount",
+    "bfdLikeMaxMissedProbeCount",
+    "bfdLikeUseModeledProbeLoss",
+    "bfdLikeProbeChecks",
+    "bfdLikeProbeSuccesses",
+    "bfdLikeProbeMisses",
+    "bfdLikeProbeLossRateObserved",
+    "bfdLikeModeledProbeLossProbabilityLast",
+    "bfdLikeModeledProbeLossProbabilityMax",
+    "bfdLikeModeledProbeLossProbabilityAtDetection",
+    "bfdLikeTriggerReasonCode",
+    "bfdLikeProtectedSpanUpAtDetection",
+    "bfdLikeDetectionBeforeHardFailure",
+    "bfdLikeLeadTimeBeforeFailure",
+    "hardFailureToBfdDetectionTime",
+    "hardFailureTime",
     "activationRiskScore",
     "activationDecisionThreshold",
     "activationPositiveDecisionStreak",
@@ -105,6 +139,9 @@ REGIONALBACKBONE_FAMILY_SCENARIOS = {
     "regionalbackbone",
     "regionalbackbone_congestion_protection",
     "regionalbackbone_mixed_traffic_protection",
+    "regionalbackbone_failure_detection_comparison",
+    "regionalbackbone_failure_detection_comparison_ms_traffic",
+    "regionalbackbone_failure_detection_degraded_link",
 }
 
 REGIONALBACKBONE_DATASET_CONFIGS = {
@@ -124,6 +161,24 @@ REGIONALBACKBONE_MIXED_TRAFFIC_CONFIGS = {
     "RegionalBackboneAiMrceRuleBasedMixedTraffic",
     "RegionalBackboneAiMrceLogRegMixedTraffic",
 }
+REGIONALBACKBONE_FAILURE_DETECTION_COMPARISON_CONFIGS = {
+    "RegionalBackboneFailureComparisonOspfOnly",
+    "RegionalBackboneFailureComparisonBfdLikeFrr",
+    "RegionalBackboneFailureComparisonAiMrceFrr",
+    "RegionalBackboneFailureComparisonHybrid",
+}
+REGIONALBACKBONE_FAILURE_DETECTION_MS_TRAFFIC_CONFIGS = {
+    "RegionalBackboneFailureComparisonOspfOnlyMsTraffic",
+    "RegionalBackboneFailureComparisonBfdLikeFrrMsTraffic",
+    "RegionalBackboneFailureComparisonAiMrceFrrMsTraffic",
+    "RegionalBackboneFailureComparisonHybridMsTraffic",
+}
+REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_CONFIGS = {
+    "RegionalBackboneFailureComparisonOspfOnlyDegradedLink",
+    "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLink",
+    "RegionalBackboneFailureComparisonAiMrceFrrDegradedLink",
+    "RegionalBackboneFailureComparisonHybridDegradedLink",
+}
 REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS = {
     "RegionalBackboneCongestionDegradation",
     "RegionalBackboneAiMrceRuleBased",
@@ -131,6 +186,9 @@ REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS = {
     "RegionalBackboneAiMrceLinearSvm",
     "RegionalBackboneAiMrceShallowTree",
     *REGIONALBACKBONE_MIXED_TRAFFIC_CONFIGS,
+    *REGIONALBACKBONE_FAILURE_DETECTION_COMPARISON_CONFIGS,
+    *REGIONALBACKBONE_FAILURE_DETECTION_MS_TRAFFIC_CONFIGS,
+    *REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_CONFIGS,
 }
 
 
@@ -240,6 +298,60 @@ SCENARIO_PRESETS = {
             "RegionalBackboneMixedTrafficCongestionDegradation": 150.0,
             "RegionalBackboneAiMrceRuleBasedMixedTraffic": 150.0,
             "RegionalBackboneAiMrceLogRegMixedTraffic": 150.0,
+        },
+    },
+    "regionalbackbone_failure_detection_comparison": {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_comparison",
+        "output_file": DATASETS_DIR / "regionalbackbone_failure_detection_comparison_dataset.csv",
+        "supported_configs": REGIONALBACKBONE_FAILURE_DETECTION_COMPARISON_CONFIGS,
+        "config_aliases": {
+            "RegionalBackboneFailureComparisonOspfOnlyCohort": "RegionalBackboneFailureComparisonOspfOnly",
+            "RegionalBackboneFailureComparisonBfdLikeFrrCohort": "RegionalBackboneFailureComparisonBfdLikeFrr",
+            "RegionalBackboneFailureComparisonAiMrceFrrCohort": "RegionalBackboneFailureComparisonAiMrceFrr",
+            "RegionalBackboneFailureComparisonHybridCohort": "RegionalBackboneFailureComparisonHybrid",
+        },
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            "RegionalBackboneFailureComparisonOspfOnly": 150.0,
+            "RegionalBackboneFailureComparisonBfdLikeFrr": 150.0,
+            "RegionalBackboneFailureComparisonAiMrceFrr": 150.0,
+            "RegionalBackboneFailureComparisonHybrid": 150.0,
+        },
+    },
+    "regionalbackbone_failure_detection_comparison_ms_traffic": {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_comparison_ms_traffic",
+        "output_file": DATASETS_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_dataset.csv",
+        "supported_configs": REGIONALBACKBONE_FAILURE_DETECTION_MS_TRAFFIC_CONFIGS,
+        "config_aliases": {
+            "RegionalBackboneFailureComparisonOspfOnlyMsTrafficCohort": "RegionalBackboneFailureComparisonOspfOnlyMsTraffic",
+            "RegionalBackboneFailureComparisonBfdLikeFrrMsTrafficCohort": "RegionalBackboneFailureComparisonBfdLikeFrrMsTraffic",
+            "RegionalBackboneFailureComparisonAiMrceFrrMsTrafficCohort": "RegionalBackboneFailureComparisonAiMrceFrrMsTraffic",
+            "RegionalBackboneFailureComparisonHybridMsTrafficCohort": "RegionalBackboneFailureComparisonHybridMsTraffic",
+        },
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            "RegionalBackboneFailureComparisonOspfOnlyMsTraffic": 150.0,
+            "RegionalBackboneFailureComparisonBfdLikeFrrMsTraffic": 150.0,
+            "RegionalBackboneFailureComparisonAiMrceFrrMsTraffic": 150.0,
+            "RegionalBackboneFailureComparisonHybridMsTraffic": 150.0,
+        },
+    },
+    "regionalbackbone_failure_detection_degraded_link": {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_degraded_link",
+        "output_file": DATASETS_DIR / "regionalbackbone_failure_detection_degraded_link_dataset.csv",
+        "supported_configs": REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_CONFIGS,
+        "config_aliases": {
+            "RegionalBackboneFailureComparisonOspfOnlyDegradedLinkCohort": "RegionalBackboneFailureComparisonOspfOnlyDegradedLink",
+            "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLinkCohort": "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLink",
+            "RegionalBackboneFailureComparisonAiMrceFrrDegradedLinkCohort": "RegionalBackboneFailureComparisonAiMrceFrrDegradedLink",
+            "RegionalBackboneFailureComparisonHybridDegradedLinkCohort": "RegionalBackboneFailureComparisonHybridDegradedLink",
+        },
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            "RegionalBackboneFailureComparisonOspfOnlyDegradedLink": 150.0,
+            "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLink": 150.0,
+            "RegionalBackboneFailureComparisonAiMrceFrrDegradedLink": 150.0,
+            "RegionalBackboneFailureComparisonHybridDegradedLink": 150.0,
         },
     },
 }
@@ -558,6 +670,128 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 tcp_app_indices=(3, 4),
                 tcp_flow_start_time_s=45.0,
                 tcp_useful_goodput_floor_bps=50_000.0,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonOspfOnly": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="ospf_only",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonBfdLikeFrr": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="bfd_like_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonAiMrceFrr": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonHybrid": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="hybrid_bfd_like_aimrce_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonOspfOnlyMsTraffic": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="ospf_only",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.002,
+                flow_start_time_s=20.0,
+                traffic_profile="udp_probe_2ms_staged_congestion",
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonBfdLikeFrrMsTraffic": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="bfd_like_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.002,
+                flow_start_time_s=20.0,
+                traffic_profile="udp_probe_2ms_staged_congestion",
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonAiMrceFrrMsTraffic": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.002,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                traffic_profile="udp_probe_2ms_staged_congestion",
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonHybridMsTraffic": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="hybrid_bfd_like_aimrce_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.002,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                traffic_profile="udp_probe_2ms_staged_congestion",
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonOspfOnlyDegradedLink": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="ospf_only",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLink": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="bfd_like_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonAiMrceFrrDegradedLink": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+            ),
+            "RegionalBackboneFailureComparisonHybridDegradedLink": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="hybrid_bfd_like_aimrce_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
         }
@@ -949,10 +1183,61 @@ def optional_numeric(value: float | int | None) -> float | int | str:
     return value
 
 
+def optional_nonnegative_numeric(value: float | int | None) -> float | int | str:
+    if value is None:
+        return ""
+    if float(value) < 0:
+        return ""
+    return value
+
+
 def bool_flag(value: bool | None) -> int | str:
     if value is None:
         return ""
     return 1 if value else 0
+
+
+def ratio_or_none(numerator: float | int | None, denominator: float | int | None) -> float | None:
+    if numerator is None or denominator is None:
+        return None
+    denominator_value = float(denominator)
+    if denominator_value <= 0:
+        return None
+    return float(numerator) / denominator_value
+
+
+def protection_trigger_source_from_code(code: float | int | None, protection_mode: str, activated: bool) -> str:
+    if code is not None:
+        code_int = int(round(float(code)))
+        return {
+            0: "none",
+            1: "aimrce",
+            2: "bfd_like",
+            3: "hybrid_aimrce_first",
+            4: "hybrid_bfd_like_first",
+        }.get(code_int, f"unknown_code_{code_int}")
+
+    if not activated:
+        return "none"
+    if protection_mode == "bfd_like_frr":
+        return "bfd_like"
+    if protection_mode == "hybrid_bfd_like_aimrce_frr":
+        return "hybrid_unknown_first"
+    if protection_mode.startswith("aimrce"):
+        return "aimrce"
+    return "unknown"
+
+
+def bfd_like_trigger_reason_from_code(code: float | int | None) -> str:
+    if code is None:
+        return ""
+    code_int = int(round(float(code)))
+    return {
+        0: "none",
+        1: "receiver_probe_interval_below_expected",
+        2: "protected_span_interface_down",
+        3: "modeled_probe_loss_from_channel_per",
+    }.get(code_int, f"unknown_code_{code_int}")
 
 
 def availability_thresholds(profile: OutcomeProfile) -> tuple[float, int, float]:
@@ -1089,11 +1374,15 @@ def packet_continuity_metrics(
             "packet_sequence_gap_observed_after_reference": None,
             "packet_sequence_gap_count_after_reference": None,
             "packet_sequence_gap_total_missing_after_reference": None,
+            "packet_sequence_gap_total_unobserved_after_reference": None,
+            "packet_sequence_gap_total_reordered_after_reference": None,
             "max_packet_sequence_gap_after_reference": None,
             "max_packet_interarrival_gap_after_reference_s": None,
             "packet_interarrival_nominal_gap_threshold_s": None,
             "packet_interarrival_gap_exceedance_count_after_reference": None,
             "packet_interarrival_gap_exceeded_nominal_threshold": None,
+            "packet_sequence_out_of_order_event_count_after_reference": None,
+            "packet_sequence_out_of_order_packet_count_after_reference": None,
             "first_packet_after_reference_delay_s": None,
         }
 
@@ -1103,11 +1392,15 @@ def packet_continuity_metrics(
             "packet_sequence_gap_observed_after_reference": False,
             "packet_sequence_gap_count_after_reference": 0,
             "packet_sequence_gap_total_missing_after_reference": 0,
+            "packet_sequence_gap_total_unobserved_after_reference": 0,
+            "packet_sequence_gap_total_reordered_after_reference": 0,
             "max_packet_sequence_gap_after_reference": 0,
             "max_packet_interarrival_gap_after_reference_s": 0.0,
             "packet_interarrival_nominal_gap_threshold_s": threshold_s,
             "packet_interarrival_gap_exceedance_count_after_reference": 0,
             "packet_interarrival_gap_exceeded_nominal_threshold": False,
+            "packet_sequence_out_of_order_event_count_after_reference": 0,
+            "packet_sequence_out_of_order_packet_count_after_reference": 0,
             "first_packet_after_reference_delay_s": None,
         }
 
@@ -1122,11 +1415,15 @@ def packet_continuity_metrics(
             "packet_sequence_gap_observed_after_reference": False,
             "packet_sequence_gap_count_after_reference": 0,
             "packet_sequence_gap_total_missing_after_reference": 0,
+            "packet_sequence_gap_total_unobserved_after_reference": 0,
+            "packet_sequence_gap_total_reordered_after_reference": 0,
             "max_packet_sequence_gap_after_reference": 0,
             "max_packet_interarrival_gap_after_reference_s": 0.0,
             "packet_interarrival_nominal_gap_threshold_s": threshold_s,
             "packet_interarrival_gap_exceedance_count_after_reference": 0,
             "packet_interarrival_gap_exceeded_nominal_threshold": False,
+            "packet_sequence_out_of_order_event_count_after_reference": 0,
+            "packet_sequence_out_of_order_packet_count_after_reference": 0,
             "first_packet_after_reference_delay_s": (
                 first_after - reference_time_s if first_after is not None else None
             ),
@@ -1134,14 +1431,21 @@ def packet_continuity_metrics(
 
     sequence_gap_count = 0
     total_missing_packets = 0
+    total_unobserved_packets = 0
+    total_reordered_gap_packets = 0
     max_sequence_gap = 0
     max_interarrival_gap_s = 0.0
     interarrival_exceedance_count = 0
+    out_of_order_event_count = 0
+    out_of_order_packet_count = 0
+    max_seen_sequence = int(round(samples[0][1]))
+    observed_sequences = {int(round(value)) for _, value in samples}
 
     previous_timestamp, previous_value = samples[0]
     for timestamp, value in samples[1:]:
         overlaps_reference_interval = previous_timestamp < reference_time_s <= timestamp
         if timestamp < reference_time_s and not overlaps_reference_interval:
+            max_seen_sequence = max(max_seen_sequence, int(round(value)))
             previous_timestamp, previous_value = timestamp, value
             continue
 
@@ -1153,8 +1457,20 @@ def packet_continuity_metrics(
         sequence_jump = max(0, int(round(value - previous_value)))
         if sequence_jump > 1:
             sequence_gap_count += 1
-            total_missing_packets += sequence_jump - 1
+            skipped_sequences = range(int(round(previous_value)) + 1, int(round(value)))
+            skipped_count = sequence_jump - 1
+            observed_skipped_count = sum(1 for sequence in skipped_sequences if sequence in observed_sequences)
+            unobserved_skipped_count = skipped_count - observed_skipped_count
+            total_missing_packets += skipped_count
+            total_reordered_gap_packets += observed_skipped_count
+            total_unobserved_packets += unobserved_skipped_count
             max_sequence_gap = max(max_sequence_gap, sequence_jump - 1)
+
+        current_sequence = int(round(value))
+        if current_sequence < max_seen_sequence:
+            out_of_order_event_count += 1
+            out_of_order_packet_count += 1
+        max_seen_sequence = max(max_seen_sequence, current_sequence)
 
         previous_timestamp, previous_value = timestamp, value
 
@@ -1164,11 +1480,15 @@ def packet_continuity_metrics(
         "packet_sequence_gap_observed_after_reference": sequence_gap_count > 0,
         "packet_sequence_gap_count_after_reference": sequence_gap_count,
         "packet_sequence_gap_total_missing_after_reference": total_missing_packets,
+        "packet_sequence_gap_total_unobserved_after_reference": total_unobserved_packets,
+        "packet_sequence_gap_total_reordered_after_reference": total_reordered_gap_packets,
         "max_packet_sequence_gap_after_reference": max_sequence_gap,
         "max_packet_interarrival_gap_after_reference_s": max_interarrival_gap_s,
         "packet_interarrival_nominal_gap_threshold_s": threshold_s,
         "packet_interarrival_gap_exceedance_count_after_reference": interarrival_exceedance_count,
         "packet_interarrival_gap_exceeded_nominal_threshold": interarrival_exceedance_count > 0,
+        "packet_sequence_out_of_order_event_count_after_reference": out_of_order_event_count,
+        "packet_sequence_out_of_order_packet_count_after_reference": out_of_order_packet_count,
         "first_packet_after_reference_delay_s": (
             first_packet_after_reference - reference_time_s
             if first_packet_after_reference is not None
@@ -1185,10 +1505,14 @@ def add_packet_continuity_outcome_fields(
     output_fields[f"packet_sequence_gap_observed_{suffix}"] = bool_flag(metrics["packet_sequence_gap_observed_after_reference"])
     output_fields[f"packet_sequence_gap_count_{suffix}"] = optional_numeric(metrics["packet_sequence_gap_count_after_reference"])
     output_fields[f"packet_sequence_gap_total_missing_{suffix}"] = optional_numeric(metrics["packet_sequence_gap_total_missing_after_reference"])
+    output_fields[f"packet_sequence_gap_total_unobserved_{suffix}"] = optional_numeric(metrics["packet_sequence_gap_total_unobserved_after_reference"])
+    output_fields[f"packet_sequence_gap_total_reordered_{suffix}"] = optional_numeric(metrics["packet_sequence_gap_total_reordered_after_reference"])
     output_fields[f"max_packet_sequence_gap_{suffix}"] = optional_numeric(metrics["max_packet_sequence_gap_after_reference"])
     output_fields[f"max_packet_interarrival_gap_{suffix}_s"] = optional_numeric(metrics["max_packet_interarrival_gap_after_reference_s"])
     output_fields[f"packet_interarrival_gap_exceedance_count_{suffix}"] = optional_numeric(metrics["packet_interarrival_gap_exceedance_count_after_reference"])
     output_fields[f"packet_interarrival_gap_exceeded_nominal_threshold_{suffix}"] = bool_flag(metrics["packet_interarrival_gap_exceeded_nominal_threshold"])
+    output_fields[f"packet_sequence_out_of_order_event_count_{suffix}"] = optional_numeric(metrics["packet_sequence_out_of_order_event_count_after_reference"])
+    output_fields[f"packet_sequence_out_of_order_packet_count_{suffix}"] = optional_numeric(metrics["packet_sequence_out_of_order_packet_count_after_reference"])
     output_fields[f"first_packet_{suffix}_delay_s"] = optional_numeric(metrics["first_packet_after_reference_delay_s"])
 
 
@@ -1254,9 +1578,33 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         run_data["scalars"],
     )
     protection_action_code = run_data["scalars"].get("protectionActionCode")
+    protection_trigger_source_code = run_data["scalars"].get("protectionTriggerSourceCode")
     repair_routes_installed = run_data["scalars"].get("repairRoutesInstalled")
     repair_route_count = run_data["scalars"].get("repairRouteCount")
     repair_route_install_time_s = run_data["scalars"].get("repairRouteInstallTime")
+    enable_aimrce_decision = run_data["scalars"].get("enableAimrceDecision")
+    enable_bfd_like_detection = run_data["scalars"].get("enableBfdLikeDetection")
+    bfd_like_detection_activated = run_data["scalars"].get("bfdLikeDetectionActivated")
+    bfd_like_detection_time_s = run_data["scalars"].get("bfdLikeDetectionTime")
+    bfd_like_detect_multiplier = run_data["scalars"].get("bfdLikeDetectMultiplier")
+    bfd_like_detection_interval_s = run_data["scalars"].get("bfdLikeDetectionInterval")
+    bfd_like_expected_detection_time_s = run_data["scalars"].get("bfdLikeExpectedDetectionTime")
+    bfd_like_missed_probe_count = run_data["scalars"].get("bfdLikeMissedProbeCount")
+    bfd_like_max_missed_probe_count = run_data["scalars"].get("bfdLikeMaxMissedProbeCount")
+    bfd_like_use_modeled_probe_loss = run_data["scalars"].get("bfdLikeUseModeledProbeLoss")
+    bfd_like_probe_checks = run_data["scalars"].get("bfdLikeProbeChecks")
+    bfd_like_probe_successes = run_data["scalars"].get("bfdLikeProbeSuccesses")
+    bfd_like_probe_misses = run_data["scalars"].get("bfdLikeProbeMisses")
+    bfd_like_probe_loss_rate_observed = run_data["scalars"].get("bfdLikeProbeLossRateObserved")
+    bfd_like_modeled_probe_loss_probability_last = run_data["scalars"].get("bfdLikeModeledProbeLossProbabilityLast")
+    bfd_like_modeled_probe_loss_probability_max = run_data["scalars"].get("bfdLikeModeledProbeLossProbabilityMax")
+    bfd_like_modeled_probe_loss_probability_at_detection = run_data["scalars"].get("bfdLikeModeledProbeLossProbabilityAtDetection")
+    bfd_like_trigger_reason_code = run_data["scalars"].get("bfdLikeTriggerReasonCode")
+    bfd_like_protected_span_up_at_detection = run_data["scalars"].get("bfdLikeProtectedSpanUpAtDetection")
+    bfd_like_detection_before_hard_failure = run_data["scalars"].get("bfdLikeDetectionBeforeHardFailure")
+    bfd_like_lead_time_before_failure_s = run_data["scalars"].get("bfdLikeLeadTimeBeforeFailure")
+    hard_failure_to_bfd_detection_time_s = run_data["scalars"].get("hardFailureToBfdDetectionTime")
+    hard_failure_time_scalar_s = run_data["scalars"].get("hardFailureTime")
     activation_risk_score = run_data["scalars"].get("activationRiskScore")
     activation_decision_threshold = run_data["scalars"].get("activationDecisionThreshold")
     activation_positive_decision_streak = run_data["scalars"].get("activationPositiveDecisionStreak")
@@ -1265,6 +1613,11 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
     activation_probe_delay_mean_s = run_data["scalars"].get("activationProbeDelayMeanS")
     activation_probe_throughput_bps = run_data["scalars"].get("activationProbeThroughputBps")
     activation_probe_packet_count = run_data["scalars"].get("activationProbePacketCount")
+    protection_trigger_source = protection_trigger_source_from_code(
+        protection_trigger_source_code,
+        profile.protection_mode,
+        protection_activated,
+    )
     hard_failure_time_s = profile.hard_failure_time_s
     protection_activated_before_failure = (
         protection_activated
@@ -1275,6 +1628,26 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
     protection_lead_time_before_failure_s = (
         hard_failure_time_s - protection_activation_time_s
         if protection_activated_before_failure and hard_failure_time_s is not None and protection_activation_time_s is not None
+        else None
+    )
+    bfd_like_detection_time_nonnegative_s = (
+        float(bfd_like_detection_time_s)
+        if bfd_like_detection_time_s is not None and float(bfd_like_detection_time_s) >= 0
+        else None
+    )
+    bfd_like_detection_before_failure = (
+        bfd_like_detection_time_nonnegative_s is not None
+        and hard_failure_time_s is not None
+        and bfd_like_detection_time_nonnegative_s < hard_failure_time_s
+    )
+    bfd_like_lead_time_computed_s = (
+        hard_failure_time_s - bfd_like_detection_time_nonnegative_s
+        if bfd_like_detection_before_failure and hard_failure_time_s is not None
+        else None
+    )
+    hard_failure_to_bfd_detection_computed_s = (
+        bfd_like_detection_time_nonnegative_s - hard_failure_time_s
+        if bfd_like_detection_time_nonnegative_s is not None and hard_failure_time_s is not None
         else None
     )
 
@@ -1420,10 +1793,49 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         "protection_activated": bool_flag(protection_activated),
         "protection_activation_time_s": optional_numeric(protection_activation_time_s),
         "protection_activation_source": protection_activation_source,
+        "protection_trigger_source": protection_trigger_source,
+        "protection_trigger_source_code": optional_numeric(protection_trigger_source_code),
         "protection_action_code": optional_numeric(protection_action_code),
         "repair_routes_installed": bool_flag(repair_routes_installed > 0.5) if repair_routes_installed is not None else "",
         "repair_route_count": optional_numeric(repair_route_count),
         "repair_route_install_time_s": optional_numeric(repair_route_install_time_s),
+        "enable_aimrce_decision": bool_flag(enable_aimrce_decision > 0.5) if enable_aimrce_decision is not None else "",
+        "enable_bfd_like_detection": bool_flag(enable_bfd_like_detection > 0.5) if enable_bfd_like_detection is not None else "",
+        "bfd_like_detection_activated": bool_flag(bfd_like_detection_activated > 0.5) if bfd_like_detection_activated is not None else "",
+        "bfd_like_detection_time_s": optional_nonnegative_numeric(bfd_like_detection_time_s),
+        "bfd_like_detect_multiplier": optional_numeric(bfd_like_detect_multiplier),
+        "bfd_like_detection_interval_s": optional_numeric(bfd_like_detection_interval_s),
+        "bfd_like_expected_detection_time_s": optional_numeric(bfd_like_expected_detection_time_s),
+        "bfd_like_missed_probe_count": optional_numeric(bfd_like_missed_probe_count),
+        "bfd_like_max_missed_probe_count": optional_numeric(bfd_like_max_missed_probe_count),
+        "bfd_like_use_modeled_probe_loss": bool_flag(bfd_like_use_modeled_probe_loss > 0.5) if bfd_like_use_modeled_probe_loss is not None else "",
+        "bfd_like_probe_checks": optional_numeric(bfd_like_probe_checks),
+        "bfd_like_probe_successes": optional_numeric(bfd_like_probe_successes),
+        "bfd_like_probe_misses": optional_numeric(bfd_like_probe_misses),
+        "bfd_like_probe_loss_rate_observed": optional_nonnegative_numeric(bfd_like_probe_loss_rate_observed),
+        "bfd_like_modeled_probe_loss_probability_last": optional_nonnegative_numeric(bfd_like_modeled_probe_loss_probability_last),
+        "bfd_like_modeled_probe_loss_probability_max": optional_nonnegative_numeric(bfd_like_modeled_probe_loss_probability_max),
+        "bfd_like_modeled_probe_loss_probability_at_detection": optional_nonnegative_numeric(bfd_like_modeled_probe_loss_probability_at_detection),
+        "bfd_like_trigger_reason_code": optional_numeric(bfd_like_trigger_reason_code),
+        "bfd_like_trigger_reason_text": bfd_like_trigger_reason_from_code(bfd_like_trigger_reason_code),
+        "bfd_like_protected_span_up_at_detection": (
+            bool_flag(bfd_like_protected_span_up_at_detection > 0.5)
+            if bfd_like_protected_span_up_at_detection is not None
+            and bfd_like_protected_span_up_at_detection >= 0
+            else ""
+        ),
+        "bfd_like_detection_before_hard_failure": (
+            bool_flag(bfd_like_detection_before_failure)
+            if bfd_like_detection_time_nonnegative_s is not None and hard_failure_time_s is not None
+            else ""
+        ),
+        "bfd_like_lead_time_before_failure_s": optional_nonnegative_numeric(
+            bfd_like_lead_time_before_failure_s
+            if bfd_like_lead_time_before_failure_s is not None and float(bfd_like_lead_time_before_failure_s) >= 0
+            else bfd_like_lead_time_computed_s
+        ),
+        "hard_failure_to_bfd_detection_time_s": optional_numeric(hard_failure_to_bfd_detection_computed_s),
+        "hard_failure_time_configured_s": optional_numeric(hard_failure_time_scalar_s),
         "activation_risk_score": optional_numeric(activation_risk_score),
         "activation_decision_threshold": optional_numeric(activation_decision_threshold),
         "activation_positive_decision_streak": optional_numeric(activation_positive_decision_streak),
@@ -1449,11 +1861,15 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         "packet_sequence_gap_observed_after_reference": bool_flag(packet_continuity["packet_sequence_gap_observed_after_reference"]),
         "packet_sequence_gap_count_after_reference": optional_numeric(packet_continuity["packet_sequence_gap_count_after_reference"]),
         "packet_sequence_gap_total_missing_after_reference": optional_numeric(packet_continuity["packet_sequence_gap_total_missing_after_reference"]),
+        "packet_sequence_gap_total_unobserved_after_reference": optional_numeric(packet_continuity["packet_sequence_gap_total_unobserved_after_reference"]),
+        "packet_sequence_gap_total_reordered_after_reference": optional_numeric(packet_continuity["packet_sequence_gap_total_reordered_after_reference"]),
         "max_packet_sequence_gap_after_reference": optional_numeric(packet_continuity["max_packet_sequence_gap_after_reference"]),
         "max_packet_interarrival_gap_after_reference_s": optional_numeric(packet_continuity["max_packet_interarrival_gap_after_reference_s"]),
         "packet_interarrival_nominal_gap_threshold_s": optional_numeric(packet_continuity["packet_interarrival_nominal_gap_threshold_s"]),
         "packet_interarrival_gap_exceedance_count_after_reference": optional_numeric(packet_continuity["packet_interarrival_gap_exceedance_count_after_reference"]),
         "packet_interarrival_gap_exceeded_nominal_threshold": bool_flag(packet_continuity["packet_interarrival_gap_exceeded_nominal_threshold"]),
+        "packet_sequence_out_of_order_event_count_after_reference": optional_numeric(packet_continuity["packet_sequence_out_of_order_event_count_after_reference"]),
+        "packet_sequence_out_of_order_packet_count_after_reference": optional_numeric(packet_continuity["packet_sequence_out_of_order_packet_count_after_reference"]),
         "first_packet_after_reference_delay_s": optional_numeric(packet_continuity["first_packet_after_reference_delay_s"]),
         "tcp_service_interruption_observed": (
             bool_flag(tcp_service_interruption_start_time_s is not None)
@@ -1480,6 +1896,27 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         packet_continuity_between_activation_and_failure,
     )
     add_packet_continuity_outcome_fields(run_outcome_fields, "after_critical_start", packet_continuity_after_critical_start)
+
+    # Reporting diagnostics only: these ratios relate the observed transition
+    # side effect to the queue state captured at activation. They intentionally
+    # do not feed back into runtime decisions or thresholds.
+    activation_queue_packets = (
+        float(activation_queue_length_pk)
+        if activation_queue_length_pk is not None and float(activation_queue_length_pk) > 0
+        else None
+    )
+    run_outcome_fields["activation_to_failure_unobserved_per_activation_queue_packet"] = optional_numeric(
+        ratio_or_none(
+            packet_continuity_between_activation_and_failure["packet_sequence_gap_total_unobserved_after_reference"],
+            activation_queue_packets,
+        )
+    )
+    run_outcome_fields["activation_to_failure_reordered_per_activation_queue_packet"] = optional_numeric(
+        ratio_or_none(
+            packet_continuity_between_activation_and_failure["packet_sequence_gap_total_reordered_after_reference"],
+            activation_queue_packets,
+        )
+    )
 
     for row in rows:
         row.update(run_outcome_fields)
@@ -1508,6 +1945,9 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             "protection_mode": outcome_profile.protection_mode,
             "traffic_profile": outcome_profile.traffic_profile,
             "monitored_flow_app_index": outcome_profile.monitored_app_index,
+            "monitored_flow_packet_size_bytes": outcome_profile.packet_size_bits / 8.0,
+            "monitored_flow_send_interval_s": outcome_profile.send_interval_s,
+            "monitored_flow_expected_packet_rate_pps": 1.0 / outcome_profile.send_interval_s,
             "monitored_flow_expected_packets_per_window": expected_packets_per_window,
             "monitored_flow_expected_throughput_bps": expected_throughput_bps,
             "service_availability_packet_progress_floor": packet_progress_floor,

@@ -14,6 +14,21 @@ $projectRoot = Resolve-Path (Join-Path $analysisDir "..")
 $requirementsPath = Join-Path $analysisDir "requirements.txt"
 $venvRoot = Join-Path $analysisDir "sklearn-env"
 
+function Test-PythonExecutable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    try {
+        & $Path --version *> $null
+        return $LASTEXITCODE -eq 0
+    }
+    catch {
+        return $false
+    }
+}
+
 function Get-AnalysisPython {
     $venvCandidates = @(
         (Join-Path $venvRoot "Scripts\\python.exe"),
@@ -22,6 +37,10 @@ function Get-AnalysisPython {
 
     foreach ($candidate in $venvCandidates) {
         if (Test-Path $candidate) {
+            if (-not (Test-PythonExecutable -Path $candidate)) {
+                Write-Warning "Ignoring analysis virtualenv Python because it could not be started: $candidate"
+                continue
+            }
             return @{
                 Type = "executable"
                 Command = (Resolve-Path $candidate).Path
@@ -131,6 +150,15 @@ Examples:
   run_analysis.bat dataset-report --scenario regionalbackbone_congestion_protection
   run_analysis.bat build-dataset --scenario regionalbackbone_mixed_traffic_protection
   run_analysis.bat dataset-report --scenario regionalbackbone_mixed_traffic_protection
+  run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_comparison
+  run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_comparison
+  run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_comparison_ms_traffic
+  run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_comparison_ms_traffic
+  run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_degraded_link
+  run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_degraded_link
+  run_analysis.bat compare-outcomes --scenarios regionalbackbone_failure_detection_comparison --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_comparison
+  run_analysis.bat compare-outcomes --scenarios regionalbackbone_failure_detection_comparison_ms_traffic --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_comparison_ms_traffic
+  run_analysis.bat compare-outcomes --scenarios regionalbackbone_failure_detection_degraded_link --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_degraded_link
   run_analysis.bat compare-outcomes --scenarios regionalbackbone_mixed_traffic_protection --output-prefix analysis\output\outcomes\regionalbackbone_mixed_traffic_protection_multirun_comparison
   run_analysis.bat compare-outcomes --allow-missing
   run_analysis.bat train-risk-model

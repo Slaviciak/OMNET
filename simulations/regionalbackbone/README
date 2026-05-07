@@ -3,7 +3,7 @@ RegionalBackbone
 
 Overview
 - This scenario is the consolidated medium-scale baseline topology for the dissertation project.
-- It starts with baseline validation and now includes reactive-failure, controlled-degradation, traffic-driven congestion, and a small family of AI-MRCE runtime prototype configs.
+- It starts with baseline validation and now includes reactive-failure, controlled-degradation, traffic-driven congestion, a small family of AI-MRCE runtime prototype configs, and a separate failure-detection comparison cohort.
 - The AI-MRCE runtime family adds one project-local controller with several conservative decision policies, but it still avoids deep OSPF-internal modifications.
 - Its purpose is to act as the main IP/OSPF-like environment for practical predictive-protection experiments.
 - Controlled degradation and congestion phases should be treated as defensible approximations for supervised experimentation, not as empirically calibrated carrier-failure traces.
@@ -123,6 +123,32 @@ Configs
     missed protection under mixed UDP/TCP traffic should be interpreted as a
     possible out-of-distribution runtime result, not hidden by threshold tuning.
   - The focused mixed branch intentionally does not multiply every runtime model variant into a TCP/UDP version; it is a transport-impact extension, not a separate model-family expansion.
+- `RegionalBackboneFailureComparisonOspfOnly`
+  - OSPF-only baseline on the same regional congestion/failure branch.
+  - No AI-MRCE trigger and no BFD-like detector are enabled.
+- `RegionalBackboneFailureComparisonBfdLikeFrr`
+  - Uses the same project-local repair-route actuator as AI-MRCE, but the trigger is a BFD-inspired protected-span detector.
+  - The detector primarily observes protected-span interface/carrier state and keeps low probe-reception intervals as a fallback diagnostic.
+  - The active evaluation profile uses `bfdLikeDetectionInterval = 300ms` and `bfdLikeDetectMultiplier = 3`, giving an expected detection time of about 0.9s after the protected span is observed unhealthy.
+  - This is not RFC-compliant BFD, not negotiated BFD session state, and not OSPF/BFD integration.
+- `RegionalBackboneFailureComparisonAiMrceFrr`
+  - Uses the existing AI-MRCE rule-based risk path to activate the same project-local FRR-like repair routes proactively.
+  - It is separated from the main AI-MRCE model-family cohort so the comparison is about trigger architecture, not model-family breadth.
+- `RegionalBackboneFailureComparisonHybrid`
+  - Enables both AI-MRCE and the BFD-like detector.
+  - Whichever trigger fires first activates the same repair routes and records a trigger-source code for analysis.
+  - This represents a conservative hybrid architecture: proactive AI-MRCE plus a reactive safety net.
+- `RegionalBackboneFailureComparison*MsTraffic`
+  - Separate measurement-resolution sensitivity configs for the same four failure-detection mechanisms.
+  - They keep the same topology, staged bulk traffic, hard failure, BFD-like timing, AI-MRCE semantics, and repair-route actuator.
+  - Only the monitored UDP probe changes from `10ms` to `2ms`, giving about 500 monitored packets per second for finer sub-second packet-continuity diagnostics.
+  - These configs write to `results/regionalbackbone/failure_detection_comparison_ms_traffic/` and should not be mixed with the default failure-detection cohort unless the comparison report keeps cohorts separate.
+- `RegionalBackboneFailureComparison*DegradedLink`
+  - Separate BFD-like correctness sensitivity configs for the same four trigger families.
+  - They add deterministic progressive delay and packet-error-rate impairment on the protected `coreNW <-> coreNE` span from `105s` to `124s`, before the same hard failure at `125s`.
+  - BFD-like and hybrid variants enable `bfdLikeUseModeledProbeLoss`, so logical BFD-like checks are exposed to the current channel packet error rate. This lets the reactive detector fire before hard failure when the link is already severely losing packets.
+  - The modeled probe-loss path is deterministic and reads current simulator channel state only; it is not an oracle and not full RFC BFD.
+  - These configs write to `results/regionalbackbone/failure_detection_degraded_link/`.
 - Debug variants enable eventlog recording for manual path inspection.
 
 Congestion timeline
@@ -132,6 +158,16 @@ Congestion timeline
 - 80s-125s: critical congestion as aggregate offered load exceeds the 10 Mbps bottleneck.
 - 125s: physical disconnect of `coreNW <-> coreNE` by ScenarioManager.
 - 125s-150s: post-failure observation and reactive rerouting.
+
+Traffic-rate note for failure-detection comparisons
+- The default failure-detection comparison inherits the congestion branch's `256B` monitored UDP probe every `10ms`, plus staged `1200B` bulk UDP flows every `4ms`.
+- The ms-traffic comparison lowers only the monitored probe interval to `2ms`. This is a conservative high-resolution sensitivity profile for observing BFD-like sub-second repair effects and post-failure packet-continuity gaps.
+- A `1ms` probe profile is intentionally not the default because it would increase vector volume and offered load more aggressively; it can be considered later as a clearly labelled stress/debug sensitivity run if needed.
+
+Degraded-link BFD-like note
+- The default congestion-only failure-detection branch does not add explicit pre-failure packet-error-rate impairment beyond traffic pressure. In that branch the BFD-like detector may therefore behave similarly to OSPF-only until the protected span is down.
+- The degraded-link branch is the intended check for severe progressive loss before carrier-down. It keeps the same BFD-like timing (`300ms x 3`) but allows logical probe checks to miss according to current protected-span packet error rate.
+- Trigger reason code `3` means the detector fired from modeled logical probe loss derived from current channel impairment. Trigger reason code `2` means the span was already observed down.
 
 Mixed UDP/TCP cohort timeline
 - 0s-20s: routing convergence, no traffic.
@@ -161,6 +197,12 @@ Measurements
     protection action moves traffic while the primary path is still alive.
   - `after_critical_start` uses the same congestion-phase reference across the
     regional congestion cohort.
+  - The legacy `packet_sequence_gap_total_missing_*` fields are forward-jump
+    estimates retained for compatibility, not direct packet-loss claims. The
+    newer `packet_sequence_gap_total_unobserved_*` and
+    `packet_sequence_gap_total_reordered_*` fields separate packets not seen in
+    the selected interval from packets that arrived out of order after the
+    repair path overtook the congested primary path.
 - TCP application packet-byte vectors in the mixed UDP/TCP branch:
   - per-app received bytes
   - per-app useful-goodput proxy
@@ -182,13 +224,32 @@ Measurements
   - `positiveDecisionStreak`
   - `protectionActive`
   - `repairRoutesInstalled`
+- BFD-like / hybrid trigger vectors when enabled:
+  - `bfdLikeMissedProbeCount`
+  - `bfdLikeDetectionActive`
+  - `bfdLikeProtectedSpanUp`
+  - `bfdLikeModeledProbeLossProbability`
+  - `bfdLikeProbeMissed`
+  - `protectionTriggerSourceCode`
 - AI-MRCE runtime prototype scalars in the AI-MRCE configs:
   - `protectionActivated`
   - `protectionActivationTime`
+  - `protectionTriggerSourceCode`
   - `protectionActionCode`
   - `repairRoutesInstalled`
   - `repairRouteCount`
   - `repairRouteInstallTime`
+  - BFD-like diagnostics when enabled: `bfdLikeDetectionActivated`,
+    `bfdLikeDetectionTime`, `bfdLikeDetectMultiplier`,
+    `bfdLikeDetectionInterval`, `bfdLikeExpectedDetectionTime`,
+    `bfdLikeMissedProbeCount`, `bfdLikeProbeChecks`,
+    `bfdLikeProbeSuccesses`, `bfdLikeProbeMisses`,
+    `bfdLikeProbeLossRateObserved`,
+    `bfdLikeModeledProbeLossProbabilityAtDetection`, and
+    `bfdLikeTriggerReasonCode`
+  - `bfdLikeProtectedSpanUpAtDetection`, which documents whether the protected
+    span interfaces were still operational when the project-local BFD-like
+    detector fired
   - activation-time diagnostics: `activationRiskScore`,
     `activationDecisionThreshold`, `activationPositiveDecisionStreak`,
     `activationQueueLengthPk`, `activationQueueBitLengthB`,
@@ -203,6 +264,16 @@ Repair-Route Transition Assumption
   receiver sequence gaps between activation and hard failure should be reported
   as pre-failure switch/transition cost rather than hidden inside a single
   post-failure recovery metric.
+- In the current congestion cohort, a route switch can make newly routed probe
+  packets arrive before older packets still delayed on the original bottleneck.
+  That is a packet-continuity/reordering penalty, but not necessarily true
+  packet loss. Use post-hard-failure unobserved gaps for loss-like benefit
+  claims, and use activation-to-failure reordered/out-of-order fields for the
+  pre-failure switch-cost claim.
+- The `activation_to_failure_*_per_activation_queue_packet` fields normalize
+  transition effects by the queue observed by AI-MRCE at activation. They are
+  diagnostics for explaining why later activation can cost more, not controller
+  thresholds or evidence of seamless make-before-break protection.
 
 Queue Assumption
 - No custom queue discipline, AQM, or vendor-specific buffer model is configured for the congestion branch.
@@ -225,9 +296,25 @@ Purpose
   reconverges quickly enough that coarse one-second windows show no complete
   service outage.
 
+OSPF Baseline Assumption
+- Regional configs do not override OSPF hello/dead timers in `omnetpp.ini` or
+  `ASConfig.xml`.
+- INET 4.5 OSPFv2 defaults therefore apply consistently: hello interval 10s
+  and router dead interval 40s.
+- This is retained as a normal OSPF reference. Fast detection is represented
+  separately by the clearly labelled BFD-like project-local detector, not by
+  silently tuning OSPF itself.
+
 AI-MRCE Prototype Scope Limit
 - The current runtime AI-MRCE family is intentionally limited to the congestion-driven regional backbone branch.
 - It does not modify OSPF internals, advertise custom LSAs, or attempt any online learning.
 - It uses a compact and interpretable telemetry set plus a small family of conservative project-local decision policies.
 - Its active regional protective action is an explicit repair-route activation over the configured southern backup corridor. This is an auditable project-local FRR-like abstraction of prearranged local protection, not a protocol-standard FRR implementation.
 - The older administrative-withdrawal behavior remains available in the controller for reference/debug configs, but it should not be described as the final intended AI-MRCE protection model.
+
+BFD-Like Detector Scope Limit
+- The failure-detection comparison cohort includes a BFD-inspired protected-span detector only as a project-local reactive trigger abstraction.
+- It does not implement RFC BFD session establishment, discriminator state, authentication, echo mode, or OSPF/BFD signaling.
+- The active BFD-like evaluation profile is deliberately faster than ordinary OSPF dead-timer behavior but still conservative: 300ms intervals with multiplier 3, expected detection about 0.9s.
+- Its purpose is to compare trigger timing and outcome metrics using the same repair-route actuator, not to claim standards-compliant BFD performance.
+- The hybrid config should be described as proactive AI-MRCE plus a reactive BFD-like safety net, with the first trigger recorded explicitly.

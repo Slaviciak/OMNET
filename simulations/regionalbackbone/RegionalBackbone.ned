@@ -2,8 +2,8 @@
 //
 // The routers and routing behavior come from standard INET components. Optional
 // project-local controllers can add controlled synthetic degradation proxies,
-// a traffic bottleneck approximation, or the current AI-MRCE runtime
-// prototype family without modifying OSPF internals.
+// a traffic bottleneck approximation, or the current AI-MRCE/BFD-like runtime
+// protection comparison logic without modifying OSPF internals.
 
 package dissertationsim.simulations.regionalbackbone;
 
@@ -22,8 +22,9 @@ network RegionalBackbone
         // Enables the fixed 10 Mbps preferred-span bottleneck used by the
         // traffic-driven congestion approximation branch.
         bool enableCoreBottleneck = default(false);
-        // Enables the project-local AI-MRCE runtime prototype. Standard OSPF
-        // behavior still comes from the underlying INET routers.
+        // Enables the project-local runtime protection controller. Standard
+        // OSPF behavior still comes from the underlying INET routers; optional
+        // AI-MRCE and BFD-like trigger paths are configured per INI config.
         bool enableAiMrceController = default(false);
         @display("b=1120,520");
     types:
@@ -159,9 +160,9 @@ network RegionalBackbone
             @display("p=170,460;is=s");
         }
         aiMrceController: AiMrceController if enableAiMrceController {
-            // Current runtime AI-MRCE prototype family. It observes telemetry
-            // and, in the active regional configs, activates an explicit
-            // project-local repair-route abstraction for the backup corridor.
+            // Current project-local protection controller. It observes
+            // telemetry and can activate explicit repair routes for the backup
+            // corridor via AI-MRCE, BFD-like, or hybrid trigger configs.
             @display("p=300,460;is=s");
         }
     connections:
