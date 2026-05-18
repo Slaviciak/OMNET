@@ -95,6 +95,15 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
         bool hasProbeDelay = false;
     };
 
+    // Result of evaluating the active AI-MRCE policy for one telemetry
+    // snapshot. Keeping score and threshold together prevents subtle drift
+    // between AI-MRCE-only and hybrid/BFD-like diagnostic paths.
+    struct PolicyScore
+    {
+        double riskScore = 0;
+        double decisionThreshold = 0;
+    };
+
     // Runtime deployment parameters exported from offline training. This keeps
     // sklearn out of OMNeT++ while preserving explicit feature provenance.
     struct RuntimeFeatureParameter
@@ -161,18 +170,28 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
         std::string destinationInterfaceModule;
     };
 
+    // Timers and resolved telemetry sources.
     omnetpp::cMessage *evaluationTimer = nullptr;
     omnetpp::cMessage *bfdLikeTimer = nullptr;
+    omnetpp::cMessage *hardFailureLogTimer = nullptr;
     omnetpp::simsignal_t packetReceivedSignal = SIMSIGNAL_NULL;
     inet::queueing::IPacketCollection *protectedQueue = nullptr;
     omnetpp::cModule *probeReceiverModule = nullptr;
+
+    // Policy/action configuration and runtime model state.
     DecisionMode decisionMode = DecisionMode::RULE_BASED;
     ProtectionAction protectionAction = ProtectionAction::ADMIN_WITHDRAWAL;
     bool enableAimrceDecision = true;
     bool enableBfdLikeDetection = false;
+    bool runtimeModelLoaded = false;
+    int runtimeModelFeatureCount = 0;
+    double runtimeModelThreshold = -1;
+    int runtimeModelFallbackReasonCode = 0;
     RuntimeLinearModel linearModel;
     RuntimeTreeModel treeModel;
     std::vector<LocalRepairRouteSpec> localRepairRouteSpecs;
+
+    // Per-cycle telemetry and BFD-like detector state.
     IntervalTelemetry intervalTelemetry;
     int bfdLikeProbePacketCount = 0;
     int bfdLikeProbeChecks = 0;
@@ -190,6 +209,8 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     int bfdLikeTriggerReasonCode = 0;
     omnetpp::simtime_t bfdLikeDetectionTime = omnetpp::simtime_t(-1);
     omnetpp::simtime_t hardFailureTime = omnetpp::simtime_t(-1);
+
+    // Protection activation and repair-route diagnostics.
     bool protectionActive = false;
     ProtectionTriggerSource protectionTriggerSource = ProtectionTriggerSource::NONE;
     int protectionTriggerSourceCode = 0;
@@ -208,7 +229,11 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     double activationProbeDelayMeanSeconds = -1;
     double activationProbeThroughputBps = -1;
     double activationProbePacketCount = -1;
+
+    // Controlled EV logging cadence.
     omnetpp::simtime_t lastTelemetryLogTime = omnetpp::simtime_t(-1);
+    omnetpp::simtime_t lastDecisionLogTime = omnetpp::simtime_t(-1);
+    omnetpp::simtime_t lastBfdLikeLogTime = omnetpp::simtime_t(-1);
 
     // These vectors expose both raw runtime observations and controller state
     // transitions so later analysis can separate telemetry behavior from the
@@ -231,13 +256,48 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     omnetpp::cOutVector bfdLikeProbeMissedVector;
 
   protected:
+    // OMNeT++ lifecycle and signal input.
     virtual void initialize() override;
     virtual void handleMessage(omnetpp::cMessage *message) override;
     virtual void finish() override;
     virtual void receiveSignal(omnetpp::cComponent *source, omnetpp::simsignal_t signalID, omnetpp::cObject *object, omnetpp::cObject *details) override;
 
+    // Initialization phases. These helpers keep initialize() readable while
+    // preserving the original parameter-read, validation, registration, and
+    // timer-scheduling order.
+    void validateControllerParameters(
+        omnetpp::simtime_t startTime,
+        omnetpp::simtime_t evaluationInterval,
+        int activationCycles,
+        omnetpp::simtime_t bfdLikeStartTime,
+        omnetpp::simtime_t bfdLikeDetectionInterval,
+        int bfdLikeDetectMultiplier,
+        int bfdLikeExpectedProbeCount,
+        omnetpp::simtime_t probeSendInterval,
+        double probePacketLength,
+        double queueLengthThreshold,
+        omnetpp::simtime_t delayThreshold,
+        omnetpp::simtime_t telemetryLogInterval,
+        omnetpp::simtime_t decisionLogInterval,
+        double throughputFloorRatio,
+        double packetCountFloorRatio,
+        double ruleRiskThreshold
+    ) const;
+    void initializeProtectionConfiguration();
+    void initializeTelemetryReferences();
+    void initializeRuntimePolicy();
+    void initializeVectorNames();
+    void initializeWatches();
+    void recordInitialVectorState();
+    void scheduleControllerTimers(omnetpp::simtime_t startTime, omnetpp::simtime_t evaluationInterval, omnetpp::simtime_t bfdLikeStartTime, omnetpp::simtime_t bfdLikeDetectionInterval);
+    void cancelControllerTimers();
+
+    // Config parsing and stable diagnostic mappings.
     DecisionMode parseDecisionMode(const char *value) const;
     ProtectionAction parseProtectionAction(const char *value) const;
+    int decisionModeCodeForDiagnostics() const;
+    const char *decisionModeNameForDiagnostics() const;
+    const char *protectionActionNameForDiagnostics() const;
     int triggerSourceCodeForActivation(ProtectionTriggerSource source) const;
     const char *triggerSourceNameForActivation(ProtectionTriggerSource source) const;
     std::vector<LocalRepairRouteSpec> parseLocalRepairRouteSpecs(const std::string& rawValue) const;
@@ -247,19 +307,26 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     inet::queueing::IPacketCollection *resolveQueue(const char *modulePath) const;
     omnetpp::cModule *resolveModule(const char *modulePath, const char *purpose) const;
     std::string resolveParameterFilePath(const char *parameterName) const;
+
     // Loads the exported deployment artifact, not an evaluation report.
     void loadRuntimeLinearModel();
     void loadRuntimeTreeModel();
+
     // Samples the current queue state and the most recent probe interval.
     FeatureSnapshot collectFeatureSnapshot() const;
+
     // Interpretable baseline score used as the non-ML runtime reference.
     double computeRuleBasedRisk(const FeatureSnapshot& snapshot) const;
+
     // Runtime inference paths using exported deployment artifacts only.
     double computeLinearModelRisk(const FeatureSnapshot& snapshot) const;
     double computeShallowTreeRisk(const FeatureSnapshot& snapshot) const;
     double lookupFeatureValue(const FeatureSnapshot& snapshot, const std::string& featureName, bool& available) const;
+    PolicyScore scoreCurrentPolicy(const FeatureSnapshot& snapshot) const;
+
     // Periodic controller cycle that applies debouncing before protection.
     void evaluateCycle();
+
     // Project-local BFD-inspired protected-span / missed-probe detector cycle.
     // This is a reactive safety-net trigger, not a full BFD protocol implementation.
     void evaluateBfdLikeCycle();
@@ -268,6 +335,7 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     double packetErrorRateForInterface(const char *modulePath) const;
     bool nextDeterministicModeledProbeMiss(double lossProbability);
     void captureActivationDiagnostics(const FeatureSnapshot& snapshot, double riskScore, double decisionThreshold);
+
     // Protective action is selected by configuration. The dissertation-core
     // regional branch uses a project-local FRR-like local-repair abstraction;
     // administrative withdrawal remains available as a conservative reference.
@@ -276,8 +344,22 @@ class AiMrceController : public omnetpp::cSimpleModule, public omnetpp::cListene
     void activateLocalRepairStaticRoutes();
     bool installLocalRepairRoute(const LocalRepairRouteSpec& spec);
     void resetIntervalTelemetry();
+
+    // Output vectors and finish-time scalar groups. Scalar/vector names are
+    // intentionally kept as literals in the .cc file because the Python
+    // analysis pipeline consumes those exact names.
     void recordVectors(const FeatureSnapshot& snapshot, double riskScore, bool decisionPositive);
+    void recordProtectionScalars();
+    void recordRuntimeModelScalars();
+    void recordBfdLikeScalars();
+    void recordActivationScalars();
+
+    // Controlled EV logging helpers for demonstration/debug configs.
     void maybeLogTelemetry(const FeatureSnapshot& snapshot, const char *context);
+    void maybeLogDecision(const FeatureSnapshot& snapshot, double riskScore, double decisionThreshold, bool decisionPositive, bool activationCycle);
+    void maybeLogBfdLikeProbe(double modeledLossProbability, bool modeledProbeMissed, bool protectedSpanHealthy, int observedProbeCount, int expectedProbeCount, bool intervalUnhealthy, bool triggerCycle);
+    void logInitializationSummary(omnetpp::simtime_t evaluationInterval, int activationCycles, omnetpp::simtime_t bfdLikeDetectionInterval, int bfdLikeDetectMultiplier) const;
+    void logHardFailureReference() const;
 };
 
 } // namespace dissertationsim::controller

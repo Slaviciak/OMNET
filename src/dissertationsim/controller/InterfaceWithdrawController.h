@@ -3,7 +3,8 @@
 // This controller performs a scheduled administrative withdrawal of two
 // interfaces. It is intentionally simple and aligns with ordinary operational
 // interface-down semantics in routing experiments rather than any custom OSPF
-// protocol extension.
+// protocol extension. It is auxiliary/reference tooling; dissertation-core
+// AI-MRCE configs use repair-route activation instead.
 
 #ifndef __DISSERTATIONSIM_INTERFACEWITHDRAWCONTROLLER_H
 #define __DISSERTATIONSIM_INTERFACEWITHDRAWCONTROLLER_H
@@ -21,7 +22,7 @@ namespace dissertationsim::controller {
  *
  * It is used for deterministic baselines such as proactive switch experiments,
  * where the action time is known in advance and no runtime inference is
- * involved.
+ * involved. Do not interpret it as predictive AI-MRCE behavior.
  */
 class InterfaceWithdrawController : public omnetpp::cSimpleModule
 {

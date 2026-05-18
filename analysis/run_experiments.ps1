@@ -36,35 +36,9 @@ if (-not (Test-Path $script:ExplorerExe)) {
 }
 
 $script:ScenarioPresets = [ordered]@{
-    "linkdegradation" = [pscustomobject]@{
-        Name = "linkdegradation"
-        Description = "Controlled synthetic degradation proxy dataset batch"
-        ScenarioDir = Join-Path $simulationsDir "linkdegradation"
-        EvalDir = Join-Path $projectRoot "results\linkdegradation\eval"
-        DatasetPath = Join-Path $datasetsDir "linkdegradation_dataset.csv"
-        ReportPath = Join-Path $reportsDir "linkdegradation_report.txt"
-        MissingCsvPath = Join-Path $debugOutputDir "linkdegradation_missing_values.csv"
-        PerConfigCsvPath = Join-Path $debugOutputDir "linkdegradation_per_config_summary.csv"
-        OutcomeSummaryPath = Join-Path $outcomesDir "linkdegradation_outcome_summary.csv"
-        EvalConfigs = @("MildLinear", "StrongLinear", "UnstableLinear", "StagedRealistic")
-        AiMrceConfigs = @()
-    }
-    "congestiondegradation" = [pscustomobject]@{
-        Name = "congestiondegradation"
-        Description = "Traffic-driven congestion approximation dataset batch"
-        ScenarioDir = Join-Path $simulationsDir "congestiondegradation"
-        EvalDir = Join-Path $projectRoot "results\congestiondegradation\eval"
-        DatasetPath = Join-Path $datasetsDir "congestiondegradation_dataset.csv"
-        ReportPath = Join-Path $reportsDir "congestiondegradation_report.txt"
-        MissingCsvPath = Join-Path $debugOutputDir "congestiondegradation_missing_values.csv"
-        PerConfigCsvPath = Join-Path $debugOutputDir "congestiondegradation_per_config_summary.csv"
-        OutcomeSummaryPath = Join-Path $outcomesDir "congestiondegradation_outcome_summary.csv"
-        EvalConfigs = @("CongestionDegradation", "CongestionDegradationMild")
-        AiMrceConfigs = @()
-    }
     "regionalbackbone" = [pscustomobject]@{
         Name = "regionalbackbone"
-        Description = "Regional backbone dataset batch with baseline, reactive failure, controlled synthetic degradation proxy, and traffic-driven congestion approximation"
+        Description = "Regional backbone runtime-model export support dataset"
         ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
         EvalDir = Join-Path $projectRoot "results\regionalbackbone\eval"
         DatasetPath = Join-Path $datasetsDir "regionalbackbone_dataset.csv"
@@ -73,17 +47,9 @@ $script:ScenarioPresets = [ordered]@{
         PerConfigCsvPath = Join-Path $debugOutputDir "regionalbackbone_per_config_summary.csv"
         OutcomeSummaryPath = Join-Path $outcomesDir "regionalbackbone_outcome_summary.csv"
         EvalConfigs = @(
-            "RegionalBackboneBaseline",
-            "RegionalBackboneReactiveFailure",
-            "RegionalBackboneControlledDegradation",
             "RegionalBackboneCongestionDegradation"
         )
-        AiMrceConfigs = @(
-            "RegionalBackboneAiMrceRuleBased",
-            "RegionalBackboneAiMrceLogReg",
-            "RegionalBackboneAiMrceLinearSvm",
-            "RegionalBackboneAiMrceShallowTree"
-        )
+        AiMrceConfigs = @()
     }
 }
 
@@ -193,11 +159,41 @@ $script:RegionalBackboneFailureDetectionDegradedLinkPreset = [pscustomobject]@{
     ComparisonRunsPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_runs.csv"
     ComparisonSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_summary.csv"
     ComparisonReportPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_report.txt"
+    HeadlineSummaryCsvPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_headline_summary.csv"
+    HeadlineSummaryTxtPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_headline_summary.txt"
     EvalConfigs = @(
         "RegionalBackboneFailureComparisonOspfOnlyDegradedLinkCohort",
         "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLinkCohort",
         "RegionalBackboneFailureComparisonAiMrceFrrDegradedLinkCohort",
         "RegionalBackboneFailureComparisonHybridDegradedLinkCohort"
+    )
+    DefaultRunNumbers = @(0, 1, 2, 3, 4)
+}
+
+$script:RegionalBackboneFailureDetectionDegradedLinkModelFamilyPreset = [pscustomobject]@{
+    Name = "regionalbackbone_failure_detection_degraded_link_model_family"
+    Description = "Regional backbone degraded-link comparison with explicit AI-MRCE runtime model-family variants"
+    ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
+    EvalDir = Join-Path $projectRoot "results\regionalbackbone\failure_detection_degraded_link_model_family"
+    DatasetPath = Join-Path $datasetsDir "regionalbackbone_failure_detection_degraded_link_model_family_dataset.csv"
+    ReportPath = Join-Path $reportsDir "regionalbackbone_failure_detection_degraded_link_model_family_report.txt"
+    MissingCsvPath = Join-Path $debugOutputDir "regionalbackbone_failure_detection_degraded_link_model_family_missing_values.csv"
+    PerConfigCsvPath = Join-Path $debugOutputDir "regionalbackbone_failure_detection_degraded_link_model_family_per_config_summary.csv"
+    OutcomeSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_model_family_outcome_summary.csv"
+    ComparisonOutputPrefix = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_model_family"
+    ComparisonRunsPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_model_family_runs.csv"
+    ComparisonSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_model_family_summary.csv"
+    ComparisonReportPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_model_family_report.txt"
+    HeadlineSummaryCsvPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_model_family_headline_summary.csv"
+    HeadlineSummaryTxtPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_degraded_link_model_family_headline_summary.txt"
+    EvalConfigs = @(
+        "RegionalBackboneFailureDegradedLinkOspfOnlyCohort",
+        "RegionalBackboneFailureDegradedLinkBfdLikeFrrCohort",
+        "RegionalBackboneFailureDegradedLinkAiMrceRuleBasedCohort",
+        "RegionalBackboneFailureDegradedLinkAiMrceLogRegCohort",
+        "RegionalBackboneFailureDegradedLinkAiMrceLinearSvmCohort",
+        "RegionalBackboneFailureDegradedLinkAiMrceShallowTreeCohort",
+        "RegionalBackboneFailureDegradedLinkHybridCohort"
     )
     DefaultRunNumbers = @(0, 1, 2, 3, 4)
 }
@@ -240,34 +236,15 @@ Usage:
 
 Commands:
   help             Show this help text.
-  dataset-batch    Run one supported scenario's eval configs sequentially, validate outputs, and optionally build the dataset and report.
-  training-batch   Verify datasets, optionally rebuild missing dataset artifacts from existing raw results, then run offline training.
-  aimrce-batch     Optionally export the runtime deployment artifacts, then run the regional AI-MRCE runtime configs.
-  regional-congestion-protection-batch
-                   Run the dedicated multi-run regional congestion protection cohort, rebuild its dataset/report, and generate its focused comparison artifacts.
-  regional-mixed-traffic-protection-batch
-                   Run the dedicated mixed UDP/TCP regional protection cohort, rebuild its dataset/report, and generate its focused comparison artifacts.
-  regional-failure-detection-comparison-batch
-                   Run the dedicated regional OSPF/BFD-like/AI-MRCE/hybrid failure-detection comparison cohort.
-  regional-failure-detection-ms-traffic-batch
-                   Run the same failure-detection comparison with a 2 ms monitored UDP probe for higher-resolution packet-continuity observation.
-  regional-failure-detection-degraded-link-batch
-                   Run the failure-detection comparison with progressive protected-span packet-loss degradation exposed to BFD-like probe checks.
-  full-pipeline    Run selected dataset batches, optional analysis, optional training, and optional AI-MRCE runtime configs.
+  regional-failure-detection-degraded-link-model-family-batch
+                   Run the degraded-link comparison with explicit AI-MRCE rule-based, logistic-regression, linear-SVM, and shallow-tree runtime policies.
 
 Common options:
-  --scenario <name...>              Scenario selection. For dataset-batch exactly one supported scenario is required. Defaults favor the regionalbackbone dissertation core.
-  --configs <config...>             Optional subset of non-debug configs for dataset-batch or aimrce-batch.
-  --runs <runNumber...>             Explicit OMNeT++ run numbers. Current configs normally expose run 0 unless repeat or iteration variables are added later.
+  --runs <runNumber...>             Explicit OMNeT++ run numbers. Dedicated publication cohorts default to runs 0,1,2,3,4 when omitted; use --runs 0 for smoke/regression work.
   --clean                           Clean generated eval artifacts before running.
   --yes                             Required together with --clean for actual deletion.
   --skip-build                      Skip the local project rebuild before simulation-running commands.
-  --skip-analysis                   Skip dataset build and dataset report after dataset-batch steps.
-  --skip-training                   Skip offline training inside full-pipeline.
   --skip-runtime-export             Reuse the existing AI-MRCE runtime deployment artifacts instead of exporting them first.
-  --rebuild-missing-datasets        For training-batch, rebuild missing dataset CSV/report artifacts from existing raw results.
-  --stronger-evaluations-only       Run only generalization-oriented evaluation modes during training.
-  --include-aimrce                  For full-pipeline, also export the runtime deployment artifacts and run the regional AI-MRCE runtime configs.
   --open-output-folder              Open the relevant generated-artifact folders in Windows Explorer after successful completion.
   --dry-run                         Print the planned actions and write dry-run logs without executing commands.
   --continue-on-error               Continue running later configs after a failed simulation command, but keep the overall batch marked failed.
@@ -275,18 +252,8 @@ Common options:
 
 Examples:
   run_experiments.bat help
-  run_experiments.bat dataset-batch --scenario regionalbackbone --clean --yes
-  run_experiments.bat dataset-batch --scenario regionalbackbone --dry-run
-  run_experiments.bat training-batch --stronger-evaluations-only
-  run_experiments.bat aimrce-batch --skip-runtime-export --dry-run
-  run_experiments.bat regional-congestion-protection-batch --dry-run
-  run_experiments.bat regional-congestion-protection-batch --runs 0 1 --clean --yes --skip-build
-  run_experiments.bat regional-mixed-traffic-protection-batch --runs 0 --skip-build --skip-runtime-export
-  run_experiments.bat regional-failure-detection-comparison-batch --runs 0 --skip-build --skip-runtime-export
-  run_experiments.bat regional-failure-detection-ms-traffic-batch --runs 0 --skip-build --skip-runtime-export
-  run_experiments.bat regional-failure-detection-degraded-link-batch --runs 0 --skip-build --skip-runtime-export
-  run_experiments.bat dataset-batch --scenario linkdegradation --open-output-folder
-  run_experiments.bat full-pipeline --clean --yes --include-aimrce
+  run_experiments.bat regional-failure-detection-degraded-link-model-family-batch --runs 0 --skip-build --skip-runtime-export
+  run_experiments.bat regional-failure-detection-degraded-link-model-family-batch --clean --yes --skip-runtime-export --skip-build
 
 Generated logs:
   analysis\output\experiment_logs\<timestamp>-<command>\...
@@ -303,8 +270,9 @@ Notes:
   - This script adds project-local automation around existing scenarios and analysis tooling only.
   - It prepares generated artifacts and methodological outputs; it is not runtime decision logic itself.
   - The optional folder opening is Windows-only workflow usability help; it is not part of the experiment methodology.
-  - When --configs selects only a subset of dataset configs, keep --skip-analysis enabled so the workflow does not silently produce a partial dataset export.
-  - regional-congestion-protection-batch, regional-mixed-traffic-protection-batch, regional-failure-detection-comparison-batch, regional-failure-detection-ms-traffic-batch, and regional-failure-detection-degraded-link-batch default to runs 0,1,2,3,4 when --runs is omitted.
+  - Use --runs 0 for development smoke/regression passes; pipeline-integrity will report this as OK_WITH_WARNINGS, not publication-ready.
+  - regional-failure-detection-degraded-link-model-family-batch defaults to runs 0,1,2,3,4 when --runs is omitted.
+  - Run run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_degraded_link_model_family before using outputs in writing.
 "@ | Write-Host
 }
 
@@ -2018,7 +1986,13 @@ function Invoke-RegionalFailureDetectionComparisonBatchCore {
         -DryRun:$Options.DryRun
 
     if (-not $Options.DryRun) {
-        foreach ($requiredPath in @($preset.ComparisonRunsPath, $preset.ComparisonSummaryPath, $preset.ComparisonReportPath)) {
+        $requiredComparisonPaths = @($preset.ComparisonRunsPath, $preset.ComparisonSummaryPath, $preset.ComparisonReportPath)
+        if ($preset.PSObject.Properties.Name -contains "HeadlineSummaryCsvPath") {
+            $requiredComparisonPaths += $preset.HeadlineSummaryCsvPath
+            $requiredComparisonPaths += $preset.HeadlineSummaryTxtPath
+        }
+
+        foreach ($requiredPath in $requiredComparisonPaths) {
             if (-not (Test-Path $requiredPath)) {
                 throw "$CommandName comparison step did not create the expected file: $requiredPath"
             }
@@ -2029,6 +2003,12 @@ function Invoke-RegionalFailureDetectionComparisonBatchCore {
             (Get-ArtifactMetadata -Path $preset.ComparisonSummaryPath -Category "Cohort comparison summary (.csv)" -SourceStep $ComparisonStepName),
             (Get-ArtifactMetadata -Path $preset.ComparisonReportPath -Category "Cohort comparison report (.txt)" -SourceStep $ComparisonStepName)
         )
+        if ($preset.PSObject.Properties.Name -contains "HeadlineSummaryCsvPath") {
+            $comparisonArtifacts += @(
+                (Get-ArtifactMetadata -Path $preset.HeadlineSummaryCsvPath -Category "Degraded-link headline summary (.csv)" -SourceStep $ComparisonStepName),
+                (Get-ArtifactMetadata -Path $preset.HeadlineSummaryTxtPath -Category "Degraded-link headline summary (.txt)" -SourceStep $ComparisonStepName)
+            )
+        }
         Publish-StepArtifacts `
             -Context $Context `
             -LogPath $comparisonCommandResult.LogPath `
@@ -2229,6 +2209,29 @@ function Validate-CommandOptions {
                 throw "--include-aimrce is only supported by full-pipeline."
             }
         }
+        "regional-failure-detection-degraded-link-model-family-batch" {
+            if ($Options.Scenarios.Count -gt 0) {
+                throw "--scenario is not supported by regional-failure-detection-degraded-link-model-family-batch because it is pinned to the dedicated regional backbone degraded-link model-family cohort."
+            }
+            if ($Options.Configs.Count -gt 0) {
+                throw "--configs is not supported by regional-failure-detection-degraded-link-model-family-batch because it always runs the full OSPF/BFD-like/AI-MRCE model-family/hybrid cohort."
+            }
+            if ($Options.SkipAnalysis) {
+                throw "--skip-analysis is not supported by regional-failure-detection-degraded-link-model-family-batch because dataset, outcome, comparison, and headline artifacts are the purpose of the command."
+            }
+            if ($Options.SkipTraining) {
+                throw "--skip-training is only supported by full-pipeline."
+            }
+            if ($Options.RebuildMissingDatasets) {
+                throw "--rebuild-missing-datasets is only supported by training-batch."
+            }
+            if ($Options.StrongerEvaluationsOnly) {
+                throw "--stronger-evaluations-only is only supported by training-batch or full-pipeline."
+            }
+            if ($Options.IncludeAimrce) {
+                throw "--include-aimrce is only supported by full-pipeline."
+            }
+        }
         "full-pipeline" {
             if ($Options.Configs.Count -gt 0) {
                 throw "--configs is not supported by full-pipeline. Use dataset-batch or aimrce-batch for manual config subsets."
@@ -2249,6 +2252,10 @@ try {
         Show-Usage
     }
     else {
+        $supportedCommands = @("regional-failure-detection-degraded-link-model-family-batch")
+        if ($supportedCommands -notcontains $Command) {
+            throw "Unsupported command '$Command'. This cleaned publication branch supports: $($supportedCommands -join ', '). Run 'run_experiments.bat help' for the current workflow."
+        }
         Require-CleanConfirmation -Options $options
         Validate-CommandOptions -BatchCommand $Command -Options $options
 
@@ -2476,6 +2483,42 @@ try {
                         -ComparisonStepName "compare-outcomes-regional-failure-detection-degraded-link" `
                         -ArtifactHeading "Created or updated degraded-link failure-detection comparison artifacts" `
                         -OutputFolderReason "regional degraded-link failure-detection comparison artifacts"
+                    if (-not $batchSucceeded) {
+                        $overallStatus = "FAILED"
+                        $scriptExitCode = 1
+                    }
+                }
+                catch {
+                    $overallStatus = "FAILED"
+                    $scriptExitCode = 1
+                    Add-StepResult -Context $context -Step $Command -Status "FAILED" -Details $_.Exception.Message
+                    Write-Error $_.Exception.Message
+                }
+                finally {
+                    Write-BatchSummary -Context $context -OverallStatus $overallStatus
+                }
+            }
+
+            "regional-failure-detection-degraded-link-model-family-batch" {
+                $context = New-BatchContext -BatchCommand $Command -ScenarioNames @("regionalbackbone_failure_detection_degraded_link_model_family")
+                $overallStatus = "OK"
+
+                try {
+                    if (-not $options.SkipBuild) {
+                        Build-Project -Context $context -DryRun:$options.DryRun
+                    }
+                    else {
+                        Add-StepResult -Context $context -Step "build" -Status "OK" -Details "Skipped build by request."
+                    }
+
+                    $batchSucceeded = Invoke-RegionalFailureDetectionComparisonBatchCore `
+                        -Context $context `
+                        -Options $options `
+                        -Preset $script:RegionalBackboneFailureDetectionDegradedLinkModelFamilyPreset `
+                        -CommandName "regional-failure-detection-degraded-link-model-family-batch" `
+                        -ComparisonStepName "compare-outcomes-regional-failure-detection-degraded-link-model-family" `
+                        -ArtifactHeading "Created or updated degraded-link AI-MRCE model-family comparison artifacts" `
+                        -OutputFolderReason "regional degraded-link AI-MRCE model-family comparison artifacts"
                     if (-not $batchSucceeded) {
                         $overallStatus = "FAILED"
                         $scriptExitCode = 1

@@ -36,6 +36,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
+import time
 from collections import Counter, defaultdict
 from pathlib import Path
 from statistics import fmean
@@ -47,18 +49,10 @@ OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
 
 SUPPORTED_SCENARIOS = (
     "regionalbackbone",
-    "regionalbackbone_congestion_protection",
-    "regionalbackbone_mixed_traffic_protection",
-    "regionalbackbone_failure_detection_comparison",
-    "regionalbackbone_failure_detection_comparison_ms_traffic",
-    "regionalbackbone_failure_detection_degraded_link",
-    "reactivefailure",
-    "proactiveswitch",
+    "regionalbackbone_failure_detection_degraded_link_model_family",
 )
 DEFAULT_SCENARIOS = (
-    "regionalbackbone",
-    "regionalbackbone_congestion_protection",
-    "regionalbackbone_mixed_traffic_protection",
+    "regionalbackbone_failure_detection_degraded_link_model_family",
 )
 
 TRAFFIC_NUMERIC_METRICS = [
@@ -146,6 +140,15 @@ PROTECTION_ACTION_NUMERIC_METRICS = [
     "protection_trigger_source_code",
     "repair_route_count",
     "repair_route_install_time_s",
+    "aimrce_policy_code",
+    "runtime_model_artifact_required",
+    "runtime_model_loaded",
+    "runtime_model_feature_count",
+    "runtime_model_threshold",
+    "runtime_model_fallback_used",
+    "runtime_model_fallback_reason_code",
+    "aimrce_evaluation_interval_s",
+    "aimrce_activation_consecutive_cycles_configured",
     "bfd_like_detection_time_s",
     "bfd_like_detect_multiplier",
     "bfd_like_detection_interval_s",
@@ -224,7 +227,16 @@ BASE_PASSTHROUGH_COLUMNS = [
 ] + BASE_NUMERIC_METRICS + BASE_FLAG_METRICS
 
 OPTIONAL_PASSTHROUGH_COLUMNS = (
-    ["traffic_profile", "monitored_flow_app_index", "protection_action_code", "protection_trigger_source", "bfd_like_trigger_reason_text"]
+    [
+        "traffic_profile",
+        "runtime_model_type",
+        "runtime_model_path",
+        "aimrce_policy_name",
+        "monitored_flow_app_index",
+        "protection_action_code",
+        "protection_trigger_source",
+        "bfd_like_trigger_reason_text",
+    ]
     + TRAFFIC_NUMERIC_METRICS
     + PROTECTION_ACTION_NUMERIC_METRICS
     + PROTECTION_ACTION_FLAG_METRICS
@@ -239,13 +251,7 @@ REQUIRED_COLUMNS = set(BASE_PASSTHROUGH_COLUMNS)
 
 SCENARIO_PRESETS = {
     "regionalbackbone": OUTCOMES_DIR / "regionalbackbone_outcome_summary.csv",
-    "regionalbackbone_congestion_protection": OUTCOMES_DIR / "regionalbackbone_congestion_protection_multirun_outcome_summary.csv",
-    "regionalbackbone_mixed_traffic_protection": OUTCOMES_DIR / "regionalbackbone_mixed_traffic_protection_multirun_outcome_summary.csv",
-    "regionalbackbone_failure_detection_comparison": OUTCOMES_DIR / "regionalbackbone_failure_detection_comparison_outcome_summary.csv",
-    "regionalbackbone_failure_detection_comparison_ms_traffic": OUTCOMES_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_outcome_summary.csv",
-    "regionalbackbone_failure_detection_degraded_link": OUTCOMES_DIR / "regionalbackbone_failure_detection_degraded_link_outcome_summary.csv",
-    "reactivefailure": OUTCOMES_DIR / "reactivefailure_outcome_summary.csv",
-    "proactiveswitch": OUTCOMES_DIR / "proactiveswitch_outcome_summary.csv",
+    "regionalbackbone_failure_detection_degraded_link_model_family": OUTCOMES_DIR / "regionalbackbone_failure_detection_degraded_link_model_family_outcome_summary.csv",
 }
 
 MECHANISM_LABELS = {
@@ -258,6 +264,10 @@ MECHANISM_LABELS = {
     "ospf_only": "OSPF only",
     "bfd_like_frr": "OSPF + BFD-like + FRR",
     "aimrce_frr": "OSPF + AI-MRCE + FRR",
+    "aimrce_rule_based_frr": "OSPF + AI-MRCE rule-based + FRR",
+    "aimrce_logistic_regression_frr": "OSPF + AI-MRCE logistic-regression + FRR",
+    "aimrce_linear_svm_frr": "OSPF + AI-MRCE linear-SVM + FRR",
+    "aimrce_shallow_tree_frr": "OSPF + AI-MRCE shallow-tree + FRR",
     "hybrid_bfd_like_aimrce_frr": "OSPF + BFD-like + AI-MRCE + FRR",
     "no_protection_baseline": "No-protection baseline",
 }
@@ -273,7 +283,11 @@ MECHANISM_ORDER = {
     "ospf_only": 10,
     "bfd_like_frr": 11,
     "aimrce_frr": 12,
-    "hybrid_bfd_like_aimrce_frr": 13,
+    "aimrce_rule_based_frr": 13,
+    "aimrce_logistic_regression_frr": 14,
+    "aimrce_linear_svm_frr": 15,
+    "aimrce_shallow_tree_frr": 16,
+    "hybrid_bfd_like_aimrce_frr": 17,
 }
 
 COHORT_LABELS = {
@@ -288,6 +302,7 @@ COHORT_LABELS = {
     "regionalbackbone_failure_detection_comparison": "Regional backbone failure-detection comparison cohort",
     "regionalbackbone_failure_detection_comparison_ms_traffic": "Regional backbone failure-detection 2 ms monitored-traffic cohort",
     "regionalbackbone_failure_detection_degraded_link": "Regional backbone failure-detection degraded-link cohort",
+    "regionalbackbone_failure_detection_degraded_link_model_family": "Regional backbone degraded-link AI-MRCE model-family cohort",
     "regionalbackbone_other": "Regional backbone other cohort",
 }
 
@@ -303,7 +318,8 @@ COHORT_ORDER = {
     "regionalbackbone_failure_detection_comparison": 8,
     "regionalbackbone_failure_detection_comparison_ms_traffic": 9,
     "regionalbackbone_failure_detection_degraded_link": 10,
-    "regionalbackbone_other": 11,
+    "regionalbackbone_failure_detection_degraded_link_model_family": 11,
+    "regionalbackbone_other": 12,
 }
 
 
@@ -348,6 +364,67 @@ def resolve_project_path(path: Path) -> Path:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
+def atomic_temp_path(path: Path) -> Path:
+    return path.with_name(f".{path.name}.{os.getpid()}.tmp")
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = atomic_temp_path(path)
+    try:
+        temp_path.write_text(text, encoding="utf-8")
+        temp_path.replace(path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def atomic_write_csv(path: Path, rows: list[dict[str, object]], fieldnames: list[str] | None = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = atomic_temp_path(path)
+    try:
+        with temp_path.open("w", newline="", encoding="utf-8") as handle:
+            if not rows:
+                handle.write("")
+            else:
+                resolved_fieldnames = list(fieldnames or [])
+                if not resolved_fieldnames:
+                    for row in rows:
+                        for key in row:
+                            if key not in resolved_fieldnames:
+                                resolved_fieldnames.append(key)
+                writer = csv.DictWriter(handle, fieldnames=resolved_fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+        temp_path.replace(path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def elapsed_text(start_time: float) -> str:
+    return f"{time.perf_counter() - start_time:.2f}s"
+
+
+def latest_mtime(paths: list[Path]) -> float | None:
+    mtimes = [path.stat().st_mtime for path in paths if path.exists()]
+    return max(mtimes) if mtimes else None
+
+
+def warn_if_existing_output_stale(output_path: Path, source_paths: list[Path], regenerate_command: str) -> None:
+    if not output_path.exists():
+        return
+    newest_source = latest_mtime(source_paths)
+    if newest_source is None or output_path.stat().st_mtime >= newest_source:
+        return
+    newest_inputs = [path for path in source_paths if path.exists() and path.stat().st_mtime == newest_source]
+    source_text = newest_inputs[0] if newest_inputs else "input outcome summary"
+    print(
+        "Warning: existing comparison artifact appears stale before regeneration: "
+        f"{output_path} is older than {source_text}. Regenerate with: {regenerate_command}"
+    )
+
+
 def humanize_identifier(value: str) -> str:
     return value.replace("_", " ").strip().title()
 
@@ -369,9 +446,8 @@ def parse_flag(value: str | None) -> int | None:
 
 
 def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
-        path.write_text("", encoding="utf-8")
+        atomic_write_csv(path, rows, [])
         return
 
     fieldnames: list[str] = []
@@ -379,11 +455,7 @@ def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
         for key in row:
             if key not in fieldnames:
                 fieldnames.append(key)
-
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+    atomic_write_csv(path, rows, fieldnames)
 
 
 def load_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -494,6 +566,20 @@ def normalize_mechanism_family(protection_mode: str, config_name: str) -> str:
         return "aimrce_frr"
     if config_name == "RegionalBackboneFailureComparisonHybridDegradedLink":
         return "hybrid_bfd_like_aimrce_frr"
+    if config_name == "RegionalBackboneFailureDegradedLinkOspfOnly":
+        return "ospf_only"
+    if config_name == "RegionalBackboneFailureDegradedLinkBfdLikeFrr":
+        return "bfd_like_frr"
+    if config_name == "RegionalBackboneFailureDegradedLinkAiMrceRuleBased":
+        return "aimrce_rule_based_frr"
+    if config_name == "RegionalBackboneFailureDegradedLinkAiMrceLogReg":
+        return "aimrce_logistic_regression_frr"
+    if config_name == "RegionalBackboneFailureDegradedLinkAiMrceLinearSvm":
+        return "aimrce_linear_svm_frr"
+    if config_name == "RegionalBackboneFailureDegradedLinkAiMrceShallowTree":
+        return "aimrce_shallow_tree_frr"
+    if config_name == "RegionalBackboneFailureDegradedLinkHybrid":
+        return "hybrid_bfd_like_aimrce_frr"
     return "unknown_mechanism"
 
 
@@ -515,6 +601,9 @@ def resolve_comparison_cohort(scenario_name: str, config_name: str, mechanism_fa
 
     if scenario_name == "regionalbackbone_failure_detection_degraded_link":
         return "regionalbackbone_failure_detection_degraded_link"
+
+    if scenario_name == "regionalbackbone_failure_detection_degraded_link_model_family":
+        return "regionalbackbone_failure_detection_degraded_link_model_family"
 
     if scenario_name == "regionalbackbone":
         if config_name == "RegionalBackboneBaseline" or mechanism_family == "no_protection_baseline":
@@ -643,6 +732,8 @@ def grouped_summary_rows(rows: list[dict[str, object]]) -> list[dict[str, object
         source_scenarios = sorted({str(row["source_scenario"]) for row in group_rows})
         dataset_variants = sorted({str(row["source_dataset_variant"]) for row in group_rows})
         traffic_profiles = sorted({str(row.get("traffic_profile", "")) for row in group_rows if str(row.get("traffic_profile", ""))})
+        runtime_model_types = sorted({str(row.get("runtime_model_type", "")) for row in group_rows if str(row.get("runtime_model_type", ""))})
+        runtime_model_paths = sorted({str(row.get("runtime_model_path", "")) for row in group_rows if str(row.get("runtime_model_path", ""))})
         trigger_sources = Counter(str(row.get("protection_trigger_source", "") or "none") for row in group_rows)
         bfd_trigger_reasons = Counter(str(row.get("bfd_like_trigger_reason_text", "") or "none") for row in group_rows)
 
@@ -657,6 +748,8 @@ def grouped_summary_rows(rows: list[dict[str, object]]) -> list[dict[str, object
             "source_scenarios": "; ".join(source_scenarios),
             "source_dataset_variants": "; ".join(dataset_variants),
             "traffic_profiles": "; ".join(traffic_profiles),
+            "runtime_model_types": "; ".join(runtime_model_types),
+            "runtime_model_paths": "; ".join(runtime_model_paths),
             "protection_trigger_sources": "; ".join(
                 f"{source}:{count}" for source, count in sorted(trigger_sources.items())
             ),
@@ -742,11 +835,238 @@ def format_counter(counter: Counter) -> list[str]:
     return [f"  {key}: {value}" for key, value in sorted(counter.items(), key=lambda item: str(item[0]))]
 
 
+DEGRADED_LINK_COHORT = "regionalbackbone_failure_detection_degraded_link"
+DEGRADED_LINK_MODEL_FAMILY_COHORT = "regionalbackbone_failure_detection_degraded_link_model_family"
+DEGRADED_LINK_HEADLINE_COHORTS = {DEGRADED_LINK_COHORT, DEGRADED_LINK_MODEL_FAMILY_COHORT}
+
+
+def summary_mean(summary_row: dict[str, object], metric: str) -> object:
+    return summary_row.get(f"{metric}_mean", "")
+
+
+def summary_rate(summary_row: dict[str, object], metric: str) -> object:
+    return summary_row.get(f"{metric}_true_rate", "")
+
+
+def degraded_link_short_interpretation(summary_row: dict[str, object]) -> str:
+    mechanism_family = str(summary_row.get("mechanism_family", ""))
+    if mechanism_family == "ospf_only":
+        return (
+            "OSPF-only has no protection trigger in this cohort and remains the "
+            "post-hard-failure unobserved-gap baseline."
+        )
+    if mechanism_family == "bfd_like_frr":
+        return (
+            "Project-local BFD-like detection triggers before hard failure only "
+            "after modeled probe loss is severe; it removes post-failure "
+            "unobserved gaps but has a large brownout/activation interval cost."
+        )
+    if mechanism_family == "aimrce_frr":
+        return (
+            "AI-MRCE triggers proactively from telemetry risk much earlier than "
+            "hard failure; it removes post-failure unobserved gaps and avoids "
+            "activation-to-failure unobserved gaps, but repair-route reordering "
+            "remains visible."
+        )
+    if mechanism_family == "aimrce_rule_based_frr":
+        return (
+            "Rule-based AI-MRCE is the transparent non-ML runtime reference. It "
+            "uses the same telemetry and repair-route action as the learned "
+            "models, making its activation cost directly comparable."
+        )
+    if mechanism_family == "aimrce_logistic_regression_frr":
+        return (
+            "Logistic-regression AI-MRCE is a compact learned runtime artifact. "
+            "Report its activation timing and transition side effects separately "
+            "from post-failure continuity."
+        )
+    if mechanism_family == "aimrce_linear_svm_frr":
+        return (
+            "Linear-SVM AI-MRCE is a lightweight margin-based runtime artifact "
+            "with a bounded score transform. It is included for interpretable "
+            "model-family comparison, not as a production predictor."
+        )
+    if mechanism_family == "aimrce_shallow_tree_frr":
+        return (
+            "Shallow-tree AI-MRCE is an auditable threshold-branch runtime "
+            "artifact. Its value is transparency and robustness rather than "
+            "black-box complexity."
+        )
+    if mechanism_family == "hybrid_bfd_like_aimrce_frr":
+        return (
+            "Hybrid triggers AI-MRCE first in this progressive degraded-link "
+            "profile; the BFD-like path remains a reactive safety-net diagnostic."
+        )
+    return "Descriptive mechanism summary; inspect the detailed comparison report before making claims."
+
+
+def build_degraded_link_headline_rows(summary_rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    # This compact artifact is intentionally descriptive and scenario-specific.
+    # It highlights the dissertation-relevant degraded-link result without
+    # changing any metric definitions or hiding activation-time side effects.
+    selected_rows = [
+        row
+        for row in summary_rows
+        if str(row.get("comparison_cohort", "")) in DEGRADED_LINK_HEADLINE_COHORTS
+    ]
+    selected_rows.sort(
+        key=lambda row: (
+            MECHANISM_ORDER.get(str(row.get("mechanism_family", "")), 999),
+            str(row.get("mechanism_family", "")),
+        )
+    )
+
+    headline_rows: list[dict[str, object]] = []
+    for row in selected_rows:
+        mechanism_family = str(row.get("mechanism_family", ""))
+        mean_activation_risk_score = (
+            summary_mean(row, "activation_risk_score")
+            if mechanism_family in {
+                "aimrce_frr",
+                "aimrce_rule_based_frr",
+                "aimrce_logistic_regression_frr",
+                "aimrce_linear_svm_frr",
+                "aimrce_shallow_tree_frr",
+                "hybrid_bfd_like_aimrce_frr",
+            }
+            else ""
+        )
+        mean_bfd_detection_time = (
+            summary_mean(row, "bfd_like_detection_time_s")
+            if mechanism_family == "bfd_like_frr"
+            else ""
+        )
+        mean_bfd_modeled_loss_at_detection = (
+            summary_mean(row, "bfd_like_modeled_probe_loss_probability_at_detection")
+            if mechanism_family == "bfd_like_frr"
+            else ""
+        )
+        headline_rows.append(
+            {
+                "mechanism_family": row.get("mechanism_family", ""),
+                "mechanism_label": row.get("mechanism_label", ""),
+                "comparison_cohort": row.get("comparison_cohort", ""),
+                "runtime_model_type": row.get("runtime_model_types", ""),
+                "runtime_model_path": row.get("runtime_model_paths", ""),
+                "trigger_source_summary": row.get("protection_trigger_sources", ""),
+                "run_count": row.get("run_count", ""),
+                "protection_before_failure_rate": summary_rate(row, "protection_activated_before_failure"),
+                "mean_activation_time_s": summary_mean(row, "protection_activation_time_s"),
+                "mean_lead_time_before_failure_s": summary_mean(row, "protection_lead_time_before_failure_s"),
+                "mean_activation_queue_pk": summary_mean(row, "activation_queue_length_pk"),
+                "mean_runtime_model_loaded": summary_mean(row, "runtime_model_loaded")
+                if mechanism_family in {
+                    "aimrce_frr",
+                    "aimrce_rule_based_frr",
+                    "aimrce_logistic_regression_frr",
+                    "aimrce_linear_svm_frr",
+                    "aimrce_shallow_tree_frr",
+                    "hybrid_bfd_like_aimrce_frr",
+                }
+                else "",
+                "mean_runtime_model_fallback_used": summary_mean(row, "runtime_model_fallback_used")
+                if mechanism_family in {
+                    "aimrce_frr",
+                    "aimrce_rule_based_frr",
+                    "aimrce_logistic_regression_frr",
+                    "aimrce_linear_svm_frr",
+                    "aimrce_shallow_tree_frr",
+                    "hybrid_bfd_like_aimrce_frr",
+                }
+                else "",
+                "mean_runtime_model_feature_count": summary_mean(row, "runtime_model_feature_count")
+                if mechanism_family in {
+                    "aimrce_logistic_regression_frr",
+                    "aimrce_linear_svm_frr",
+                    "aimrce_shallow_tree_frr",
+                }
+                else "",
+                "mean_activation_risk_score": mean_activation_risk_score,
+                "mean_activation_threshold": summary_mean(row, "activation_decision_threshold")
+                if mechanism_family in {
+                    "aimrce_frr",
+                    "aimrce_rule_based_frr",
+                    "aimrce_logistic_regression_frr",
+                    "aimrce_linear_svm_frr",
+                    "aimrce_shallow_tree_frr",
+                    "hybrid_bfd_like_aimrce_frr",
+                }
+                else "",
+                "mean_bfd_detection_time_s": mean_bfd_detection_time,
+                "mean_bfd_modeled_loss_at_detection": mean_bfd_modeled_loss_at_detection,
+                "mean_post_failure_unobserved": summary_mean(
+                    row,
+                    "packet_sequence_gap_total_unobserved_after_hard_failure",
+                ),
+                "mean_activation_to_failure_unobserved": summary_mean(
+                    row,
+                    "packet_sequence_gap_total_unobserved_between_activation_and_failure",
+                ),
+                "mean_activation_to_failure_reordered": summary_mean(
+                    row,
+                    "packet_sequence_gap_total_reordered_between_activation_and_failure",
+                ),
+                "short_interpretation": degraded_link_short_interpretation(row),
+            }
+        )
+    return headline_rows
+
+
+def render_degraded_link_headline_summary(headline_rows: list[dict[str, object]]) -> str:
+    title = "Degraded-Link Failure Detection Headline Summary"
+    lines = [title, "=" * len(title), ""]
+    lines.append("Method note")
+    lines.append(
+        "  This compact summary is descriptive and scenario-conditioned. BFD-like "
+        "is a project-local reactive detector, AI-MRCE is a proactive telemetry "
+        "trigger, and repair routes are project-local FRR-like abstractions."
+    )
+    lines.append(
+        "  Use post-hard-failure unobserved gaps as the headline loss-like metric. "
+        "Use activation-to-failure unobserved/reordered packets as brownout and "
+        "repair-route transition side-effect metrics."
+    )
+    lines.append("")
+    for row in headline_rows:
+        lines.append(f"{row['mechanism_label']} ({row['mechanism_family']})")
+        lines.append(f"  runtime_model_type: {row['runtime_model_type']}")
+        lines.append(f"  runtime_model_path: {row['runtime_model_path']}")
+        lines.append(f"  trigger_source_summary: {row['trigger_source_summary']}")
+        lines.append(f"  run_count: {row['run_count']}")
+        lines.append(f"  protection_before_failure_rate: {row['protection_before_failure_rate']}")
+        lines.append(f"  mean_activation_time_s: {row['mean_activation_time_s']}")
+        lines.append(f"  mean_lead_time_before_failure_s: {row['mean_lead_time_before_failure_s']}")
+        lines.append(f"  mean_activation_queue_pk: {row['mean_activation_queue_pk']}")
+        lines.append(f"  mean_runtime_model_loaded: {row['mean_runtime_model_loaded']}")
+        lines.append(f"  mean_runtime_model_fallback_used: {row['mean_runtime_model_fallback_used']}")
+        lines.append(f"  mean_runtime_model_feature_count: {row['mean_runtime_model_feature_count']}")
+        lines.append(f"  mean_activation_risk_score: {row['mean_activation_risk_score']}")
+        lines.append(f"  mean_activation_threshold: {row['mean_activation_threshold']}")
+        lines.append(f"  mean_bfd_detection_time_s: {row['mean_bfd_detection_time_s']}")
+        lines.append(
+            "  mean_bfd_modeled_loss_at_detection: "
+            f"{row['mean_bfd_modeled_loss_at_detection']}"
+        )
+        lines.append(f"  mean_post_failure_unobserved: {row['mean_post_failure_unobserved']}")
+        lines.append(
+            "  mean_activation_to_failure_unobserved: "
+            f"{row['mean_activation_to_failure_unobserved']}"
+        )
+        lines.append(
+            "  mean_activation_to_failure_reordered: "
+            f"{row['mean_activation_to_failure_reordered']}"
+        )
+        lines.append(f"  interpretation: {row['short_interpretation']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def render_report(
     input_paths: list[Path],
     skipped_paths: list[str],
     rows: list[dict[str, object]],
     summary_rows: list[dict[str, object]],
+    headline_rows: list[dict[str, object]],
     output_paths: dict[str, Path],
 ) -> str:
     title = "Outcome Comparison Report"
@@ -792,6 +1112,105 @@ def render_report(
     lines.append("  runs by mechanism family:")
     lines.extend(format_counter(mechanism_counts))
     lines.append("")
+
+    if headline_rows:
+        headline_cohorts = {str(row.get("comparison_cohort", "")) for row in headline_rows}
+        if DEGRADED_LINK_MODEL_FAMILY_COHORT in headline_cohorts:
+            lines.append("Main Dissertation Finding: AI-MRCE Model-Family Behavior in Degraded-Link Detection")
+            lines.append(
+                "  The model-family degraded-link cohort keeps OSPF-only, "
+                "BFD-like+FRR, and hybrid references visible while separating "
+                "AI-MRCE rule-based, logistic-regression, linear-SVM, and "
+                "shallow-tree decision policies under the same repair-route "
+                "actuator and degradation timeline."
+            )
+        else:
+            lines.append("Main Dissertation Finding: Degraded-Link Failure Detection")
+            lines.append(
+                "  The degraded-link cohort is the clearest current comparison of "
+                "OSPF-only, project-local BFD-like reactive protection, proactive "
+                "AI-MRCE protection, and the hybrid safety-net design."
+            )
+        lines.append(
+            "  OSPF-only remains the no-protection post-hard-failure baseline. "
+            "BFD-like protection is reactive: it fires only after modeled probe "
+            "loss becomes severe shortly before hard failure. AI-MRCE policies "
+            "are proactive: they fire from telemetry risk before hard failure. "
+            "Hybrid rows record which trigger wins first."
+        )
+        lines.append(
+            "  Post-hard-failure unobserved packet gaps are the headline loss-like "
+            "metric. Activation-to-failure unobserved and reordered packets are "
+            "reported separately as brownout/switch side effects. Reordered "
+            "packets are not counted as direct loss."
+        )
+        if DEGRADED_LINK_MODEL_FAMILY_COHORT in headline_cohorts:
+            aimrce_rows = [
+                row
+                for row in headline_rows
+                if str(row.get("mechanism_family", "")).startswith("aimrce_")
+                and str(row.get("mechanism_family", "")) != "aimrce_frr"
+            ]
+            if aimrce_rows:
+                def mean_or_none(row: dict[str, object], field: str) -> float | None:
+                    try:
+                        value = row.get(field, "")
+                        return None if value == "" else float(value)
+                    except (TypeError, ValueError):
+                        return None
+
+                activation_rows = [(row, mean_or_none(row, "mean_activation_time_s")) for row in aimrce_rows]
+                activation_rows = [(row, value) for row, value in activation_rows if value is not None]
+                reordered_rows = [(row, mean_or_none(row, "mean_activation_to_failure_reordered")) for row in aimrce_rows]
+                reordered_rows = [(row, value) for row, value in reordered_rows if value is not None]
+                unobserved_rows = [(row, mean_or_none(row, "mean_activation_to_failure_unobserved")) for row in aimrce_rows]
+                unobserved_rows = [(row, value) for row, value in unobserved_rows if value is not None]
+                post_failure_rows = [(row, mean_or_none(row, "mean_post_failure_unobserved")) for row in aimrce_rows]
+                post_failure_rows = [(row, value) for row, value in post_failure_rows if value is not None]
+
+                if activation_rows:
+                    earliest = min(activation_rows, key=lambda item: item[1])
+                    latest = max(activation_rows, key=lambda item: item[1])
+                    lines.append(
+                        "  AI-MRCE activation timing: "
+                        f"earliest={earliest[0]['mechanism_label']} at {earliest[1]}s; "
+                        f"latest={latest[0]['mechanism_label']} at {latest[1]}s."
+                    )
+                if unobserved_rows:
+                    lowest_unobserved = min(unobserved_rows, key=lambda item: item[1])
+                    lines.append(
+                        "  Lowest activation-to-failure unobserved cost among AI-MRCE policies: "
+                        f"{lowest_unobserved[0]['mechanism_label']} with mean={lowest_unobserved[1]}."
+                    )
+                if reordered_rows:
+                    lowest_reordered = min(reordered_rows, key=lambda item: item[1])
+                    lines.append(
+                        "  Lowest activation-to-failure reordering among AI-MRCE policies: "
+                        f"{lowest_reordered[0]['mechanism_label']} with mean={lowest_reordered[1]}."
+                    )
+                if post_failure_rows and all(value == 0 for _, value in post_failure_rows):
+                    lines.append(
+                        "  All AI-MRCE model-family policies show zero post-hard-failure "
+                        "unobserved gaps in this descriptive cohort."
+                    )
+        for row in headline_rows:
+            lines.append(
+                "  "
+                f"{row['mechanism_label']}: runs={row['run_count']}, "
+                f"runtime_model={row['runtime_model_type'] or 'n/a'}, "
+                f"trigger={row['trigger_source_summary']}, "
+                f"protection_before_failure_rate={row['protection_before_failure_rate']}, "
+                f"activation_time={row['mean_activation_time_s']}, "
+                f"lead_time={row['mean_lead_time_before_failure_s']}, "
+                f"runtime_loaded={row['mean_runtime_model_loaded']}, "
+                f"fallback_used={row['mean_runtime_model_fallback_used']}, "
+                f"threshold={row['mean_activation_threshold']}, "
+                f"post_failure_unobserved={row['mean_post_failure_unobserved']}, "
+                f"activation_to_failure_unobserved={row['mean_activation_to_failure_unobserved']}, "
+                f"activation_to_failure_reordered={row['mean_activation_to_failure_reordered']}"
+            )
+            lines.append(f"    {row['short_interpretation']}")
+        lines.append("")
 
     cohort_grouped_rows: dict[str, list[dict[str, object]]] = defaultdict(list)
     for summary_row in summary_rows:
@@ -1010,40 +1429,67 @@ def render_report(
     lines.append(f"  consolidated runs: {output_paths['runs']}")
     lines.append(f"  cohort summary: {output_paths['summary']}")
     lines.append(f"  report: {output_paths['report']}")
+    if headline_rows:
+        lines.append(f"  degraded-link headline summary CSV: {output_paths['headline_csv']}")
+        lines.append(f"  degraded-link headline summary TXT: {output_paths['headline_txt']}")
     lines.append("")
 
     return "\n".join(lines)
 
 
 def main() -> None:
+    total_start = time.perf_counter()
     args = parse_args()
+    print("[compare_outcomes] Loading outcome inputs")
     input_paths, skipped_paths = resolve_input_paths(args)
+    print(f"[compare_outcomes] Inputs: {', '.join(str(path) for path in input_paths)}")
     rows = collect_rows(input_paths)
+    print(f"[compare_outcomes] Loaded {len(rows)} run-level outcome row(s)")
     summary_rows = grouped_summary_rows(rows)
+    headline_rows = build_degraded_link_headline_rows(summary_rows)
 
     output_prefix = resolve_project_path(args.output_prefix)
     output_paths = {
         "runs": output_prefix.with_name(f"{output_prefix.name}_runs.csv"),
         "summary": output_prefix.with_name(f"{output_prefix.name}_summary.csv"),
         "report": output_prefix.with_name(f"{output_prefix.name}_report.txt"),
+        "headline_csv": output_prefix.with_name(f"{output_prefix.name}_headline_summary.csv"),
+        "headline_txt": output_prefix.with_name(f"{output_prefix.name}_headline_summary.txt"),
     }
+
+    regenerate_command = (
+        "py -3 analysis\\compare_outcomes.py --inputs "
+        f"{' '.join(str(path) for path in input_paths)} --output-prefix {output_prefix}"
+    )
+    for output_path in output_paths.values():
+        warn_if_existing_output_stale(output_path, input_paths, regenerate_command)
 
     write_csv(output_paths["runs"], rows)
     write_csv(output_paths["summary"], summary_rows)
+    if headline_rows:
+        write_csv(output_paths["headline_csv"], headline_rows)
+        atomic_write_text(
+            output_paths["headline_txt"],
+            render_degraded_link_headline_summary(headline_rows),
+        )
 
     report_text = render_report(
         input_paths=input_paths,
         skipped_paths=skipped_paths,
         rows=rows,
         summary_rows=summary_rows,
+        headline_rows=headline_rows,
         output_paths=output_paths,
     )
-    output_paths["report"].parent.mkdir(parents=True, exist_ok=True)
-    output_paths["report"].write_text(report_text, encoding="utf-8")
+    atomic_write_text(output_paths["report"], report_text)
 
     print(f"Wrote consolidated run table to {output_paths['runs']}")
     print(f"Wrote cohort summary to {output_paths['summary']}")
+    if headline_rows:
+        print(f"Wrote degraded-link headline summary to {output_paths['headline_csv']}")
+        print(f"Wrote degraded-link headline report to {output_paths['headline_txt']}")
     print(f"Wrote report to {output_paths['report']}")
+    print(f"[compare_outcomes] Total elapsed: {elapsed_text(total_start)}")
 
 
 if __name__ == "__main__":

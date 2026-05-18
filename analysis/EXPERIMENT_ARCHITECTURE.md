@@ -1,200 +1,127 @@
 # Experiment Architecture
 
-This note records the consolidated experiment architecture after aligning the repository with the dissertation framing document for **Intelligent Fast Network Recovery**.
+This repository is now centered on one publication-ready dissertation core:
 
-The project should be read as one dissertation prototype, not as a growing collection of unrelated OMNeT++ examples.
+`regionalbackbone_failure_detection_degraded_link_model_family`
 
-## Research Center
+The old standalone small-topology scenario trees were removed during cleanup.
+The remaining architecture is deliberately narrower: regionalbackbone
+simulation source, AI-MRCE/FRR-like/BFD-like controllers, runtime model
+artifacts, and the analysis pipeline needed to reproduce, validate, trace, and
+package the active experiment.
 
-The active research question is whether a project-local AI-MRCE element can use monitored network indicators and offline-trained, auditable models to trigger a protective reroute action before selected hard outages, then improve practical recovery/protection outcomes relative to reactive behavior.
+## Simulation Layer
 
-The simulator contribution is therefore:
+Active scenario directory:
 
-- a regional IP/OSPF-like topology,
-- controlled degradation and congestion branches with observable symptoms,
-- runtime AI-MRCE decision candidates,
-- conservative project-local FRR-like repair-route protection action,
-- a separate BFD-inspired protected-span safety-net comparison branch,
-- offline training/export,
-- run-level recovery/protection outcome comparison.
-- receiver-observed packet-continuity diagnostics that complement coarse
-  one-second availability windows when rerouting effects are short.
-- activation-time controller diagnostics that make the repair-route trigger
-  auditable without changing routing or AI-MRCE decision semantics.
-- reordering-aware sequence diagnostics so a repair path overtaking queued
-  primary-path packets is not misreported as pure packet loss.
+- `simulations/regionalbackbone/`
 
-The simulator does not attempt to implement every FRR mechanism from the literature. Standards-compliant FRR and BFD remain literature and technical-comparison baselines. The failure-detection comparison branch uses a project-local BFD-like detector abstraction only. Regional OSPF uses INET OSPFv2 defaults consistently across the topology unless a config states otherwise; no OSPF timer is tuned to create an artificial baseline.
+Important files:
 
-## Core Active Scenario
+- `RegionalBackbone.ned`: regional OSPF backbone topology.
+- `omnetpp.ini`: active model-family configs plus retained base configs used by
+  inheritance and runtime export.
+- `aimrce_runtime_manifest.csv`: runtime model artifact manifest.
+- `aimrce_runtime_logreg.csv`: logistic-regression runtime model.
+- `aimrce_runtime_linsvm.csv`: linear-SVM runtime model.
+- `aimrce_runtime_shallow_tree.csv`: shallow-tree runtime model.
 
-### `simulations/regionalbackbone`
+The active model-family configs compare:
 
-Role: main dissertation topology.
+- OSPF only;
+- BFD-like + FRR-like repair routes;
+- AI-MRCE rule-based + FRR-like repair routes;
+- AI-MRCE logistic regression + FRR-like repair routes;
+- AI-MRCE linear SVM + FRR-like repair routes;
+- AI-MRCE shallow tree + FRR-like repair routes;
+- hybrid BFD-like + AI-MRCE + FRR-like repair routes.
 
-Purpose:
+Historical regionalbackbone experimental configs were removed from the active
+`omnetpp.ini` hierarchy. The only retained non-model-family config is
+`RegionalBackboneCongestionDegradation`, which supports runtime-model export and
+is not presented as a separate publication claim.
 
-- validate baseline OSPF-like behavior,
-- compare reactive behavior after hard failure,
-- model selected pre-failure degradation/congestion classes,
-- evaluate AI-MRCE runtime candidates under one consistent topology,
-- support multi-run practical outcome comparison.
+## Controller Layer
 
-Core configs:
+Active custom controllers:
 
-- `RegionalBackboneBaseline`
-- `RegionalBackboneReactiveFailure`
-- `RegionalBackboneControlledDegradation`
-- `RegionalBackboneCongestionDegradation`
+- `src/dissertationsim/controller/AiMrceController.*`
+- `src/dissertationsim/controller/LinkDegradationController.*`
+- `src/dissertationsim/controller/InterfaceWithdrawController.*`
 
-Runtime AI-MRCE configs:
+`AiMrceController` is the core dissertation mechanism. It collects telemetry,
+constructs runtime features, evaluates rule-based or learned risk policies,
+applies threshold/streak logic, arbitrates AI-MRCE and BFD-like triggers in
+hybrid mode, installs project-local static `/32` repair routes, and records
+diagnostics.
 
-- `RegionalBackboneAiMrceRuleBased`
-- `RegionalBackboneAiMrceLogReg`
-- `RegionalBackboneAiMrceLinearSvm`
-- `RegionalBackboneAiMrceShallowTree`
+`LinkDegradationController` provides deterministic pre-failure impairment for
+the degraded-link/brownout profile. Hard failure remains separate and is handled
+by the scenario script/config timing, not by using future failure knowledge in
+the AI-MRCE decision.
 
-Focused mixed UDP/TCP configs:
+`InterfaceWithdrawController` is retained as auxiliary/reference source. It is
+not the active AI-MRCE dissertation mechanism.
 
-- `RegionalBackboneMixedTrafficCongestionDegradation`
-- `RegionalBackboneAiMrceRuleBasedMixedTraffic`
-- `RegionalBackboneAiMrceLogRegMixedTraffic`
+## Analysis Layer
 
-Dedicated multi-run cohort wrappers:
+Active pipeline scripts:
 
-- `RegionalBackboneCongestionDegradationCohort`
-- `RegionalBackboneAiMrceRuleBasedCohort`
-- `RegionalBackboneAiMrceLogRegCohort`
-- `RegionalBackboneAiMrceLinearSvmCohort`
-- `RegionalBackboneAiMrceShallowTreeCohort`
-- `RegionalBackboneMixedTrafficCongestionDegradationCohort`
-- `RegionalBackboneAiMrceRuleBasedMixedTrafficCohort`
-- `RegionalBackboneAiMrceLogRegMixedTrafficCohort`
-- `RegionalBackboneFailureComparisonOspfOnlyCohort`
-- `RegionalBackboneFailureComparisonBfdLikeFrrCohort`
-- `RegionalBackboneFailureComparisonAiMrceFrrCohort`
-- `RegionalBackboneFailureComparisonHybridCohort`
-- `RegionalBackboneFailureComparisonOspfOnlyMsTrafficCohort`
-- `RegionalBackboneFailureComparisonBfdLikeFrrMsTrafficCohort`
-- `RegionalBackboneFailureComparisonAiMrceFrrMsTrafficCohort`
-- `RegionalBackboneFailureComparisonHybridMsTrafficCohort`
-- `RegionalBackboneFailureComparisonOspfOnlyDegradedLinkCohort`
-- `RegionalBackboneFailureComparisonBfdLikeFrrDegradedLinkCohort`
-- `RegionalBackboneFailureComparisonAiMrceFrrDegradedLinkCohort`
-- `RegionalBackboneFailureComparisonHybridDegradedLinkCohort`
+- `analysis/build_dataset.py`
+- `analysis/dataset_report.py`
+- `analysis/compare_outcomes.py`
+- `analysis/extract_aimrce_risk_trace.py`
+- `analysis/export_runtime_models.py`
+- `analysis/pipeline_integrity.py`
+- `analysis/package_current_experiment.py`
+- `analysis/clean_generated.py`
+- `analysis/run_analysis.ps1`
+- `analysis/run_experiments.ps1`
 
-This is the scenario family that should appear in main dissertation result tables.
+The pipeline reads OMNeT++ `.sca/.vec/.vci` outputs from the active results
+folder, produces dataset/report/outcome/comparison artifacts, validates
+mechanism/run coverage with pipeline integrity, extracts AI-MRCE risk traces,
+and builds a compact current-experiment package for review.
 
-The mixed UDP/TCP branch is intentionally smaller than the full runtime family. It compares the reactive congestion baseline against the existing rule-based and logistic-regression AI-MRCE candidates while adding standard INET TCP application traffic whose larger request direction follows the monitored hostA -> hostB corridor. TCP useful-goodput remains an application-endpoint proxy, not a TCP-internal restoration counter. The logistic-regression mixed run intentionally reuses the UDP-dominant regional runtime export, so missed protection there should be interpreted as deployment-compatibility evidence rather than tuned away. This keeps the transport-impact evidence focused without creating many weak variants.
+Support-only Python tooling:
 
-The failure-detection comparison branch is intentionally separate from the main AI-MRCE model-family cohort. It compares OSPF-only behavior, a BFD-like protected-span detector plus the same repair-route actuator, AI-MRCE plus the same actuator, and a hybrid where the first trigger wins. The BFD-like detector is a project-local reactive abstraction using protected-span interface/carrier state plus configurable probe-miss intervals and a detect multiplier; it must not be reported as full BFD session behavior or OSPF/BFD integration. The active BFD-like timing profile is moderate-fast rather than deliberately weak: 300ms intervals with multiplier 3, expected detection about 0.9s after the protected span is observed unhealthy.
+- `analysis/train_risk_model.py` remains as offline ML methodology support. It
+  is not part of the default active publication regeneration path and is not
+  exposed by the cleaned `run_analysis.bat help` surface.
 
-The 2 ms monitored-traffic failure-detection branch is a measurement-resolution sensitivity cohort, not a new mechanism. The default failure-detection cohort already uses a 10 ms monitored UDP probe; the ms-traffic branch lowers only that monitored probe interval to 2 ms while preserving the same staged bulk load, hard-failure timing, BFD-like timing, AI-MRCE decision semantics, and repair-route actuator. Its purpose is to make sub-second fast-recovery effects more observable in receiver-side packet-continuity metrics without pretending to implement standards-compliant BFD or seamless FRR.
+## Generated Outputs
 
-The degraded-link failure-detection branch is a BFD-like correctness sensitivity cohort. It keeps the same trigger families and repair-route actuator, but adds deterministic progressive packet-error-rate impairment on the protected span before the same hard failure. BFD-like and hybrid variants enable modeled logical probe loss derived from current channel packet error rate, so this branch can test whether the reactive safety net fires before hard failure when the link is already visibly losing packets. This is still not full BFD and not predictive logic; it is an auditable degraded-link detector abstraction.
+Generated outputs are ignored and should not be committed:
 
-## Auxiliary Data Scenarios
+- `results/`
+- `out/`
+- `analysis/output/`
+- eventlogs and packet captures
+- local Python virtual environments and caches
 
-### `simulations/linkdegradation`
+The current active raw result folder is:
 
-Role: auxiliary controlled synthetic data branch.
+`results/regionalbackbone/failure_detection_degraded_link_model_family/`
 
-Purpose:
+The compact review package is:
 
-- isolate delay, delay variation, and packet-error-rate symptoms,
-- provide optional sanity checks and cross-topology training evidence,
-- retain the staged intermittent brownout-style profile as a clearly synthetic approximation.
+`analysis/output/current_experiment/regionalbackbone_failure_detection_degraded_link_model_family/`
 
-This branch is useful but secondary. It should not be presented as the main validation topology.
+## Claims And Non-Claims
 
-### `simulations/congestiondegradation`
+Allowed claims are scenario-conditioned:
 
-Role: auxiliary traffic-driven congestion branch.
+- AI-MRCE activates earlier than the project-local BFD-like comparator in the
+  deterministic progressive degraded-link profile.
+- Hybrid protection is AI-MRCE-first in the current degraded-link profile.
+- AI-MRCE removes post-hard-failure unobserved gaps in the validated cohort.
+- Repair-route reordering remains visible and must be reported.
 
-Purpose:
+Non-claims:
 
-- isolate queue buildup and delivery impact in the small topology,
-- provide optional sanity checks and cross-topology training evidence,
-- validate that congestion symptoms can be generated through traffic pressure instead of direct channel impairment.
-
-This branch is useful but secondary.
-
-## Archival Reference Scenarios
-
-### `simulations/dualpathbaseline`
-
-Role: archival minimal OSPF sanity reference.
-
-Use only when a tiny topology is needed to check basic routing behavior.
-
-### `simulations/reactivefailure`
-
-Role: archival small-topology reactive failure reference.
-
-Regional backbone reactive branches now provide the dissertation-grade comparison context.
-
-### `simulations/proactiveswitch`
-
-Role: archival small-topology deterministic proactive switch prototype.
-
-The active dissertation path now compares runtime AI-MRCE candidates in the regional congestion protection cohort.
-
-### `simulations/simpletest`
-
-Role: external/reference INET material.
-
-Do not include in active batches, datasets, or dissertation result tables.
-
-## Active Analysis Artifacts
-
-The main analysis outputs are:
-
-- datasets under `analysis/output/datasets/`,
-- reports under `analysis/output/reports/`,
-- outcome summaries and comparisons under `analysis/output/outcomes/`,
-- offline ML evaluation outputs under `analysis/output/training/`,
-- verbose helper/debug CSVs under `analysis/output/debug/`,
-- batch logs under `analysis/output/experiment_logs/`.
-
-## Methodological Guardrails
-
-- Keep scenario-phase labels separate from operational outcome metrics.
-- Keep runtime deployment artifacts separate from offline methodological evaluation.
-- Keep AI-MRCE action semantics conservative: sustained positive decision followed by project-local activation of explicit host-specific repair routes on the configured backup corridor.
-- Keep BFD-like semantics conservative: protected-span interface/carrier observation plus missed probe-reception intervals followed by the same project-local repair-route activation as a reactive safety net. In degraded-link variants, modeled logical probe loss is derived from current channel packet-error-rate impairment, not future failure time.
-- Treat this as an auditable local-protection abstraction, not as a standards-compliant IP FRR/LFA/TI-LFA implementation.
-- Treat the BFD-like branch as an experiment trigger abstraction, not standards-compliant BFD.
-- Do not modify INET or OSPF internals in the current prototype.
-- Do not claim that all failures are predictable.
-- Do not claim carrier-calibrated restoration from the current operational metrics.
-- Treat packet sequence gaps and endpoint receive gaps as descriptive
-  application-delivery evidence, not as RFC-standard recovery timers.
-- Keep packet-continuity reference points explicit. The operational
-  after-reference view may include AI-MRCE activation transition cost, while
-  the after-hard-failure view is the cleaner post-failure protection comparison.
-- Treat `packet_sequence_gap_total_unobserved_after_hard_failure` as the
-  headline loss-like post-failure continuity metric. Treat
-  `packet_sequence_gap_total_reordered_between_activation_and_failure` and
-  out-of-order event counts as pre-failure repair-route switch side-effect
-  metrics. Legacy `packet_sequence_gap_total_missing_*` fields are forward
-  sequence-jump estimates retained for compatibility, not direct loss claims.
-- Queue-normalized activation-to-failure diagnostics relate the switch
-  side-effect counts to `activationQueueLengthPk`. They are descriptive
-  mechanism-audit values only and should not be interpreted as learned
-  thresholds, standards-compliant FRR behavior, or make-before-break proof.
-- Treat small-topology branches as optional support, not as the dissertation core.
-
-## Current Default Workflow
-
-Default dissertation commands should favor:
-
-- `run_experiments.bat dataset-batch --scenario regionalbackbone`
-- `run_analysis.bat train-risk-model`
-- `run_analysis.bat export-runtime-models --configs RegionalBackboneCongestionDegradation`
-- `run_experiments.bat regional-congestion-protection-batch`
-- `run_experiments.bat regional-mixed-traffic-protection-batch`
-- `run_experiments.bat regional-failure-detection-comparison-batch`
-- `run_experiments.bat regional-failure-detection-degraded-link-batch`
-- `run_analysis.bat compare-outcomes`
-
-Use auxiliary or archival scenarios only when they answer a specific methodological question.
+- no universal failure prediction;
+- no RFC-compliant BFD implementation;
+- no standards-compliant LFA, TI-LFA, or FRR implementation;
+- no seamless make-before-break guarantee;
+- no generalization beyond the current topology, traffic profile, degradation
+  class, and run count.

@@ -240,6 +240,8 @@ def runtime_metadata_rows(
         ("training_rows", str(len(rows))),
         ("feature_names", " ".join(RUNTIME_FEATURES)),
         ("risk_label_counts", "; ".join(f"{key}={value}" for key, value in sorted(label_counts.items()))),
+        ("supported_risk_labels", " ".join(sorted(SUPPORTED_RISK_LABELS))),
+        ("excluded_label_policy", "Only safe, warning, and protect rows from the selected baseline configs are used; failed and unsupported labels are excluded from runtime deployment export."),
         ("source_files", "; ".join(f"{scenario}={path}" for scenario, path in sorted(input_files.items()))),
     ]
     if extra_rows:
@@ -423,7 +425,11 @@ def export_logistic_regression(
         "output_path": str(output_path),
         "threshold": args.threshold,
         "training_rows": len(runtime_rows),
+        "positive_class_rate": f"{label_counts['protect'] / len(runtime_rows):.12g}",
         "features": " ".join(RUNTIME_FEATURES),
+        "coefficient_or_feature_summary": "; ".join(
+            f"{feature}={coefficient:.6g}" for feature, coefficient in zip(RUNTIME_FEATURES, classifier.coef_[0])
+        ),
         "selected_configs": " ".join(args.configs),
         "selected_scenarios": " ".join(args.scenarios),
         "note": "Logistic-regression runtime deployment artifact.",
@@ -486,7 +492,11 @@ def export_linear_svm(
         "output_path": str(output_path),
         "threshold": args.threshold,
         "training_rows": len(runtime_rows),
+        "positive_class_rate": f"{label_counts['protect'] / len(runtime_rows):.12g}",
         "features": " ".join(RUNTIME_FEATURES),
+        "coefficient_or_feature_summary": "; ".join(
+            f"{feature}={coefficient:.6g}" for feature, coefficient in zip(RUNTIME_FEATURES, classifier.coef_[0])
+        ),
         "selected_configs": " ".join(args.configs),
         "selected_scenarios": " ".join(args.scenarios),
         "note": "Linear-SVM runtime deployment artifact with bounded sigmoid-of-margin score.",
@@ -567,7 +577,11 @@ def export_shallow_tree(
         "output_path": str(output_path),
         "threshold": args.threshold,
         "training_rows": len(runtime_rows),
+        "positive_class_rate": f"{label_counts['protect'] / len(runtime_rows):.12g}",
         "features": " ".join(RUNTIME_FEATURES),
+        "coefficient_or_feature_summary": "; ".join(
+            sorted({str(node["feature_name"]) for node in exported_nodes if str(node["feature_name"])})
+        ),
         "selected_configs": " ".join(args.configs),
         "selected_scenarios": " ".join(args.scenarios),
         "note": f"Shallow-tree runtime deployment artifact (max_depth={args.tree_max_depth}, min_samples_leaf={args.tree_min_samples_leaf}).",

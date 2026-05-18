@@ -33,6 +33,28 @@ using namespace omnetpp;
 
 namespace {
 
+constexpr const char *DECISION_MODE_RULE_BASED = "ruleBased";
+constexpr const char *DECISION_MODE_LOGISTIC_REGRESSION = "logisticRegression";
+constexpr const char *DECISION_MODE_LINEAR_SVM = "linearSvm";
+constexpr const char *DECISION_MODE_SHALLOW_TREE = "shallowTree";
+constexpr const char *DECISION_MODE_RULE_BASED_NORMALIZED = "rulebased";
+constexpr const char *DECISION_MODE_LOGISTIC_REGRESSION_NORMALIZED = "logisticregression";
+constexpr const char *DECISION_MODE_LINEAR_SVM_NORMALIZED = "linearsvm";
+constexpr const char *DECISION_MODE_SHALLOW_TREE_NORMALIZED = "shallowtree";
+constexpr const char *SUPPORTED_DECISION_MODES = "ruleBased, logisticRegression, linearSvm, shallowTree";
+
+constexpr const char *PROTECTION_ACTION_ADMIN_WITHDRAWAL = "adminWithdrawal";
+constexpr const char *PROTECTION_ACTION_LOCAL_REPAIR_STATIC_ROUTES = "localRepairStaticRoutes";
+constexpr const char *PROTECTION_ACTION_ADMIN_WITHDRAWAL_NORMALIZED = "adminwithdrawal";
+constexpr const char *PROTECTION_ACTION_LOCAL_REPAIR_STATIC_ROUTES_NORMALIZED = "localrepairstaticroutes";
+constexpr const char *SUPPORTED_PROTECTION_ACTIONS = "adminWithdrawal, localRepairStaticRoutes";
+
+constexpr const char *TRIGGER_SOURCE_NONE = "none";
+constexpr const char *TRIGGER_SOURCE_AIMRCE = "aimrce";
+constexpr const char *TRIGGER_SOURCE_BFD_LIKE = "bfd_like";
+constexpr const char *TRIGGER_SOURCE_HYBRID_AIMRCE_FIRST = "hybrid_aimrce_first";
+constexpr const char *TRIGGER_SOURCE_HYBRID_BFD_LIKE_FIRST = "hybrid_bfd_like_first";
+
 double clamp01(double value)
 {
     if (value < 0)
@@ -101,6 +123,18 @@ int parseCsvInt(const std::string& rawValue, const char *fieldName)
     }
 }
 
+template <typename FeatureParameter>
+std::string joinFeatureNames(const std::vector<FeatureParameter>& features)
+{
+    std::stringstream featureNames;
+    for (size_t i = 0; i < features.size(); i++) {
+        if (i > 0)
+            featureNames << ";";
+        featureNames << features[i].name;
+    }
+    return featureNames.str();
+}
+
 } // namespace
 
 namespace dissertationsim::controller {
@@ -124,10 +158,61 @@ void AiMrceController::initialize()
     double queueLengthThreshold = par("queueLengthThresholdPk").doubleValue();
     simtime_t delayThreshold = par("delayThreshold");
     simtime_t telemetryLogInterval = par("telemetryLogInterval");
+    simtime_t decisionLogInterval = par("decisionLogInterval");
     auto throughputFloorRatio = par("throughputFloorRatio").doubleValue();
     auto packetCountFloorRatio = par("packetCountFloorRatio").doubleValue();
     auto ruleRiskThreshold = par("ruleRiskThreshold").doubleValue();
 
+    validateControllerParameters(
+        startTime,
+        evaluationInterval,
+        activationCycles,
+        bfdLikeStartTime,
+        bfdLikeDetectionInterval,
+        bfdLikeDetectMultiplier,
+        bfdLikeExpectedProbeCount,
+        probeSendInterval,
+        probePacketLength,
+        queueLengthThreshold,
+        delayThreshold,
+        telemetryLogInterval,
+        decisionLogInterval,
+        throughputFloorRatio,
+        packetCountFloorRatio,
+        ruleRiskThreshold
+    );
+
+    initializeProtectionConfiguration();
+    initializeTelemetryReferences();
+    initializeRuntimePolicy();
+
+    logInitializationSummary(evaluationInterval, activationCycles, bfdLikeDetectionInterval, bfdLikeDetectMultiplier);
+
+    initializeVectorNames();
+    initializeWatches();
+    recordInitialVectorState();
+    scheduleControllerTimers(startTime, evaluationInterval, bfdLikeStartTime, bfdLikeDetectionInterval);
+}
+
+void AiMrceController::validateControllerParameters(
+    simtime_t startTime,
+    simtime_t evaluationInterval,
+    int activationCycles,
+    simtime_t bfdLikeStartTime,
+    simtime_t bfdLikeDetectionInterval,
+    int bfdLikeDetectMultiplier,
+    int bfdLikeExpectedProbeCount,
+    simtime_t probeSendInterval,
+    double probePacketLength,
+    double queueLengthThreshold,
+    simtime_t delayThreshold,
+    simtime_t telemetryLogInterval,
+    simtime_t decisionLogInterval,
+    double throughputFloorRatio,
+    double packetCountFloorRatio,
+    double ruleRiskThreshold
+) const
+{
     if (!enableAimrceDecision && !enableBfdLikeDetection)
         throw cRuntimeError("At least one controller trigger must be enabled: enableAimrceDecision or enableBfdLikeDetection");
     if (startTime < 0)
@@ -160,25 +245,56 @@ void AiMrceController::initialize()
         throw cRuntimeError("ruleRiskThreshold must be in the range [0, 1]");
     if (telemetryLogInterval <= 0)
         throw cRuntimeError("telemetryLogInterval must be positive");
+    if (decisionLogInterval <= 0)
+        throw cRuntimeError("decisionLogInterval must be positive");
+}
 
+void AiMrceController::initializeProtectionConfiguration()
+{
     decisionMode = parseDecisionMode(par("decisionMode"));
     protectionAction = parseProtectionAction(par("protectionAction"));
     localRepairRouteSpecs = parseLocalRepairRouteSpecs(par("localRepairRouteSpecs").stdstringValue());
     if (protectionAction == ProtectionAction::LOCAL_REPAIR_STATIC_ROUTES && localRepairRouteSpecs.empty())
         throw cRuntimeError("localRepairRouteSpecs must define at least one route when protectionAction=localRepairStaticRoutes");
+}
 
+void AiMrceController::initializeTelemetryReferences()
+{
     protectedQueue = resolveQueue(par("protectedQueueModule"));
     probeReceiverModule = resolveModule(par("probeReceiverModule"), "probe receiver module");
     packetReceivedSignal = registerSignal("packetReceived");
     probeReceiverModule->subscribe(packetReceivedSignal, this);
+}
 
-    if (enableAimrceDecision) {
-        if (decisionMode == DecisionMode::LOGISTIC_REGRESSION || decisionMode == DecisionMode::LINEAR_SVM)
-            loadRuntimeLinearModel();
-        else if (decisionMode == DecisionMode::SHALLOW_TREE)
-            loadRuntimeTreeModel();
+void AiMrceController::initializeRuntimePolicy()
+{
+    if (!enableAimrceDecision)
+        return;
+
+    if (decisionMode == DecisionMode::LOGISTIC_REGRESSION || decisionMode == DecisionMode::LINEAR_SVM) {
+        loadRuntimeLinearModel();
+        return;
+    }
+    if (decisionMode == DecisionMode::SHALLOW_TREE) {
+        loadRuntimeTreeModel();
+        return;
     }
 
+    // Rule-based AI-MRCE has no deployment artifact to load. Recording this
+    // explicitly helps later reports distinguish an intentional transparent
+    // baseline policy from a learned-model loading failure.
+    runtimeModelLoaded = false;
+    runtimeModelFeatureCount = 0;
+    runtimeModelThreshold = par("ruleRiskThreshold").doubleValue();
+    if (par("verboseModelLoadingLogging").boolValue()) {
+        EV_INFO << "[AI-MRCE:model] t=" << simTime().dbl()
+                << "s model=ruleBased artifactRequired=0 loaded=0 fallback=0 "
+                << "threshold=" << runtimeModelThreshold << endl;
+    }
+}
+
+void AiMrceController::initializeVectorNames()
+{
     queueLengthVector.setName("observedQueueLengthPk");
     queueBitLengthVector.setName("observedQueueBitLengthB");
     probeDelayMeanVector.setName("observedProbeDelayMeanS");
@@ -195,7 +311,10 @@ void AiMrceController::initialize()
     bfdLikeProtectedSpanUpVector.setName("bfdLikeProtectedSpanUp");
     bfdLikeModeledProbeLossProbabilityVector.setName("bfdLikeModeledProbeLossProbability");
     bfdLikeProbeMissedVector.setName("bfdLikeProbeMissed");
+}
 
+void AiMrceController::initializeWatches()
+{
     WATCH(protectionActive);
     WATCH(enableAimrceDecision);
     WATCH(enableBfdLikeDetection);
@@ -214,7 +333,10 @@ void AiMrceController::initialize()
     WATCH(activationRiskScore);
     WATCH(activationDecisionThreshold);
     WATCH(activationPositiveDecisionStreak);
+}
 
+void AiMrceController::recordInitialVectorState()
+{
     protectionActiveVector.record(0);
     repairRoutesInstalledVector.record(0);
     protectionTriggerSourceCodeVector.record(0);
@@ -223,7 +345,10 @@ void AiMrceController::initialize()
     bfdLikeProtectedSpanUpVector.record(isBfdLikeProtectedSpanHealthy() ? 1 : 0);
     bfdLikeModeledProbeLossProbabilityVector.record(0);
     bfdLikeProbeMissedVector.record(0);
+}
 
+void AiMrceController::scheduleControllerTimers(simtime_t startTime, simtime_t evaluationInterval, simtime_t bfdLikeStartTime, simtime_t bfdLikeDetectionInterval)
+{
     if (enableAimrceDecision) {
         // The first evaluation is scheduled one interval after startTime so
         // each controller cycle summarizes a full observation window.
@@ -238,6 +363,13 @@ void AiMrceController::initialize()
         // actuator as a reactive safety net.
         bfdLikeTimer = new cMessage("bfdLikeDetectionTimer");
         scheduleAt(bfdLikeStartTime + bfdLikeDetectionInterval, bfdLikeTimer);
+    }
+
+    if (hardFailureTime >= SIMTIME_ZERO && par("verboseTriggerLogging").boolValue()) {
+        // Logging-only reference marker for demo/debug runs. This self-message
+        // does not alter failure, routing, repair, or decision semantics.
+        hardFailureLogTimer = new cMessage("aiMrceHardFailureReferenceLogTimer");
+        scheduleAt(hardFailureTime, hardFailureLogTimer);
     }
 }
 
@@ -255,10 +387,27 @@ void AiMrceController::handleMessage(cMessage *message)
         return;
     }
 
+    if (message == hardFailureLogTimer) {
+        logHardFailureReference();
+        return;
+    }
+
     throw cRuntimeError("Unexpected message received by AiMrceController");
 }
 
 void AiMrceController::finish()
+{
+    cancelControllerTimers();
+    recordProtectionScalars();
+    recordRuntimeModelScalars();
+    recordBfdLikeScalars();
+    recordScalar("hardFailureTime", hardFailureTime >= SIMTIME_ZERO ? hardFailureTime.dbl() : -1);
+    recordActivationScalars();
+    recordScalar("lastRiskScore", lastRiskScore);
+    recordScalar("lastDecisionPositive", lastDecisionPositive);
+}
+
+void AiMrceController::cancelControllerTimers()
 {
     if (evaluationTimer != nullptr) {
         cancelAndDelete(evaluationTimer);
@@ -268,7 +417,14 @@ void AiMrceController::finish()
         cancelAndDelete(bfdLikeTimer);
         bfdLikeTimer = nullptr;
     }
+    if (hardFailureLogTimer != nullptr) {
+        cancelAndDelete(hardFailureLogTimer);
+        hardFailureLogTimer = nullptr;
+    }
+}
 
+void AiMrceController::recordProtectionScalars()
+{
     recordScalar("protectionActivated", protectionActive);
     recordScalar("protectionActivationTime", protectionActivationTime >= SIMTIME_ZERO ? protectionActivationTime.dbl() : -1);
     recordScalar("protectionTriggerSourceCode", protectionTriggerSourceCode);
@@ -278,6 +434,26 @@ void AiMrceController::finish()
     recordScalar("repairRouteInstallTime", repairRouteInstallTime >= SIMTIME_ZERO ? repairRouteInstallTime.dbl() : -1);
     recordScalar("enableAimrceDecision", enableAimrceDecision);
     recordScalar("enableBfdLikeDetection", enableBfdLikeDetection);
+}
+
+void AiMrceController::recordRuntimeModelScalars()
+{
+    recordScalar("aimrcePolicyCode", enableAimrceDecision ? decisionModeCodeForDiagnostics() : 0);
+    recordScalar(
+        "runtimeModelArtifactRequired",
+        enableAimrceDecision && decisionMode != DecisionMode::RULE_BASED ? 1 : 0
+    );
+    recordScalar("runtimeModelLoaded", runtimeModelLoaded);
+    recordScalar("runtimeModelFeatureCount", runtimeModelFeatureCount);
+    recordScalar("runtimeModelThreshold", runtimeModelThreshold);
+    recordScalar("runtimeModelFallbackUsed", 0);
+    recordScalar("runtimeModelFallbackReasonCode", runtimeModelFallbackReasonCode);
+    recordScalar("aimrceEvaluationInterval", par("evaluationInterval").doubleValue());
+    recordScalar("aimrceActivationConsecutiveCyclesConfigured", par("activationConsecutiveCycles").intValue());
+}
+
+void AiMrceController::recordBfdLikeScalars()
+{
     recordScalar("bfdLikeDetectionActivated", bfdLikeDetectionActivated);
     if (enableBfdLikeDetection) {
         // BFD-like timing scalars are recorded only for configurations that
@@ -319,7 +495,10 @@ void AiMrceController::finish()
                 : -1
         );
     }
-    recordScalar("hardFailureTime", hardFailureTime >= SIMTIME_ZERO ? hardFailureTime.dbl() : -1);
+}
+
+void AiMrceController::recordActivationScalars()
+{
     recordScalar("activationRiskScore", activationRiskScore);
     recordScalar("activationDecisionThreshold", activationDecisionThreshold);
     recordScalar("activationPositiveDecisionStreak", activationPositiveDecisionStreak);
@@ -328,8 +507,6 @@ void AiMrceController::finish()
     recordScalar("activationProbeDelayMeanS", activationProbeDelayMeanSeconds);
     recordScalar("activationProbeThroughputBps", activationProbeThroughputBps);
     recordScalar("activationProbePacketCount", activationProbePacketCount);
-    recordScalar("lastRiskScore", lastRiskScore);
-    recordScalar("lastDecisionPositive", lastDecisionPositive);
 }
 
 void AiMrceController::receiveSignal(cComponent *source, simsignal_t signalID, cObject *object, cObject *details)
@@ -354,25 +531,66 @@ void AiMrceController::receiveSignal(cComponent *source, simsignal_t signalID, c
 AiMrceController::DecisionMode AiMrceController::parseDecisionMode(const char *value) const
 {
     auto mode = toLower(value);
-    if (mode == "rulebased")
+    if (mode == DECISION_MODE_RULE_BASED_NORMALIZED)
         return DecisionMode::RULE_BASED;
-    if (mode == "logisticregression")
+    if (mode == DECISION_MODE_LOGISTIC_REGRESSION_NORMALIZED)
         return DecisionMode::LOGISTIC_REGRESSION;
-    if (mode == "linearsvm")
+    if (mode == DECISION_MODE_LINEAR_SVM_NORMALIZED)
         return DecisionMode::LINEAR_SVM;
-    if (mode == "shallowtree")
+    if (mode == DECISION_MODE_SHALLOW_TREE_NORMALIZED)
         return DecisionMode::SHALLOW_TREE;
-    throw cRuntimeError("Unsupported decisionMode '%s'", value);
+    throw cRuntimeError("Unsupported decisionMode '%s'. Supported values: %s", value, SUPPORTED_DECISION_MODES);
 }
 
 AiMrceController::ProtectionAction AiMrceController::parseProtectionAction(const char *value) const
 {
     auto mode = toLower(value);
-    if (mode == "adminwithdrawal")
+    if (mode == PROTECTION_ACTION_ADMIN_WITHDRAWAL_NORMALIZED)
         return ProtectionAction::ADMIN_WITHDRAWAL;
-    if (mode == "localrepairstaticroutes")
+    if (mode == PROTECTION_ACTION_LOCAL_REPAIR_STATIC_ROUTES_NORMALIZED)
         return ProtectionAction::LOCAL_REPAIR_STATIC_ROUTES;
-    throw cRuntimeError("Unsupported protectionAction '%s'", value);
+    throw cRuntimeError("Unsupported protectionAction '%s'. Supported values: %s", value, SUPPORTED_PROTECTION_ACTIONS);
+}
+
+int AiMrceController::decisionModeCodeForDiagnostics() const
+{
+    switch (decisionMode) {
+        case DecisionMode::RULE_BASED:
+            return 1;
+        case DecisionMode::LOGISTIC_REGRESSION:
+            return 2;
+        case DecisionMode::LINEAR_SVM:
+            return 3;
+        case DecisionMode::SHALLOW_TREE:
+            return 4;
+    }
+    return -1;
+}
+
+const char *AiMrceController::decisionModeNameForDiagnostics() const
+{
+    switch (decisionMode) {
+        case DecisionMode::RULE_BASED:
+            return DECISION_MODE_RULE_BASED;
+        case DecisionMode::LOGISTIC_REGRESSION:
+            return DECISION_MODE_LOGISTIC_REGRESSION;
+        case DecisionMode::LINEAR_SVM:
+            return DECISION_MODE_LINEAR_SVM;
+        case DecisionMode::SHALLOW_TREE:
+            return DECISION_MODE_SHALLOW_TREE;
+    }
+    return "unknown";
+}
+
+const char *AiMrceController::protectionActionNameForDiagnostics() const
+{
+    switch (protectionAction) {
+        case ProtectionAction::ADMIN_WITHDRAWAL:
+            return PROTECTION_ACTION_ADMIN_WITHDRAWAL;
+        case ProtectionAction::LOCAL_REPAIR_STATIC_ROUTES:
+            return PROTECTION_ACTION_LOCAL_REPAIR_STATIC_ROUTES;
+    }
+    return "unknown";
 }
 
 int AiMrceController::triggerSourceCodeForActivation(ProtectionTriggerSource source) const
@@ -391,11 +609,11 @@ const char *AiMrceController::triggerSourceNameForActivation(ProtectionTriggerSo
 {
     auto code = triggerSourceCodeForActivation(source);
     switch (code) {
-        case 1: return "aimrce";
-        case 2: return "bfd_like";
-        case 3: return "hybrid_aimrce_first";
-        case 4: return "hybrid_bfd_like_first";
-        default: return "none";
+        case 1: return TRIGGER_SOURCE_AIMRCE;
+        case 2: return TRIGGER_SOURCE_BFD_LIKE;
+        case 3: return TRIGGER_SOURCE_HYBRID_AIMRCE_FIRST;
+        case 4: return TRIGGER_SOURCE_HYBRID_BFD_LIKE_FIRST;
+        default: return TRIGGER_SOURCE_NONE;
     }
 }
 
@@ -482,6 +700,12 @@ void AiMrceController::loadRuntimeLinearModel()
     linearModel = RuntimeLinearModel();
     linearModel.sourcePath = resolveParameterFilePath("runtimeModelFile");
 
+    if (par("verboseModelLoadingLogging").boolValue()) {
+        EV_INFO << "[AI-MRCE:model] t=" << simTime().dbl()
+                << "s loading model=" << decisionModeNameForDiagnostics()
+                << " path=" << linearModel.sourcePath << endl;
+    }
+
     std::ifstream input(linearModel.sourcePath.c_str());
     if (!input.is_open())
         throw cRuntimeError("Cannot open runtime linear model file '%s' (resolved from '%s')", linearModel.sourcePath.c_str(), configuredPath.c_str());
@@ -539,6 +763,17 @@ void AiMrceController::loadRuntimeLinearModel()
         else
             linearModel.scoreTransform = "sigmoid_of_margin";
     }
+    runtimeModelLoaded = true;
+    runtimeModelFeatureCount = static_cast<int>(linearModel.features.size());
+    runtimeModelThreshold = linearModel.threshold;
+    if (par("verboseModelLoadingLogging").boolValue()) {
+        EV_INFO << "[AI-MRCE:model] t=" << simTime().dbl()
+                << "s model=" << decisionModeNameForDiagnostics()
+                << " loaded=1 fallback=0 featureCount=" << runtimeModelFeatureCount
+                << " threshold=" << runtimeModelThreshold
+                << " scoreSemantics=" << linearModel.scoreTransform
+                << " features=" << joinFeatureNames(linearModel.features) << endl;
+    }
 }
 
 void AiMrceController::loadRuntimeTreeModel()
@@ -549,6 +784,12 @@ void AiMrceController::loadRuntimeTreeModel()
 
     treeModel = RuntimeTreeModel();
     treeModel.sourcePath = resolveParameterFilePath("runtimeModelFile");
+
+    if (par("verboseModelLoadingLogging").boolValue()) {
+        EV_INFO << "[AI-MRCE:model] t=" << simTime().dbl()
+                << "s loading model=" << decisionModeNameForDiagnostics()
+                << " path=" << treeModel.sourcePath << endl;
+    }
 
     std::ifstream input(treeModel.sourcePath.c_str());
     if (!input.is_open())
@@ -611,6 +852,17 @@ void AiMrceController::loadRuntimeTreeModel()
         throw cRuntimeError("Runtime tree model '%s' does not define any features", treeModel.sourcePath.c_str());
     if (treeModel.nodes.empty())
         throw cRuntimeError("Runtime tree model '%s' does not define any nodes", treeModel.sourcePath.c_str());
+    runtimeModelLoaded = true;
+    runtimeModelFeatureCount = static_cast<int>(treeModel.features.size());
+    runtimeModelThreshold = treeModel.threshold;
+    if (par("verboseModelLoadingLogging").boolValue()) {
+        EV_INFO << "[AI-MRCE:model] t=" << simTime().dbl()
+                << "s model=" << decisionModeNameForDiagnostics()
+                << " loaded=1 fallback=0 featureCount=" << runtimeModelFeatureCount
+                << " threshold=" << runtimeModelThreshold
+                << " nodes=" << treeModel.nodes.size()
+                << " features=" << joinFeatureNames(treeModel.features) << endl;
+    }
 }
 
 AiMrceController::FeatureSnapshot AiMrceController::collectFeatureSnapshot() const
@@ -733,28 +985,35 @@ double AiMrceController::lookupFeatureValue(const FeatureSnapshot& snapshot, con
     throw cRuntimeError("Runtime model requested unsupported feature '%s'", featureName.c_str());
 }
 
+AiMrceController::PolicyScore AiMrceController::scoreCurrentPolicy(const FeatureSnapshot& snapshot) const
+{
+    PolicyScore score;
+    switch (decisionMode) {
+        case DecisionMode::RULE_BASED:
+            score.riskScore = computeRuleBasedRisk(snapshot);
+            score.decisionThreshold = par("ruleRiskThreshold").doubleValue();
+            return score;
+        case DecisionMode::LOGISTIC_REGRESSION:
+        case DecisionMode::LINEAR_SVM:
+            score.riskScore = computeLinearModelRisk(snapshot);
+            score.decisionThreshold = linearModel.threshold;
+            return score;
+        case DecisionMode::SHALLOW_TREE:
+            score.riskScore = computeShallowTreeRisk(snapshot);
+            score.decisionThreshold = treeModel.threshold;
+            return score;
+    }
+    throw cRuntimeError("Unsupported AI-MRCE decision mode code %d while scoring current policy", decisionModeCodeForDiagnostics());
+}
+
 void AiMrceController::evaluateCycle()
 {
     auto snapshot = collectFeatureSnapshot();
     maybeLogTelemetry(snapshot, "AI-MRCE evaluation");
 
-    double riskScore = 0;
-    double decisionThreshold = 0;
-    switch (decisionMode) {
-        case DecisionMode::RULE_BASED:
-            riskScore = computeRuleBasedRisk(snapshot);
-            decisionThreshold = par("ruleRiskThreshold").doubleValue();
-            break;
-        case DecisionMode::LOGISTIC_REGRESSION:
-        case DecisionMode::LINEAR_SVM:
-            riskScore = computeLinearModelRisk(snapshot);
-            decisionThreshold = linearModel.threshold;
-            break;
-        case DecisionMode::SHALLOW_TREE:
-            riskScore = computeShallowTreeRisk(snapshot);
-            decisionThreshold = treeModel.threshold;
-            break;
-    }
+    auto policyScore = scoreCurrentPolicy(snapshot);
+    auto riskScore = policyScore.riskScore;
+    auto decisionThreshold = policyScore.decisionThreshold;
     auto decisionPositive = riskScore >= decisionThreshold;
 
     // Consecutive positive cycles provide simple hysteresis for the first
@@ -764,15 +1023,10 @@ void AiMrceController::evaluateCycle()
     else
         positiveDecisionStreak = 0;
 
-    if (par("verboseDecisionLogging").boolValue()) {
-        EV_INFO << "AI-MRCE decision at " << simTime()
-                << ": score=" << riskScore
-                << ", threshold=" << decisionThreshold
-                << ", positive=" << (decisionPositive ? "true" : "false")
-                << ", streak=" << positiveDecisionStreak << endl;
-    }
+    auto activationCycle = !protectionActive && positiveDecisionStreak >= par("activationConsecutiveCycles").intValue();
+    maybeLogDecision(snapshot, riskScore, decisionThreshold, decisionPositive, activationCycle);
 
-    if (!protectionActive && positiveDecisionStreak >= par("activationConsecutiveCycles").intValue()) {
+    if (activationCycle) {
         captureActivationDiagnostics(snapshot, riskScore, decisionThreshold);
         activateProtection(ProtectionTriggerSource::AIMRCE);
     }
@@ -812,41 +1066,27 @@ void AiMrceController::evaluateBfdLikeCycle()
         bfdLikeConsecutiveMissedProbeIntervals
     );
 
-    if (par("verboseBfdLikeLogging").boolValue()) {
-        EV_INFO << "BFD-like detector at " << simTime()
-                << ": observedProbes=" << observedProbeCount
-                << ", expectedMinimum=" << expectedProbeCount
-                << ", modeledProbeLossProbability=" << modeledLossProbability
-                << ", modeledProbeMissed=" << (modeledProbeMissed ? "true" : "false")
-                << ", protectedSpanUp=" << (protectedSpanHealthy ? "true" : "false")
-                << ", missedIntervals=" << bfdLikeConsecutiveMissedProbeIntervals
-                << "/" << detectMultiplier
-                << ", protectionActive=" << (protectionActive ? "true" : "false")
-                << endl;
-    }
+    auto bfdLikeTriggerCycle = !protectionActive && bfdLikeConsecutiveMissedProbeIntervals >= detectMultiplier;
+    maybeLogBfdLikeProbe(
+        modeledLossProbability,
+        modeledProbeMissed,
+        protectedSpanHealthy,
+        observedProbeCount,
+        expectedProbeCount,
+        intervalUnhealthy,
+        bfdLikeTriggerCycle
+    );
 
-    if (!protectionActive && bfdLikeConsecutiveMissedProbeIntervals >= detectMultiplier) {
+    if (bfdLikeTriggerCycle) {
         auto snapshot = collectFeatureSnapshot();
         maybeLogTelemetry(snapshot, "BFD-like detection");
 
         double riskScore = -1;
         double decisionThreshold = -1;
         if (enableAimrceDecision) {
-            switch (decisionMode) {
-                case DecisionMode::RULE_BASED:
-                    riskScore = computeRuleBasedRisk(snapshot);
-                    decisionThreshold = par("ruleRiskThreshold").doubleValue();
-                    break;
-                case DecisionMode::LOGISTIC_REGRESSION:
-                case DecisionMode::LINEAR_SVM:
-                    riskScore = computeLinearModelRisk(snapshot);
-                    decisionThreshold = linearModel.threshold;
-                    break;
-                case DecisionMode::SHALLOW_TREE:
-                    riskScore = computeShallowTreeRisk(snapshot);
-                    decisionThreshold = treeModel.threshold;
-                    break;
-            }
+            auto policyScore = scoreCurrentPolicy(snapshot);
+            riskScore = policyScore.riskScore;
+            decisionThreshold = policyScore.decisionThreshold;
             lastRiskScore = riskScore;
             lastDecisionPositive = riskScore >= decisionThreshold;
         }
@@ -967,9 +1207,37 @@ void AiMrceController::activateProtection(ProtectionTriggerSource triggerSource)
     protectionTriggerSource = triggerSource;
     protectionTriggerSourceCode = triggerSourceCodeForActivation(triggerSource);
 
-    EV_INFO << "Protection trigger '" << triggerSourceNameForActivation(triggerSource)
-            << "' activating project-local repair action on the monitored corridor at "
-            << protectionActivationTime << endl;
+    if (par("verboseTriggerLogging").boolValue()) {
+        auto leadTime = hardFailureTime >= SIMTIME_ZERO ? (hardFailureTime - simTime()).dbl() : -1;
+        if (triggerSource == ProtectionTriggerSource::AIMRCE) {
+            EV_INFO << "[AI-MRCE:trigger] t=" << simTime().dbl()
+                    << "s source=" << triggerSourceNameForActivation(triggerSource)
+                    << " model=" << decisionModeNameForDiagnostics()
+                    << " score=" << activationRiskScore
+                    << " threshold=" << activationDecisionThreshold
+                    << " streak=" << activationPositiveDecisionStreak
+                    << "/" << par("activationConsecutiveCycles").intValue()
+                    << " leadTimeBeforeFailure=" << leadTime
+                    << "s queue=" << activationQueueLengthPackets
+                    << "pk probeDelay=" << activationProbeDelayMeanSeconds
+                    << "s" << endl;
+        }
+        else if (triggerSource == ProtectionTriggerSource::BFD_LIKE) {
+            EV_INFO << "[BFD-like:trigger] t=" << simTime().dbl()
+                    << "s source=" << triggerSourceNameForActivation(triggerSource)
+                    << " reasonCode=" << bfdLikeTriggerReasonCode
+                    << " modeledLoss=" << bfdLikeModeledProbeLossProbabilityAtDetection
+                    << " missed=" << bfdLikeMissedProbeCountAtDetection
+                    << "/" << par("bfdLikeDetectMultiplier").intValue()
+                    << " leadTimeBeforeFailure=" << leadTime
+                    << "s protectionAlreadyActivated=0" << endl;
+        }
+        else {
+            EV_INFO << "[Protection:trigger] t=" << simTime().dbl()
+                    << "s source=" << triggerSourceNameForActivation(triggerSource)
+                    << " leadTimeBeforeFailure=" << leadTime << "s" << endl;
+        }
+    }
     switch (protectionAction) {
         case ProtectionAction::ADMIN_WITHDRAWAL:
             // Retained for reference and debugging: ordinary administrative
@@ -991,7 +1259,10 @@ void AiMrceController::administrativelyWithdraw(const char *modulePath)
 
     // This follows ordinary administrative interface-down semantics that OSPF
     // can react to in the simulation, rather than introducing custom LSAs.
-    EV_INFO << "AI-MRCE administratively withdrawing interface " << networkInterface->getInterfaceFullPath() << endl;
+    if (par("verboseRepairRouteLogging").boolValue()) {
+        EV_INFO << "[FRR-like:admin-withdrawal] t=" << simTime().dbl()
+                << "s withdrawing interface " << networkInterface->getInterfaceFullPath() << endl;
+    }
     cMethodCallContextSwitcher contextSwitcher(networkInterface);
     networkInterface->setState(inet::NetworkInterface::DOWN);
 }
@@ -1005,6 +1276,15 @@ void AiMrceController::activateLocalRepairStaticRoutes()
     // intentionally implemented as explicit host-specific manual IPv4 routes:
     // scientifically auditable, project-local, and not a claim of standards-
     // compliant IP/LFA/TI-LFA behavior.
+    if (par("verboseRepairRouteLogging").boolValue()) {
+        EV_INFO << "[FRR-like:repair-route] t=" << simTime().dbl()
+                << "s source=" << triggerSourceNameForActivation(protectionTriggerSource)
+                << " installing static /32 repair routes"
+                << " countConfigured=" << localRepairRouteSpecs.size()
+                << " corridor=configured-southern-backup"
+                << " alreadyInstalled=" << (repairRoutesInstalled ? 1 : 0)
+                << endl;
+    }
     for (const auto& spec : localRepairRouteSpecs) {
         if (installLocalRepairRoute(spec))
             repairRouteCount++;
@@ -1016,7 +1296,11 @@ void AiMrceController::activateLocalRepairStaticRoutes()
 
     repairRouteInstallTime = simTime();
 
-    EV_INFO << "Installed " << repairRouteCount << " project-local local-repair static routes at " << repairRouteInstallTime << endl;
+    if (par("verboseRepairRouteLogging").boolValue()) {
+        EV_INFO << "[FRR-like:repair-route] t=" << repairRouteInstallTime.dbl()
+                << "s installed=" << (repairRoutesInstalled ? 1 : 0)
+                << " routeCount=" << repairRouteCount << endl;
+    }
 }
 
 bool AiMrceController::installLocalRepairRoute(const LocalRepairRouteSpec& spec)
@@ -1044,8 +1328,9 @@ bool AiMrceController::installLocalRepairRoute(const LocalRepairRouteSpec& spec)
     // host-specific manual entry, so it is intended to override the broader
     // OSPF route without modifying OSPF internals or link-state behavior.
     if (par("verboseRepairRouteLogging").boolValue()) {
-        EV_INFO << "Project-local repair route on " << spec.routerModule
-                << ": " << destinationAddress
+        EV_INFO << "[FRR-like:repair-route] t=" << simTime().dbl()
+                << "s router=" << spec.routerModule
+                << " destination=" << destinationAddress
                 << "/32 via " << gatewayAddress
                 << " out " << outputInterface->getInterfaceFullPath() << endl;
     }
@@ -1085,6 +1370,101 @@ void AiMrceController::recordVectors(const FeatureSnapshot& snapshot, double ris
     }
 }
 
+void AiMrceController::maybeLogDecision(const FeatureSnapshot& snapshot, double riskScore, double decisionThreshold, bool decisionPositive, bool activationCycle)
+{
+    if (!par("verboseDecisionLogging").boolValue())
+        return;
+
+    auto logOnlyPositive = par("logOnlyPositiveDecisions").boolValue();
+    simtime_t decisionLogInterval = par("decisionLogInterval");
+    auto cadenceReached = lastDecisionLogTime < SIMTIME_ZERO || simTime() - lastDecisionLogTime >= decisionLogInterval;
+    auto shouldLog = activationCycle || (logOnlyPositive ? decisionPositive : cadenceReached);
+    if (!shouldLog)
+        return;
+
+    lastDecisionLogTime = simTime();
+    EV_INFO << "[AI-MRCE:decision] t=" << simTime().dbl()
+            << "s model=" << decisionModeNameForDiagnostics()
+            << " score=" << riskScore
+            << " threshold=" << decisionThreshold
+            << " positive=" << (decisionPositive ? 1 : 0)
+            << " streak=" << positiveDecisionStreak
+            << "/" << par("activationConsecutiveCycles").intValue()
+            << " queue=" << snapshot.queueLengthPackets
+            << "pk queueBits=" << snapshot.queueBitLength
+            << " probeDelay=" << (snapshot.hasProbeDelay ? snapshot.probeDelayMeanSeconds : -1)
+            << "s probeThroughputBps=" << snapshot.probeThroughputBps
+            << " probePackets=" << snapshot.probePacketCount
+            << " protection=" << (protectionActive ? 1 : 0)
+            << (activationCycle ? " activationCycle=1" : "")
+            << endl;
+}
+
+void AiMrceController::maybeLogBfdLikeProbe(double modeledLossProbability, bool modeledProbeMissed, bool protectedSpanHealthy, int observedProbeCount, int expectedProbeCount, bool intervalUnhealthy, bool triggerCycle)
+{
+    if (!par("verboseBfdLikeLogging").boolValue())
+        return;
+
+    simtime_t logInterval = par("decisionLogInterval");
+    auto cadenceReached = lastBfdLikeLogTime < SIMTIME_ZERO || simTime() - lastBfdLikeLogTime >= logInterval;
+    auto firstMissInStreak = intervalUnhealthy && bfdLikeConsecutiveMissedProbeIntervals == 1;
+    auto shouldLog = triggerCycle || cadenceReached || firstMissInStreak;
+    if (!shouldLog)
+        return;
+
+    lastBfdLikeLogTime = simTime();
+    EV_INFO << "[BFD-like:probe] t=" << simTime().dbl()
+            << "s modeledLoss=" << modeledLossProbability
+            << " miss=" << (intervalUnhealthy ? 1 : 0)
+            << " modeledMiss=" << (modeledProbeMissed ? 1 : 0)
+            << " observedProbes=" << observedProbeCount
+            << " expectedMinimum=" << expectedProbeCount
+            << " missed=" << bfdLikeConsecutiveMissedProbeIntervals
+            << "/" << par("bfdLikeDetectMultiplier").intValue()
+            << " protectedSpanUp=" << (protectedSpanHealthy ? 1 : 0)
+            << " protectionAlreadyActivated=" << (protectionActive ? 1 : 0)
+            << endl;
+}
+
+void AiMrceController::logInitializationSummary(simtime_t evaluationInterval, int activationCycles, simtime_t bfdLikeDetectionInterval, int bfdLikeDetectMultiplier) const
+{
+    if (!par("verboseInitializationLogging").boolValue())
+        return;
+
+    auto decisionThreshold = runtimeModelThreshold >= 0 ? runtimeModelThreshold : par("ruleRiskThreshold").doubleValue();
+    EV_INFO << "[AI-MRCE:init] t=" << simTime().dbl()
+            << "s module=" << getFullPath()
+            << " aimrce=" << (enableAimrceDecision ? 1 : 0)
+            << " bfdLike=" << (enableBfdLikeDetection ? 1 : 0)
+            << " policy=" << (enableAimrceDecision ? decisionModeNameForDiagnostics() : "disabled")
+            << " runtimeModelPath=" << par("runtimeModelFile").stdstringValue()
+            << " threshold=" << decisionThreshold
+            << " decisionInterval=" << evaluationInterval.dbl()
+            << "s streakRequired=" << activationCycles
+            << " repairAction=" << protectionActionNameForDiagnostics();
+    if (enableBfdLikeDetection) {
+        EV_INFO << " bfdInterval=" << bfdLikeDetectionInterval.dbl()
+                << "s bfdMultiplier=" << bfdLikeDetectMultiplier
+                << " bfdExpectedDetection=" << (bfdLikeDetectionInterval.dbl() * bfdLikeDetectMultiplier)
+                << "s";
+    }
+    EV_INFO << " hardFailureTime=" << (hardFailureTime >= SIMTIME_ZERO ? hardFailureTime.dbl() : -1)
+            << "s" << endl;
+}
+
+void AiMrceController::logHardFailureReference() const
+{
+    if (!par("verboseTriggerLogging").boolValue())
+        return;
+
+    EV_INFO << "[Scenario:hard-failure] t=" << simTime().dbl()
+            << "s protectionActivated=" << (protectionActive ? 1 : 0)
+            << " source=" << triggerSourceNameForActivation(protectionTriggerSource)
+            << " activationTime="
+            << (protectionActivationTime >= SIMTIME_ZERO ? protectionActivationTime.dbl() : -1)
+            << "s" << endl;
+}
+
 void AiMrceController::maybeLogTelemetry(const FeatureSnapshot& snapshot, const char *context)
 {
     if (!par("verboseTelemetryLogging").boolValue())
@@ -1095,12 +1475,13 @@ void AiMrceController::maybeLogTelemetry(const FeatureSnapshot& snapshot, const 
         return;
 
     lastTelemetryLogTime = simTime();
-    EV_INFO << context << " telemetry at " << simTime()
-            << ": queuePk=" << snapshot.queueLengthPackets
-            << ", queueBits=" << snapshot.queueBitLength
-            << ", probePackets=" << snapshot.probePacketCount
-            << ", probeThroughputBps=" << snapshot.probeThroughputBps
-            << ", probeDelayMeanS=" << (snapshot.hasProbeDelay ? snapshot.probeDelayMeanSeconds : -1)
+    EV_INFO << "[AI-MRCE:telemetry] t=" << simTime().dbl()
+            << "s context=" << context
+            << " queuePk=" << snapshot.queueLengthPackets
+            << " queueBits=" << snapshot.queueBitLength
+            << " probePackets=" << snapshot.probePacketCount
+            << " probeThroughputBps=" << snapshot.probeThroughputBps
+            << " probeDelayMeanS=" << (snapshot.hasProbeDelay ? snapshot.probeDelayMeanSeconds : -1)
             << endl;
 }
 

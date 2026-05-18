@@ -2,7 +2,9 @@
 //
 // This controller is part of the project-local experimental tooling. It does
 // not implement any new routing protocol mechanism; instead it exercises the
-// standard routing consequences of taking the protected interface down.
+// standard routing consequences of taking the protected interface down. It is
+// deterministic auxiliary/reference behavior, not the active AI-MRCE
+// repair-route mechanism and not a predictive controller.
 
 #include "InterfaceWithdrawController.h"
 #include "inet/networklayer/common/NetworkInterface.h"

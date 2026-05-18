@@ -31,6 +31,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
+import time
 from collections import Counter, defaultdict
 from pathlib import Path
 from statistics import fmean, median
@@ -38,6 +40,59 @@ from statistics import fmean, median
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
+
+
+def atomic_temp_path(path: Path) -> Path:
+    return path.with_name(f".{path.name}.{os.getpid()}.tmp")
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = atomic_temp_path(path)
+    try:
+        temp_path.write_text(text, encoding="utf-8")
+        temp_path.replace(path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def atomic_write_csv(path: Path, rows: list[dict[str, object]], fieldnames: list[str] | None = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = atomic_temp_path(path)
+    try:
+        with temp_path.open("w", newline="", encoding="utf-8") as handle:
+            if not rows:
+                handle.write("")
+            else:
+                resolved_fieldnames = list(fieldnames or [])
+                if not resolved_fieldnames:
+                    for row in rows:
+                        for key in row.keys():
+                            if key not in resolved_fieldnames:
+                                resolved_fieldnames.append(key)
+                writer = csv.DictWriter(handle, fieldnames=resolved_fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+        temp_path.replace(path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def elapsed_text(start_time: float) -> str:
+    return f"{time.perf_counter() - start_time:.2f}s"
+
+
+def warn_if_existing_output_stale(output_path: Path, source_path: Path, regenerate_command: str) -> None:
+    if not output_path.exists() or not source_path.exists():
+        return
+    if output_path.stat().st_mtime >= source_path.stat().st_mtime:
+        return
+    print(
+        "Warning: existing report artifact appears stale before regeneration: "
+        f"{output_path} is older than {source_path}. Regenerate with: {regenerate_command}"
+    )
 DATASETS_DIR = OUTPUT_ROOT / "datasets"
 REPORTS_DIR = OUTPUT_ROOT / "reports"
 OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
@@ -49,6 +104,8 @@ OUTCOME_COLUMNS = [
     "run_number",
     "protection_mode",
     "traffic_profile",
+    "runtime_model_type",
+    "runtime_model_path",
     "monitored_flow_app_index",
     "monitored_flow_packet_size_bytes",
     "monitored_flow_send_interval_s",
@@ -66,6 +123,16 @@ OUTCOME_COLUMNS = [
     "repair_route_install_time_s",
     "enable_aimrce_decision",
     "enable_bfd_like_detection",
+    "aimrce_policy_name",
+    "aimrce_policy_code",
+    "runtime_model_artifact_required",
+    "runtime_model_loaded",
+    "runtime_model_feature_count",
+    "runtime_model_threshold",
+    "runtime_model_fallback_used",
+    "runtime_model_fallback_reason_code",
+    "aimrce_evaluation_interval_s",
+    "aimrce_activation_consecutive_cycles_configured",
     "bfd_like_detection_activated",
     "bfd_like_detection_time_s",
     "bfd_like_detect_multiplier",
@@ -188,81 +255,6 @@ OUTCOME_COLUMNS = [
 ]
 
 SCENARIO_PRESETS = {
-    "linkdegradation": {
-        "dataset_path": DATASETS_DIR / "linkdegradation_dataset.csv",
-        "report_path": REPORTS_DIR / "linkdegradation_report.txt",
-        "missing_csv_path": DEBUG_OUTPUT_DIR / "linkdegradation_missing_values.csv",
-        "per_config_csv_path": DEBUG_OUTPUT_DIR / "linkdegradation_per_config_summary.csv",
-        "outcome_csv_path": OUTCOMES_DIR / "linkdegradation_outcome_summary.csv",
-        "report_title": "LinkDegradation Dataset Sanity Report",
-        "expected_configs": ["MildLinear", "StrongLinear", "UnstableLinear", "StagedRealistic"],
-        "key_numeric_columns": [
-            "controller_delay_mean_s",
-            "controller_packet_error_rate_mean",
-            "receiver_total_packet_count",
-            "receiver_app0_e2e_delay_mean_s",
-            "receiver_app1_e2e_delay_mean_s",
-            "service_interruption_duration_s",
-            "recovery_time_after_failure_s",
-            "packet_sequence_gap_total_missing_after_reference",
-            "max_packet_interarrival_gap_after_reference_s",
-        ],
-    },
-    "congestiondegradation": {
-        "dataset_path": DATASETS_DIR / "congestiondegradation_dataset.csv",
-        "report_path": REPORTS_DIR / "congestiondegradation_report.txt",
-        "missing_csv_path": DEBUG_OUTPUT_DIR / "congestiondegradation_missing_values.csv",
-        "per_config_csv_path": DEBUG_OUTPUT_DIR / "congestiondegradation_per_config_summary.csv",
-        "outcome_csv_path": OUTCOMES_DIR / "congestiondegradation_outcome_summary.csv",
-        "report_title": "CongestionDegradation Dataset Sanity Report",
-        "expected_configs": ["CongestionDegradation", "CongestionDegradationMild"],
-        "key_numeric_columns": [
-            "bottleneck_queue_length_mean_pk",
-            "bottleneck_queue_bit_length_mean_b",
-            "bottleneck_queueing_time_mean_s",
-            "receiver_total_packet_count",
-            "receiver_app0_e2e_delay_mean_s",
-            "receiver_app0_throughput_mean_bps",
-            "service_interruption_duration_s",
-            "recovery_time_after_failure_s",
-            "packet_sequence_gap_total_missing_after_reference",
-            "max_packet_interarrival_gap_after_reference_s",
-        ],
-    },
-    "reactivefailure": {
-        "dataset_path": DATASETS_DIR / "reactivefailure_dataset.csv",
-        "report_path": REPORTS_DIR / "reactivefailure_report.txt",
-        "missing_csv_path": DEBUG_OUTPUT_DIR / "reactivefailure_missing_values.csv",
-        "per_config_csv_path": DEBUG_OUTPUT_DIR / "reactivefailure_per_config_summary.csv",
-        "outcome_csv_path": OUTCOMES_DIR / "reactivefailure_outcome_summary.csv",
-        "report_title": "ReactiveFailure Dataset Sanity Report",
-        "expected_configs": ["ReactiveFailure"],
-        "key_numeric_columns": [
-            "receiver_total_packet_count",
-            "receiver_app0_throughput_mean_bps",
-            "service_interruption_duration_s",
-            "recovery_time_after_failure_s",
-            "zero_progress_window_count_after_reference",
-            "packet_sequence_gap_total_missing_after_reference",
-        ],
-    },
-    "proactiveswitch": {
-        "dataset_path": DATASETS_DIR / "proactiveswitch_dataset.csv",
-        "report_path": REPORTS_DIR / "proactiveswitch_report.txt",
-        "missing_csv_path": DEBUG_OUTPUT_DIR / "proactiveswitch_missing_values.csv",
-        "per_config_csv_path": DEBUG_OUTPUT_DIR / "proactiveswitch_per_config_summary.csv",
-        "outcome_csv_path": OUTCOMES_DIR / "proactiveswitch_outcome_summary.csv",
-        "report_title": "ProactiveSwitch Dataset Sanity Report",
-        "expected_configs": ["ProactiveSwitch"],
-        "key_numeric_columns": [
-            "receiver_total_packet_count",
-            "receiver_app0_throughput_mean_bps",
-            "protection_lead_time_before_failure_s",
-            "service_interruption_duration_s",
-            "recovery_time_after_failure_s",
-            "packet_sequence_gap_total_missing_after_reference",
-        ],
-    },
     "regionalbackbone": {
         "dataset_path": DATASETS_DIR / "regionalbackbone_dataset.csv",
         "report_path": REPORTS_DIR / "regionalbackbone_report.txt",
@@ -271,9 +263,6 @@ SCENARIO_PRESETS = {
         "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_outcome_summary.csv",
         "report_title": "RegionalBackbone Dataset Sanity Report",
         "expected_configs": [
-            "RegionalBackboneBaseline",
-            "RegionalBackboneReactiveFailure",
-            "RegionalBackboneControlledDegradation",
             "RegionalBackboneCongestionDegradation",
         ],
         "key_numeric_columns": [
@@ -292,143 +281,21 @@ SCENARIO_PRESETS = {
             "max_packet_interarrival_gap_after_reference_s",
         ],
     },
-    "regionalbackbone_congestion_protection": {
-        "dataset_path": DATASETS_DIR / "regionalbackbone_congestion_protection_multirun_dataset.csv",
-        "report_path": REPORTS_DIR / "regionalbackbone_congestion_protection_multirun_report.txt",
-        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_congestion_protection_multirun_missing_values.csv",
-        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_congestion_protection_multirun_per_config_summary.csv",
-        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_congestion_protection_multirun_outcome_summary.csv",
-        "report_title": "RegionalBackbone Congestion Protection Multi-Run Dataset Sanity Report",
+    "regionalbackbone_failure_detection_degraded_link_model_family": {
+        "dataset_path": DATASETS_DIR / "regionalbackbone_failure_detection_degraded_link_model_family_dataset.csv",
+        "report_path": REPORTS_DIR / "regionalbackbone_failure_detection_degraded_link_model_family_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_degraded_link_model_family_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_degraded_link_model_family_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_failure_detection_degraded_link_model_family_outcome_summary.csv",
+        "report_title": "RegionalBackbone Failure-Detection Degraded-Link AI-MRCE Model-Family Dataset Sanity Report",
         "expected_configs": [
-            "RegionalBackboneCongestionDegradation",
-            "RegionalBackboneAiMrceRuleBased",
-            "RegionalBackboneAiMrceLogReg",
-            "RegionalBackboneAiMrceLinearSvm",
-            "RegionalBackboneAiMrceShallowTree",
-        ],
-        "key_numeric_columns": [
-            "receiver_total_packet_count",
-            "receiver_app0_e2e_delay_mean_s",
-            "receiver_app0_throughput_mean_bps",
-            "bottleneck_queue_length_mean_pk",
-            "bottleneck_queue_bit_length_mean_b",
-            "bottleneck_queueing_time_mean_s",
-            "service_interruption_duration_s",
-            "recovery_time_after_failure_s",
-            "protection_lead_time_before_failure_s",
-            "packet_sequence_gap_total_missing_after_reference",
-            "max_packet_sequence_gap_after_reference",
-            "max_packet_interarrival_gap_after_reference_s",
-        ],
-    },
-    "regionalbackbone_mixed_traffic_protection": {
-        "dataset_path": DATASETS_DIR / "regionalbackbone_mixed_traffic_protection_multirun_dataset.csv",
-        "report_path": REPORTS_DIR / "regionalbackbone_mixed_traffic_protection_multirun_report.txt",
-        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_mixed_traffic_protection_multirun_missing_values.csv",
-        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_mixed_traffic_protection_multirun_per_config_summary.csv",
-        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_mixed_traffic_protection_multirun_outcome_summary.csv",
-        "report_title": "RegionalBackbone Mixed UDP/TCP Protection Multi-Run Dataset Sanity Report",
-        "expected_configs": [
-            "RegionalBackboneMixedTrafficCongestionDegradation",
-            "RegionalBackboneAiMrceRuleBasedMixedTraffic",
-            "RegionalBackboneAiMrceLogRegMixedTraffic",
-        ],
-        "key_numeric_columns": [
-            "receiver_total_packet_count",
-            "receiver_app0_e2e_delay_mean_s",
-            "receiver_app0_throughput_mean_bps",
-            "receiver_app3_goodput_mean_bps",
-            "receiver_app4_goodput_mean_bps",
-            "receiver_tcp_goodput_mean_bps",
-            "bottleneck_queue_length_mean_pk",
-            "bottleneck_queue_bit_length_mean_b",
-            "bottleneck_queueing_time_mean_s",
-            "service_interruption_duration_s",
-            "tcp_service_interruption_duration_s",
-            "tcp_zero_goodput_window_count_after_reference",
-            "recovery_time_after_failure_s",
-            "protection_lead_time_before_failure_s",
-            "packet_sequence_gap_total_missing_after_reference",
-            "max_packet_sequence_gap_after_reference",
-            "max_packet_interarrival_gap_after_reference_s",
-            "tcp_max_endpoint_receive_gap_after_reference_s",
-        ],
-    },
-    "regionalbackbone_failure_detection_comparison": {
-        "dataset_path": DATASETS_DIR / "regionalbackbone_failure_detection_comparison_dataset.csv",
-        "report_path": REPORTS_DIR / "regionalbackbone_failure_detection_comparison_report.txt",
-        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_comparison_missing_values.csv",
-        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_comparison_per_config_summary.csv",
-        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_failure_detection_comparison_outcome_summary.csv",
-        "report_title": "RegionalBackbone Failure-Detection Comparison Dataset Sanity Report",
-        "expected_configs": [
-            "RegionalBackboneFailureComparisonOspfOnly",
-            "RegionalBackboneFailureComparisonBfdLikeFrr",
-            "RegionalBackboneFailureComparisonAiMrceFrr",
-            "RegionalBackboneFailureComparisonHybrid",
-        ],
-        "key_numeric_columns": [
-            "receiver_total_packet_count",
-            "receiver_app0_e2e_delay_mean_s",
-            "receiver_app0_throughput_mean_bps",
-            "bottleneck_queue_length_mean_pk",
-            "bottleneck_queue_bit_length_mean_b",
-            "bottleneck_queueing_time_mean_s",
-            "protection_lead_time_before_failure_s",
-            "bfd_like_detection_time_s",
-            "bfd_like_expected_detection_time_s",
-            "bfd_like_missed_probe_count",
-            "activation_queue_length_pk",
-            "packet_sequence_gap_total_unobserved_after_hard_failure",
-            "packet_sequence_gap_total_reordered_between_activation_and_failure",
-            "max_packet_interarrival_gap_after_hard_failure_s",
-        ],
-    },
-    "regionalbackbone_failure_detection_comparison_ms_traffic": {
-        "dataset_path": DATASETS_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_dataset.csv",
-        "report_path": REPORTS_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_report.txt",
-        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_missing_values.csv",
-        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_per_config_summary.csv",
-        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_outcome_summary.csv",
-        "report_title": "RegionalBackbone Failure-Detection 2 ms Monitored-Traffic Dataset Sanity Report",
-        "expected_configs": [
-            "RegionalBackboneFailureComparisonOspfOnlyMsTraffic",
-            "RegionalBackboneFailureComparisonBfdLikeFrrMsTraffic",
-            "RegionalBackboneFailureComparisonAiMrceFrrMsTraffic",
-            "RegionalBackboneFailureComparisonHybridMsTraffic",
-        ],
-        "key_numeric_columns": [
-            "monitored_flow_send_interval_s",
-            "monitored_flow_expected_packet_rate_pps",
-            "monitored_flow_expected_packets_per_window",
-            "receiver_total_packet_count",
-            "receiver_app0_e2e_delay_mean_s",
-            "receiver_app0_throughput_mean_bps",
-            "bottleneck_queue_length_mean_pk",
-            "bottleneck_queue_bit_length_mean_b",
-            "bottleneck_queueing_time_mean_s",
-            "protection_lead_time_before_failure_s",
-            "bfd_like_detection_time_s",
-            "bfd_like_expected_detection_time_s",
-            "bfd_like_missed_probe_count",
-            "activation_queue_length_pk",
-            "packet_sequence_gap_total_unobserved_after_hard_failure",
-            "packet_sequence_gap_total_reordered_between_activation_and_failure",
-            "max_packet_interarrival_gap_after_hard_failure_s",
-        ],
-    },
-    "regionalbackbone_failure_detection_degraded_link": {
-        "dataset_path": DATASETS_DIR / "regionalbackbone_failure_detection_degraded_link_dataset.csv",
-        "report_path": REPORTS_DIR / "regionalbackbone_failure_detection_degraded_link_report.txt",
-        "missing_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_degraded_link_missing_values.csv",
-        "per_config_csv_path": DEBUG_OUTPUT_DIR / "regionalbackbone_failure_detection_degraded_link_per_config_summary.csv",
-        "outcome_csv_path": OUTCOMES_DIR / "regionalbackbone_failure_detection_degraded_link_outcome_summary.csv",
-        "report_title": "RegionalBackbone Failure-Detection Degraded-Link Dataset Sanity Report",
-        "expected_configs": [
-            "RegionalBackboneFailureComparisonOspfOnlyDegradedLink",
-            "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLink",
-            "RegionalBackboneFailureComparisonAiMrceFrrDegradedLink",
-            "RegionalBackboneFailureComparisonHybridDegradedLink",
+            "RegionalBackboneFailureDegradedLinkOspfOnly",
+            "RegionalBackboneFailureDegradedLinkBfdLikeFrr",
+            "RegionalBackboneFailureDegradedLinkAiMrceRuleBased",
+            "RegionalBackboneFailureDegradedLinkAiMrceLogReg",
+            "RegionalBackboneFailureDegradedLinkAiMrceLinearSvm",
+            "RegionalBackboneFailureDegradedLinkAiMrceShallowTree",
+            "RegionalBackboneFailureDegradedLinkHybrid",
         ],
         "key_numeric_columns": [
             "controller_packet_error_rate_mean",
@@ -438,12 +305,19 @@ SCENARIO_PRESETS = {
             "receiver_app0_e2e_delay_mean_s",
             "receiver_app0_throughput_mean_bps",
             "protection_lead_time_before_failure_s",
+            "runtime_model_loaded",
+            "runtime_model_fallback_used",
+            "runtime_model_feature_count",
+            "runtime_model_threshold",
+            "activation_risk_score",
+            "activation_decision_threshold",
+            "activation_queue_length_pk",
             "bfd_like_detection_time_s",
             "bfd_like_lead_time_before_failure_s",
             "bfd_like_probe_loss_rate_observed",
             "bfd_like_modeled_probe_loss_probability_at_detection",
-            "bfd_like_trigger_reason_code",
             "packet_sequence_gap_total_unobserved_after_hard_failure",
+            "packet_sequence_gap_total_unobserved_between_activation_and_failure",
             "packet_sequence_gap_total_reordered_between_activation_and_failure",
             "max_packet_interarrival_gap_after_hard_failure_s",
         ],
@@ -627,6 +501,15 @@ def per_config_outcome_summary(run_rows: list[dict[str, str]]) -> list[dict[str,
         "protection_trigger_source_code",
         "repair_route_count",
         "repair_route_install_time_s",
+        "aimrce_policy_code",
+        "runtime_model_artifact_required",
+        "runtime_model_loaded",
+        "runtime_model_feature_count",
+        "runtime_model_threshold",
+        "runtime_model_fallback_used",
+        "runtime_model_fallback_reason_code",
+        "aimrce_evaluation_interval_s",
+        "aimrce_activation_consecutive_cycles_configured",
         "bfd_like_detection_time_s",
         "bfd_like_detect_multiplier",
         "bfd_like_detection_interval_s",
@@ -762,22 +645,12 @@ def per_config_outcome_summary(run_rows: list[dict[str, str]]) -> list[dict[str,
 
 
 def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if not rows:
-        with path.open("w", newline="", encoding="utf-8") as handle:
-            handle.write("")
-        return
-
     fieldnames: list[str] = []
     for row in rows:
         for key in row.keys():
             if key not in fieldnames:
                 fieldnames.append(key)
-
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+    atomic_write_csv(path, rows, fieldnames)
 
 
 def format_counter(title: str, counter: Counter) -> list[str]:
@@ -1049,7 +922,18 @@ def main() -> None:
     if not dataset_path.exists():
         raise SystemExit(f"Dataset CSV not found: {dataset_path}")
 
+    total_start = time.perf_counter()
+    print(f"[dataset_report] Scenario: {args.scenario}")
+    print(f"[dataset_report] Dataset: {dataset_path}")
+    print(f"[dataset_report] Report: {report_path}")
+    regenerate_command = f"py -3 analysis\\dataset_report.py --scenario {args.scenario}"
+    for output_path in (report_path, missing_csv_path, per_config_csv_path, outcome_csv_path):
+        warn_if_existing_output_stale(output_path, dataset_path, regenerate_command)
+
+    load_start = time.perf_counter()
     rows = load_rows(dataset_path)
+    print(f"[dataset_report] Loaded {len(rows)} dataset row(s) in {elapsed_text(load_start)}")
+    report_start = time.perf_counter()
     report_text = build_report(
         rows,
         report_title,
@@ -1061,9 +945,9 @@ def main() -> None:
         per_config_csv_path,
         outcome_csv_path,
     )
+    print(f"[dataset_report] Built report text in {elapsed_text(report_start)}")
 
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(report_text, encoding="utf-8")
+    atomic_write_text(report_path, report_text)
 
     columns = list(rows[0].keys()) if rows else []
     missing_counts = count_missing(rows, columns)
@@ -1080,6 +964,7 @@ def main() -> None:
     print(f"Wrote missing-value summary to {missing_csv_path}")
     print(f"Wrote per-config summary to {per_config_csv_path}")
     print(f"Wrote outcome summary to {outcome_csv_path}")
+    print(f"[dataset_report] Total elapsed: {elapsed_text(total_start)}")
 
 
 if __name__ == "__main__":

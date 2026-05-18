@@ -132,38 +132,34 @@ Commands:
   python-info           Show the Python interpreter that will be used.
   setup-env             Create analysis\sklearn-env if it does not already exist.
   install-ml-deps       Install analysis\requirements.txt into analysis\sklearn-env.
-  prepare-batch         Forward to analysis\prepare_batch.py.
   build-dataset         Forward to analysis\build_dataset.py.
   dataset-report        Forward to analysis\dataset_report.py.
   compare-outcomes      Forward to analysis\compare_outcomes.py.
-  train-risk-model      Forward to analysis\train_risk_model.py.
+  model-risk-trace      Forward to analysis\extract_aimrce_risk_trace.py.
+  pipeline-integrity    Forward to analysis\pipeline_integrity.py.
+  package-current-experiment
+                        Create a compact sendable package for the active current experiment.
+  clean-generated       Forward to analysis\clean_generated.py.
   export-runtime-models Forward to analysis\export_runtime_models.py.
-  export-runtime-logreg Forward to analysis\export_runtime_logreg.py.
 
 Examples:
   run_analysis.bat python-info
   run_analysis.bat setup-env
   run_analysis.bat install-ml-deps
-  run_analysis.bat build-dataset --scenario regionalbackbone
-  run_analysis.bat dataset-report --scenario regionalbackbone
-  run_analysis.bat build-dataset --scenario regionalbackbone_congestion_protection
-  run_analysis.bat dataset-report --scenario regionalbackbone_congestion_protection
-  run_analysis.bat build-dataset --scenario regionalbackbone_mixed_traffic_protection
-  run_analysis.bat dataset-report --scenario regionalbackbone_mixed_traffic_protection
-  run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_comparison
-  run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_comparison
-  run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_comparison_ms_traffic
-  run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_comparison_ms_traffic
-  run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_degraded_link
-  run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_degraded_link
-  run_analysis.bat compare-outcomes --scenarios regionalbackbone_failure_detection_comparison --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_comparison
-  run_analysis.bat compare-outcomes --scenarios regionalbackbone_failure_detection_comparison_ms_traffic --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_comparison_ms_traffic
-  run_analysis.bat compare-outcomes --scenarios regionalbackbone_failure_detection_degraded_link --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_degraded_link
-  run_analysis.bat compare-outcomes --scenarios regionalbackbone_mixed_traffic_protection --output-prefix analysis\output\outcomes\regionalbackbone_mixed_traffic_protection_multirun_comparison
-  run_analysis.bat compare-outcomes --allow-missing
-  run_analysis.bat train-risk-model
+  run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_degraded_link_model_family
+  run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_degraded_link_model_family
+  run_analysis.bat compare-outcomes --scenarios regionalbackbone_failure_detection_degraded_link_model_family --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_degraded_link_model_family
+  run_analysis.bat model-risk-trace --scenario regionalbackbone_failure_detection_degraded_link_model_family --runs 0 --start 78 --end 86
+  run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_degraded_link_model_family
+  run_analysis.bat package-current-experiment --scenario regionalbackbone_failure_detection_degraded_link_model_family
+  run_analysis.bat clean-generated
+  run_analysis.bat clean-generated --include-results --scenario regionalbackbone_failure_detection_degraded_link_model_family
   run_analysis.bat export-runtime-models --configs RegionalBackboneCongestionDegradation
-  run_analysis.bat export-runtime-logreg --configs RegionalBackboneCongestionDegradation
+
+Reliability notes:
+  - pipeline-integrity reports OK for complete five-run publication outputs and OK_WITH_WARNINGS for expected run-0 development outputs.
+  - clean-generated is dry-run by default; use --clean --yes only when you intentionally want to remove generated artifacts.
+  - build-dataset prints per-file progress because regional .vec files can be hundreds of MB each.
 "@ | Write-Host
 }
 
@@ -188,9 +184,6 @@ try {
         "install-ml-deps" {
             Install-AnalysisRequirements
         }
-        "prepare-batch" {
-            Invoke-AnalysisScript -ScriptName "prepare_batch.py" -ScriptArgs $CommandArgs
-        }
         "build-dataset" {
             Invoke-AnalysisScript -ScriptName "build_dataset.py" -ScriptArgs $CommandArgs
         }
@@ -200,14 +193,20 @@ try {
         "compare-outcomes" {
             Invoke-AnalysisScript -ScriptName "compare_outcomes.py" -ScriptArgs $CommandArgs
         }
-        "train-risk-model" {
-            Invoke-AnalysisScript -ScriptName "train_risk_model.py" -ScriptArgs $CommandArgs
+        "model-risk-trace" {
+            Invoke-AnalysisScript -ScriptName "extract_aimrce_risk_trace.py" -ScriptArgs $CommandArgs
+        }
+        "pipeline-integrity" {
+            Invoke-AnalysisScript -ScriptName "pipeline_integrity.py" -ScriptArgs $CommandArgs
+        }
+        "package-current-experiment" {
+            Invoke-AnalysisScript -ScriptName "package_current_experiment.py" -ScriptArgs $CommandArgs
+        }
+        "clean-generated" {
+            Invoke-AnalysisScript -ScriptName "clean_generated.py" -ScriptArgs $CommandArgs
         }
         "export-runtime-models" {
             Invoke-AnalysisScript -ScriptName "export_runtime_models.py" -ScriptArgs $CommandArgs
-        }
-        "export-runtime-logreg" {
-            Invoke-AnalysisScript -ScriptName "export_runtime_logreg.py" -ScriptArgs $CommandArgs
         }
         default {
             throw "Unsupported command '$Command'. Run 'run_analysis.bat help' to see the supported commands."

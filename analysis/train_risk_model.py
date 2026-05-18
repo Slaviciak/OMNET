@@ -22,7 +22,8 @@ Assumptions:
 - Labels come from scenario-phase supervision, not measured real-world failure
   onset detection, so evaluation results should be interpreted accordingly.
 - The random window split is retained as an optimistic baseline only. Grouped
-  and transfer-style evaluations are the primary evidence for generalization.
+  regional holdout evaluations are the primary evidence for this cleaned
+  publication branch.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 DATASETS_DIR = OUTPUT_ROOT / "datasets"
 TRAINING_DIR = OUTPUT_ROOT / "training"
 
-SUPPORTED_SCENARIOS = ("linkdegradation", "congestiondegradation", "regionalbackbone")
+SUPPORTED_SCENARIOS = ("regionalbackbone",)
 DEFAULT_SCENARIOS = ("regionalbackbone",)
 DECISION_LABELS = ["safe", "warning", "protect", "failed"]
 
@@ -49,8 +50,6 @@ SUPPORTED_EVALUATIONS = (
     "baseline_random",
     "grouped_run_holdout",
     "leave_one_config_out",
-    "topology_transfer_small_to_regional",
-    "topology_transfer_regional_to_small",
 )
 DEFAULT_EVALUATIONS = (
     "baseline_random",
@@ -74,16 +73,6 @@ EVALUATION_METADATA = {
         "category": "generalization_oriented",
         "description": "Each config is held out in turn to test cross-config generalization.",
     },
-    "topology_transfer_small_to_regional": {
-        "title": "Small To Regional Transfer",
-        "category": "generalization_oriented",
-        "description": "Train on small-topology datasets and test on the medium-topology regional backbone dataset.",
-    },
-    "topology_transfer_regional_to_small": {
-        "title": "Regional To Small Transfer",
-        "category": "generalization_oriented",
-        "description": "Train on the medium-topology regional backbone dataset and test on the small-topology datasets.",
-    },
 }
 
 FEATURE_COLUMNS = [
@@ -102,20 +91,6 @@ FEATURE_COLUMNS = [
 # prototype intentionally uses a smaller exported subset instead of this full
 # mixed controller/receiver/queue feature list.
 
-LINKDEGRADATION_LABEL_MAP = {
-    "normal": "safe",
-    "degraded": "warning",
-    "pre_failure": "protect",
-    "failed": "failed",
-}
-
-CONGESTIONDEGRADATION_LABEL_MAP = {
-    "baseline": "safe",
-    "rising_congestion": "warning",
-    "critical_congestion": "protect",
-    "failed": "failed",
-}
-
 REGIONAL_CONTROLLED_LABEL_MAP = {
     "normal": "safe",
     "degraded": "warning",
@@ -129,9 +104,6 @@ REGIONAL_CONGESTION_LABEL_MAP = {
     "critical_congestion": "protect",
     "failed": "failed",
 }
-
-SMALL_TOPOLOGY_SCENARIOS = {"linkdegradation", "congestiondegradation"}
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train offline risk-state classifiers from dataset CSV files.")
@@ -246,14 +218,6 @@ def remap_label(scenario: str, row: dict[str, str], include_regional_reactive: b
     """
     label = row.get("label", "")
     config_name = row.get("config_name", "")
-
-    if scenario == "linkdegradation":
-        mapped = LINKDEGRADATION_LABEL_MAP.get(label)
-        return mapped, None if mapped else f"unsupported_label:{label}"
-
-    if scenario == "congestiondegradation":
-        mapped = CONGESTIONDEGRADATION_LABEL_MAP.get(label)
-        return mapped, None if mapped else f"excluded_or_unsupported_label:{label}"
 
     if scenario == "regionalbackbone":
         if config_name == "RegionalBackboneReactiveFailure" and not include_regional_reactive:
@@ -539,39 +503,6 @@ def plan_leave_one_config_out(rows: list[dict[str, Any]], sklearn: dict[str, Any
         )
     return folds
 
-
-def plan_topology_transfer(rows: list[dict[str, Any]], evaluation_scheme: str) -> list[dict[str, Any]]:
-    """Create topology-transfer folds between small and regional datasets.
-
-    These folds are meant to test whether the offline classifier is learning a
-    transferable risk signal rather than only memorizing one topology family.
-    """
-    if evaluation_scheme == "topology_transfer_small_to_regional":
-        train_indices = [index for index, row in enumerate(rows) if row["source_scenario"] in SMALL_TOPOLOGY_SCENARIOS]
-        test_indices = [index for index, row in enumerate(rows) if row["source_scenario"] == "regionalbackbone"]
-        description = "Train on small-topology datasets, test on regional backbone"
-        fold_id = "small_to_regional"
-    else:
-        train_indices = [index for index, row in enumerate(rows) if row["source_scenario"] == "regionalbackbone"]
-        test_indices = [index for index, row in enumerate(rows) if row["source_scenario"] in SMALL_TOPOLOGY_SCENARIOS]
-        description = "Train on regional backbone, test on small-topology datasets"
-        fold_id = "regional_to_small"
-
-    if not train_indices or not test_indices:
-        return []
-
-    return [
-        make_fold(
-            evaluation_scheme,
-            fold_id,
-            description,
-            train_indices,
-            test_indices,
-            baseline_only=False,
-        )
-    ]
-
-
 def plan_evaluation_folds(
     rows: list[dict[str, Any]],
     evaluations: list[str],
@@ -587,8 +518,6 @@ def plan_evaluation_folds(
             folds.extend(plan_grouped_run_holdout(rows, sklearn, test_size, random_seed))
         elif evaluation == "leave_one_config_out":
             folds.extend(plan_leave_one_config_out(rows, sklearn))
-        elif evaluation in {"topology_transfer_small_to_regional", "topology_transfer_regional_to_small"}:
-            folds.extend(plan_topology_transfer(rows, evaluation))
         else:
             raise SystemExit(f"Unsupported evaluation scheme '{evaluation}'")
     return folds

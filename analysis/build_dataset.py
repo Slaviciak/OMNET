@@ -50,36 +50,18 @@ Assumptions:
 from __future__ import annotations
 
 import argparse
+from bisect import bisect_left, bisect_right
 import csv
 import math
+import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import fmean
 
 
 WINDOW_SIZE_SECONDS = 1.0
-
-SMALL_REACTIVE_FAILURE_TIME_SECONDS = 20.0
-SMALL_PROACTIVE_PROTECTION_TIME_SECONDS = 18.0
-SMALL_PROACTIVE_HARD_FAILURE_TIME_SECONDS = 20.0
-
-DEGRADATION_START_SECONDS = 20.0
-PRE_FAILURE_START_SECONDS = 40.0
-HARD_FAILURE_TIME_SECONDS = 45.0
-
-CONGESTION_CONVERGENCE_END_SECONDS = 20.0
-CONGESTION_BASELINE_END_SECONDS = 50.0
-CONGESTION_RISING_END_SECONDS = 125.0
-CONGESTION_CRITICAL_END_SECONDS = 150.0
-CONGESTION_HARD_FAILURE_TIME_SECONDS = 150.0
-
-REGIONAL_REACTIVE_FAILURE_TIME_SECONDS = 40.0
-REGIONAL_REACTIVE_DISRUPTION_END_SECONDS = 50.0
-
-REGIONAL_DEGRADATION_START_SECONDS = 35.0
-REGIONAL_DEGRADATION_END_SECONDS = 55.0
-REGIONAL_HARD_FAILURE_TIME_SECONDS = 60.0
 
 REGIONAL_CONGESTION_CONVERGENCE_END_SECONDS = 20.0
 REGIONAL_CONGESTION_BASELINE_END_SECONDS = 35.0
@@ -94,7 +76,6 @@ DEFAULT_SCENARIO = "regionalbackbone"
 BOTTLE_NECK_QUEUE_MODULE_SUFFIX = ".r2.eth[1].queue"
 REGIONAL_BOTTLENECK_QUEUE_MODULE_SUFFIX = ".coreNW.eth[1].queue"
 HOSTB_APP_RE = re.compile(r".*\.hostB\.app\[(\d+)\]$")
-HOSTA_TCP_REPLY_APP_RE = re.compile(r".*\.hostA\.app\[(3|4)\]$")
 TARGET_CONTROLLER_SCALAR_NAMES = {
     "protectionActivated",
     "protectionActivationTime",
@@ -105,6 +86,15 @@ TARGET_CONTROLLER_SCALAR_NAMES = {
     "repairRouteInstallTime",
     "enableAimrceDecision",
     "enableBfdLikeDetection",
+    "aimrcePolicyCode",
+    "runtimeModelArtifactRequired",
+    "runtimeModelLoaded",
+    "runtimeModelFeatureCount",
+    "runtimeModelThreshold",
+    "runtimeModelFallbackUsed",
+    "runtimeModelFallbackReasonCode",
+    "aimrceEvaluationInterval",
+    "aimrceActivationConsecutiveCyclesConfigured",
     "bfdLikeDetectionActivated",
     "bfdLikeDetectionTime",
     "bfdLikeDetectMultiplier",
@@ -137,58 +127,25 @@ TARGET_CONTROLLER_SCALAR_NAMES = {
 }
 REGIONALBACKBONE_FAMILY_SCENARIOS = {
     "regionalbackbone",
-    "regionalbackbone_congestion_protection",
-    "regionalbackbone_mixed_traffic_protection",
-    "regionalbackbone_failure_detection_comparison",
-    "regionalbackbone_failure_detection_comparison_ms_traffic",
-    "regionalbackbone_failure_detection_degraded_link",
+    "regionalbackbone_failure_detection_degraded_link_model_family",
 }
 
 REGIONALBACKBONE_DATASET_CONFIGS = {
-    "RegionalBackboneBaseline",
-    "RegionalBackboneReactiveFailure",
-    "RegionalBackboneControlledDegradation",
     "RegionalBackboneCongestionDegradation",
 }
-REGIONALBACKBONE_OPTIONAL_RUNTIME_CONFIGS = {
-    "RegionalBackboneAiMrceRuleBased",
-    "RegionalBackboneAiMrceLogReg",
-    "RegionalBackboneAiMrceLinearSvm",
-    "RegionalBackboneAiMrceShallowTree",
-}
-REGIONALBACKBONE_MIXED_TRAFFIC_CONFIGS = {
-    "RegionalBackboneMixedTrafficCongestionDegradation",
-    "RegionalBackboneAiMrceRuleBasedMixedTraffic",
-    "RegionalBackboneAiMrceLogRegMixedTraffic",
-}
-REGIONALBACKBONE_FAILURE_DETECTION_COMPARISON_CONFIGS = {
-    "RegionalBackboneFailureComparisonOspfOnly",
-    "RegionalBackboneFailureComparisonBfdLikeFrr",
-    "RegionalBackboneFailureComparisonAiMrceFrr",
-    "RegionalBackboneFailureComparisonHybrid",
-}
-REGIONALBACKBONE_FAILURE_DETECTION_MS_TRAFFIC_CONFIGS = {
-    "RegionalBackboneFailureComparisonOspfOnlyMsTraffic",
-    "RegionalBackboneFailureComparisonBfdLikeFrrMsTraffic",
-    "RegionalBackboneFailureComparisonAiMrceFrrMsTraffic",
-    "RegionalBackboneFailureComparisonHybridMsTraffic",
-}
-REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_CONFIGS = {
-    "RegionalBackboneFailureComparisonOspfOnlyDegradedLink",
-    "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLink",
-    "RegionalBackboneFailureComparisonAiMrceFrrDegradedLink",
-    "RegionalBackboneFailureComparisonHybridDegradedLink",
+REGIONALBACKBONE_OPTIONAL_RUNTIME_CONFIGS: set[str] = set()
+REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_MODEL_FAMILY_CONFIGS = {
+    "RegionalBackboneFailureDegradedLinkOspfOnly",
+    "RegionalBackboneFailureDegradedLinkBfdLikeFrr",
+    "RegionalBackboneFailureDegradedLinkAiMrceRuleBased",
+    "RegionalBackboneFailureDegradedLinkAiMrceLogReg",
+    "RegionalBackboneFailureDegradedLinkAiMrceLinearSvm",
+    "RegionalBackboneFailureDegradedLinkAiMrceShallowTree",
+    "RegionalBackboneFailureDegradedLinkHybrid",
 }
 REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS = {
     "RegionalBackboneCongestionDegradation",
-    "RegionalBackboneAiMrceRuleBased",
-    "RegionalBackboneAiMrceLogReg",
-    "RegionalBackboneAiMrceLinearSvm",
-    "RegionalBackboneAiMrceShallowTree",
-    *REGIONALBACKBONE_MIXED_TRAFFIC_CONFIGS,
-    *REGIONALBACKBONE_FAILURE_DETECTION_COMPARISON_CONFIGS,
-    *REGIONALBACKBONE_FAILURE_DETECTION_MS_TRAFFIC_CONFIGS,
-    *REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_CONFIGS,
+    *REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_MODEL_FAMILY_CONFIGS,
 }
 
 
@@ -207,39 +164,11 @@ class OutcomeProfile:
     tcp_flow_start_time_s: float | None = None
     tcp_useful_goodput_floor_bps: float | None = None
     packet_continuity_critical_start_time_s: float | None = None
+    runtime_model_type: str = ""
+    runtime_model_path: str = ""
 
 
 SCENARIO_PRESETS = {
-    "linkdegradation": {
-        "results_dir": PROJECT_ROOT / "results" / "linkdegradation" / "eval",
-        "output_file": DATASETS_DIR / "linkdegradation_dataset.csv",
-        "supported_configs": {"MildLinear", "StrongLinear", "UnstableLinear", "StagedRealistic"},
-        "config_aliases": {
-            "LinkDegradation": "MildLinear",
-        },
-        "default_sim_time_limit": 60.0,
-    },
-    "congestiondegradation": {
-        "results_dir": PROJECT_ROOT / "results" / "congestiondegradation" / "eval",
-        "output_file": DATASETS_DIR / "congestiondegradation_dataset.csv",
-        "supported_configs": {"CongestionDegradation", "CongestionDegradationMild"},
-        "config_aliases": {},
-        "default_sim_time_limit": 180.0,
-    },
-    "reactivefailure": {
-        "results_dir": PROJECT_ROOT / "results" / "reactivefailure" / "eval",
-        "output_file": DATASETS_DIR / "reactivefailure_dataset.csv",
-        "supported_configs": {"ReactiveFailure"},
-        "config_aliases": {},
-        "default_sim_time_limit": 60.0,
-    },
-    "proactiveswitch": {
-        "results_dir": PROJECT_ROOT / "results" / "proactiveswitch" / "eval",
-        "output_file": DATASETS_DIR / "proactiveswitch_dataset.csv",
-        "supported_configs": {"ProactiveSwitch"},
-        "config_aliases": {},
-        "default_sim_time_limit": 60.0,
-    },
     "regionalbackbone": {
         "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "eval",
         "output_file": DATASETS_DIR / "regionalbackbone_dataset.csv",
@@ -248,110 +177,31 @@ SCENARIO_PRESETS = {
         "config_aliases": {},
         "default_sim_time_limit": 150.0,
         "default_sim_time_limits_by_config": {
-            "RegionalBackboneBaseline": 60.0,
-            "RegionalBackboneReactiveFailure": 80.0,
-            "RegionalBackboneControlledDegradation": 90.0,
             "RegionalBackboneCongestionDegradation": 150.0,
-            "RegionalBackboneAiMrceRuleBased": 150.0,
-            "RegionalBackboneAiMrceLogReg": 150.0,
-            "RegionalBackboneAiMrceLinearSvm": 150.0,
-            "RegionalBackboneAiMrceShallowTree": 150.0,
         },
     },
-    "regionalbackbone_congestion_protection": {
-        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "congestion_protection_cohort",
-        "output_file": DATASETS_DIR / "regionalbackbone_congestion_protection_multirun_dataset.csv",
-        "supported_configs": {
-            "RegionalBackboneCongestionDegradation",
-            "RegionalBackboneAiMrceRuleBased",
-            "RegionalBackboneAiMrceLogReg",
-            "RegionalBackboneAiMrceLinearSvm",
-            "RegionalBackboneAiMrceShallowTree",
-        },
+    "regionalbackbone_failure_detection_degraded_link_model_family": {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_degraded_link_model_family",
+        "output_file": DATASETS_DIR / "regionalbackbone_failure_detection_degraded_link_model_family_dataset.csv",
+        "supported_configs": REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_MODEL_FAMILY_CONFIGS,
         "config_aliases": {
-            "RegionalBackboneCongestionDegradationCohort": "RegionalBackboneCongestionDegradation",
-            "RegionalBackboneAiMrceRuleBasedCohort": "RegionalBackboneAiMrceRuleBased",
-            "RegionalBackboneAiMrceLogRegCohort": "RegionalBackboneAiMrceLogReg",
-            "RegionalBackboneAiMrceLinearSvmCohort": "RegionalBackboneAiMrceLinearSvm",
-            "RegionalBackboneAiMrceShallowTreeCohort": "RegionalBackboneAiMrceShallowTree",
+            "RegionalBackboneFailureDegradedLinkOspfOnlyCohort": "RegionalBackboneFailureDegradedLinkOspfOnly",
+            "RegionalBackboneFailureDegradedLinkBfdLikeFrrCohort": "RegionalBackboneFailureDegradedLinkBfdLikeFrr",
+            "RegionalBackboneFailureDegradedLinkAiMrceRuleBasedCohort": "RegionalBackboneFailureDegradedLinkAiMrceRuleBased",
+            "RegionalBackboneFailureDegradedLinkAiMrceLogRegCohort": "RegionalBackboneFailureDegradedLinkAiMrceLogReg",
+            "RegionalBackboneFailureDegradedLinkAiMrceLinearSvmCohort": "RegionalBackboneFailureDegradedLinkAiMrceLinearSvm",
+            "RegionalBackboneFailureDegradedLinkAiMrceShallowTreeCohort": "RegionalBackboneFailureDegradedLinkAiMrceShallowTree",
+            "RegionalBackboneFailureDegradedLinkHybridCohort": "RegionalBackboneFailureDegradedLinkHybrid",
         },
         "default_sim_time_limit": 150.0,
         "default_sim_time_limits_by_config": {
-            "RegionalBackboneCongestionDegradation": 150.0,
-            "RegionalBackboneAiMrceRuleBased": 150.0,
-            "RegionalBackboneAiMrceLogReg": 150.0,
-            "RegionalBackboneAiMrceLinearSvm": 150.0,
-            "RegionalBackboneAiMrceShallowTree": 150.0,
-        },
-    },
-    "regionalbackbone_mixed_traffic_protection": {
-        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "mixed_traffic_protection_cohort",
-        "output_file": DATASETS_DIR / "regionalbackbone_mixed_traffic_protection_multirun_dataset.csv",
-        "supported_configs": REGIONALBACKBONE_MIXED_TRAFFIC_CONFIGS,
-        "config_aliases": {
-            "RegionalBackboneMixedTrafficCongestionDegradationCohort": "RegionalBackboneMixedTrafficCongestionDegradation",
-            "RegionalBackboneAiMrceRuleBasedMixedTrafficCohort": "RegionalBackboneAiMrceRuleBasedMixedTraffic",
-            "RegionalBackboneAiMrceLogRegMixedTrafficCohort": "RegionalBackboneAiMrceLogRegMixedTraffic",
-        },
-        "default_sim_time_limit": 150.0,
-        "default_sim_time_limits_by_config": {
-            "RegionalBackboneMixedTrafficCongestionDegradation": 150.0,
-            "RegionalBackboneAiMrceRuleBasedMixedTraffic": 150.0,
-            "RegionalBackboneAiMrceLogRegMixedTraffic": 150.0,
-        },
-    },
-    "regionalbackbone_failure_detection_comparison": {
-        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_comparison",
-        "output_file": DATASETS_DIR / "regionalbackbone_failure_detection_comparison_dataset.csv",
-        "supported_configs": REGIONALBACKBONE_FAILURE_DETECTION_COMPARISON_CONFIGS,
-        "config_aliases": {
-            "RegionalBackboneFailureComparisonOspfOnlyCohort": "RegionalBackboneFailureComparisonOspfOnly",
-            "RegionalBackboneFailureComparisonBfdLikeFrrCohort": "RegionalBackboneFailureComparisonBfdLikeFrr",
-            "RegionalBackboneFailureComparisonAiMrceFrrCohort": "RegionalBackboneFailureComparisonAiMrceFrr",
-            "RegionalBackboneFailureComparisonHybridCohort": "RegionalBackboneFailureComparisonHybrid",
-        },
-        "default_sim_time_limit": 150.0,
-        "default_sim_time_limits_by_config": {
-            "RegionalBackboneFailureComparisonOspfOnly": 150.0,
-            "RegionalBackboneFailureComparisonBfdLikeFrr": 150.0,
-            "RegionalBackboneFailureComparisonAiMrceFrr": 150.0,
-            "RegionalBackboneFailureComparisonHybrid": 150.0,
-        },
-    },
-    "regionalbackbone_failure_detection_comparison_ms_traffic": {
-        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_comparison_ms_traffic",
-        "output_file": DATASETS_DIR / "regionalbackbone_failure_detection_comparison_ms_traffic_dataset.csv",
-        "supported_configs": REGIONALBACKBONE_FAILURE_DETECTION_MS_TRAFFIC_CONFIGS,
-        "config_aliases": {
-            "RegionalBackboneFailureComparisonOspfOnlyMsTrafficCohort": "RegionalBackboneFailureComparisonOspfOnlyMsTraffic",
-            "RegionalBackboneFailureComparisonBfdLikeFrrMsTrafficCohort": "RegionalBackboneFailureComparisonBfdLikeFrrMsTraffic",
-            "RegionalBackboneFailureComparisonAiMrceFrrMsTrafficCohort": "RegionalBackboneFailureComparisonAiMrceFrrMsTraffic",
-            "RegionalBackboneFailureComparisonHybridMsTrafficCohort": "RegionalBackboneFailureComparisonHybridMsTraffic",
-        },
-        "default_sim_time_limit": 150.0,
-        "default_sim_time_limits_by_config": {
-            "RegionalBackboneFailureComparisonOspfOnlyMsTraffic": 150.0,
-            "RegionalBackboneFailureComparisonBfdLikeFrrMsTraffic": 150.0,
-            "RegionalBackboneFailureComparisonAiMrceFrrMsTraffic": 150.0,
-            "RegionalBackboneFailureComparisonHybridMsTraffic": 150.0,
-        },
-    },
-    "regionalbackbone_failure_detection_degraded_link": {
-        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_degraded_link",
-        "output_file": DATASETS_DIR / "regionalbackbone_failure_detection_degraded_link_dataset.csv",
-        "supported_configs": REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_CONFIGS,
-        "config_aliases": {
-            "RegionalBackboneFailureComparisonOspfOnlyDegradedLinkCohort": "RegionalBackboneFailureComparisonOspfOnlyDegradedLink",
-            "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLinkCohort": "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLink",
-            "RegionalBackboneFailureComparisonAiMrceFrrDegradedLinkCohort": "RegionalBackboneFailureComparisonAiMrceFrrDegradedLink",
-            "RegionalBackboneFailureComparisonHybridDegradedLinkCohort": "RegionalBackboneFailureComparisonHybridDegradedLink",
-        },
-        "default_sim_time_limit": 150.0,
-        "default_sim_time_limits_by_config": {
-            "RegionalBackboneFailureComparisonOspfOnlyDegradedLink": 150.0,
-            "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLink": 150.0,
-            "RegionalBackboneFailureComparisonAiMrceFrrDegradedLink": 150.0,
-            "RegionalBackboneFailureComparisonHybridDegradedLink": 150.0,
+            "RegionalBackboneFailureDegradedLinkOspfOnly": 150.0,
+            "RegionalBackboneFailureDegradedLinkBfdLikeFrr": 150.0,
+            "RegionalBackboneFailureDegradedLinkAiMrceRuleBased": 150.0,
+            "RegionalBackboneFailureDegradedLinkAiMrceLogReg": 150.0,
+            "RegionalBackboneFailureDegradedLinkAiMrceLinearSvm": 150.0,
+            "RegionalBackboneFailureDegradedLinkAiMrceShallowTree": 150.0,
+            "RegionalBackboneFailureDegradedLinkHybrid": 150.0,
         },
     },
 }
@@ -405,6 +255,60 @@ def resolve_project_path(path: Path) -> Path:
     return path if path.is_absolute() else PROJECT_ROOT / path
 
 
+def atomic_temp_path(path: Path) -> Path:
+    return path.with_name(f".{path.name}.{os.getpid()}.tmp")
+
+
+def atomic_write_csv(path: Path, rows: list[dict[str, object]], fieldnames: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = atomic_temp_path(path)
+    try:
+        with temp_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        temp_path.replace(path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def file_size_text(path: Path) -> str:
+    if not path.exists():
+        return "missing"
+    size_bytes = path.stat().st_size
+    if size_bytes >= 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GiB"
+    if size_bytes >= 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MiB"
+    if size_bytes >= 1024:
+        return f"{size_bytes / 1024:.1f} KiB"
+    return f"{size_bytes} B"
+
+
+def elapsed_text(start_time: float) -> str:
+    return f"{time.perf_counter() - start_time:.2f}s"
+
+
+def latest_mtime(paths: list[Path]) -> float | None:
+    mtimes = [path.stat().st_mtime for path in paths if path.exists()]
+    return max(mtimes) if mtimes else None
+
+
+def warn_if_existing_output_stale(output_file: Path, input_files: list[Path], regenerate_command: str) -> None:
+    if not output_file.exists():
+        return
+    newest_input = latest_mtime(input_files)
+    if newest_input is None or output_file.stat().st_mtime >= newest_input:
+        return
+    newest_inputs = [path for path in input_files if path.exists() and path.stat().st_mtime == newest_input]
+    source_text = newest_inputs[0] if newest_inputs else "input result file"
+    print(
+        "Warning: existing output appears stale before regeneration: "
+        f"{output_file} is older than {source_text}. Regenerate with: {regenerate_command}"
+    )
+
+
 def get_scenario_preset(scenario: str) -> dict[str, object]:
     preset = SCENARIO_PRESETS.get(scenario)
     if preset is None:
@@ -424,64 +328,7 @@ def normalize_config_name(name: str, config_aliases: dict[str, str]) -> str:
     return config_aliases.get(name, name)
 
 
-def label_for_linkdegradation_window(window_start: float) -> str:
-    if window_start < DEGRADATION_START_SECONDS:
-        return "normal"
-    if window_start < PRE_FAILURE_START_SECONDS:
-        return "degraded"
-    if window_start < HARD_FAILURE_TIME_SECONDS:
-        return "pre_failure"
-    return "failed"
-
-
-def label_for_congestiondegradation_window(window_start: float) -> str:
-    if window_start < CONGESTION_CONVERGENCE_END_SECONDS:
-        return "convergence"
-    if window_start < CONGESTION_BASELINE_END_SECONDS:
-        return "baseline"
-    if window_start < CONGESTION_RISING_END_SECONDS:
-        return "rising_congestion"
-    if window_start < CONGESTION_CRITICAL_END_SECONDS:
-        return "critical_congestion"
-    return "failed"
-
-
-def label_for_reactivefailure_window(window_start: float) -> str:
-    if window_start < SMALL_REACTIVE_FAILURE_TIME_SECONDS:
-        return "normal"
-    if window_start < SMALL_REACTIVE_FAILURE_TIME_SECONDS + 10.0:
-        return "reactive_disruption"
-    return "post_reroute"
-
-
-def label_for_proactiveswitch_window(window_start: float) -> str:
-    if window_start < SMALL_PROACTIVE_PROTECTION_TIME_SECONDS:
-        return "normal"
-    if window_start < SMALL_PROACTIVE_HARD_FAILURE_TIME_SECONDS:
-        return "protected_pre_failure"
-    return "post_failure_protected"
-
-
 def label_for_regionalbackbone_window(config_name: str, window_start: float) -> str:
-    if config_name == "RegionalBackboneBaseline":
-        return "normal"
-
-    if config_name == "RegionalBackboneReactiveFailure":
-        if window_start < REGIONAL_REACTIVE_FAILURE_TIME_SECONDS:
-            return "normal"
-        if window_start < REGIONAL_REACTIVE_DISRUPTION_END_SECONDS:
-            return "reactive_disruption"
-        return "post_reroute"
-
-    if config_name == "RegionalBackboneControlledDegradation":
-        if window_start < REGIONAL_DEGRADATION_START_SECONDS:
-            return "normal"
-        if window_start < REGIONAL_DEGRADATION_END_SECONDS:
-            return "degraded"
-        if window_start < REGIONAL_HARD_FAILURE_TIME_SECONDS:
-            return "pre_failure"
-        return "failed"
-
     if config_name in REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS:
         # The runtime AI-MRCE configs reuse the congestion-branch supervision
         # timeline intentionally. These labels remain scenario-phase schedule
@@ -500,88 +347,14 @@ def label_for_regionalbackbone_window(config_name: str, window_start: float) -> 
 
 
 def label_for_window(scenario: str, config_name: str, window_start: float) -> str:
-    if scenario == "linkdegradation":
-        return label_for_linkdegradation_window(window_start)
-    if scenario == "congestiondegradation":
-        return label_for_congestiondegradation_window(window_start)
-    if scenario == "reactivefailure":
-        return label_for_reactivefailure_window(window_start)
-    if scenario == "proactiveswitch":
-        return label_for_proactiveswitch_window(window_start)
     if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
         return label_for_regionalbackbone_window(config_name, window_start)
     raise SystemExit(f"Unsupported scenario '{scenario}' for labeling")
 
 
 def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
-    if scenario == "linkdegradation":
-        return OutcomeProfile(
-            hard_failure_time_s=HARD_FAILURE_TIME_SECONDS,
-            protection_mode="reactive_only",
-            monitored_app_index=0,
-            packet_size_bits=512.0 * 8.0,
-            send_interval_s=1.0,
-            flow_start_time_s=10.0,
-        )
-
-    if scenario == "congestiondegradation":
-        return OutcomeProfile(
-            hard_failure_time_s=CONGESTION_HARD_FAILURE_TIME_SECONDS,
-            protection_mode="reactive_only",
-            monitored_app_index=0,
-            packet_size_bits=256.0 * 8.0,
-            send_interval_s=0.01,
-            flow_start_time_s=20.0,
-        )
-
-    if scenario == "reactivefailure":
-        return OutcomeProfile(
-            hard_failure_time_s=SMALL_REACTIVE_FAILURE_TIME_SECONDS,
-            protection_mode="reactive_only",
-            monitored_app_index=0,
-            packet_size_bits=512.0 * 8.0,
-            send_interval_s=1.0,
-            flow_start_time_s=10.0,
-        )
-
-    if scenario == "proactiveswitch":
-        return OutcomeProfile(
-            hard_failure_time_s=SMALL_PROACTIVE_HARD_FAILURE_TIME_SECONDS,
-            protection_mode="deterministic_admin_protection",
-            monitored_app_index=0,
-            packet_size_bits=512.0 * 8.0,
-            send_interval_s=1.0,
-            flow_start_time_s=10.0,
-            protection_expected=True,
-            scheduled_protection_time_s=SMALL_PROACTIVE_PROTECTION_TIME_SECONDS,
-        )
-
     if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
         profiles = {
-            "RegionalBackboneBaseline": OutcomeProfile(
-                hard_failure_time_s=None,
-                protection_mode="no_protection_baseline",
-                monitored_app_index=0,
-                packet_size_bits=512.0 * 8.0,
-                send_interval_s=1.0,
-                flow_start_time_s=20.0,
-            ),
-            "RegionalBackboneReactiveFailure": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_REACTIVE_FAILURE_TIME_SECONDS,
-                protection_mode="reactive_only",
-                monitored_app_index=0,
-                packet_size_bits=512.0 * 8.0,
-                send_interval_s=1.0,
-                flow_start_time_s=20.0,
-            ),
-            "RegionalBackboneControlledDegradation": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="reactive_only",
-                monitored_app_index=0,
-                packet_size_bits=512.0 * 8.0,
-                send_interval_s=1.0,
-                flow_start_time_s=20.0,
-            ),
             "RegionalBackboneCongestionDegradation": OutcomeProfile(
                 hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
                 protection_mode="reactive_only",
@@ -591,168 +364,7 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 flow_start_time_s=20.0,
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
-            "RegionalBackboneAiMrceRuleBased": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="aimrce_rule_based",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                protection_expected=True,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneAiMrceLogReg": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="aimrce_logistic_regression",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                protection_expected=True,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneAiMrceLinearSvm": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="aimrce_linear_svm",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                protection_expected=True,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneAiMrceShallowTree": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="aimrce_shallow_tree",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                protection_expected=True,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneMixedTrafficCongestionDegradation": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="reactive_only",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                traffic_profile="mixed_udp_tcp",
-                tcp_app_indices=(3, 4),
-                tcp_flow_start_time_s=45.0,
-                tcp_useful_goodput_floor_bps=50_000.0,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneAiMrceRuleBasedMixedTraffic": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="aimrce_rule_based",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                protection_expected=True,
-                traffic_profile="mixed_udp_tcp",
-                tcp_app_indices=(3, 4),
-                tcp_flow_start_time_s=45.0,
-                tcp_useful_goodput_floor_bps=50_000.0,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneAiMrceLogRegMixedTraffic": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="aimrce_logistic_regression",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                protection_expected=True,
-                traffic_profile="mixed_udp_tcp",
-                tcp_app_indices=(3, 4),
-                tcp_flow_start_time_s=45.0,
-                tcp_useful_goodput_floor_bps=50_000.0,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneFailureComparisonOspfOnly": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="ospf_only",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneFailureComparisonBfdLikeFrr": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="bfd_like_frr",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneFailureComparisonAiMrceFrr": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="aimrce_frr",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                protection_expected=True,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneFailureComparisonHybrid": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="hybrid_bfd_like_aimrce_frr",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.01,
-                flow_start_time_s=20.0,
-                protection_expected=True,
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneFailureComparisonOspfOnlyMsTraffic": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="ospf_only",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.002,
-                flow_start_time_s=20.0,
-                traffic_profile="udp_probe_2ms_staged_congestion",
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneFailureComparisonBfdLikeFrrMsTraffic": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="bfd_like_frr",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.002,
-                flow_start_time_s=20.0,
-                traffic_profile="udp_probe_2ms_staged_congestion",
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneFailureComparisonAiMrceFrrMsTraffic": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="aimrce_frr",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.002,
-                flow_start_time_s=20.0,
-                protection_expected=True,
-                traffic_profile="udp_probe_2ms_staged_congestion",
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneFailureComparisonHybridMsTraffic": OutcomeProfile(
-                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="hybrid_bfd_like_aimrce_frr",
-                monitored_app_index=0,
-                packet_size_bits=256.0 * 8.0,
-                send_interval_s=0.002,
-                flow_start_time_s=20.0,
-                protection_expected=True,
-                traffic_profile="udp_probe_2ms_staged_congestion",
-                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
-            ),
-            "RegionalBackboneFailureComparisonOspfOnlyDegradedLink": OutcomeProfile(
+            "RegionalBackboneFailureDegradedLinkOspfOnly": OutcomeProfile(
                 hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
                 protection_mode="ospf_only",
                 monitored_app_index=0,
@@ -762,7 +374,7 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
-            "RegionalBackboneFailureComparisonBfdLikeFrrDegradedLink": OutcomeProfile(
+            "RegionalBackboneFailureDegradedLinkBfdLikeFrr": OutcomeProfile(
                 hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
                 protection_mode="bfd_like_frr",
                 monitored_app_index=0,
@@ -772,9 +384,9 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
-            "RegionalBackboneFailureComparisonAiMrceFrrDegradedLink": OutcomeProfile(
+            "RegionalBackboneFailureDegradedLinkAiMrceRuleBased": OutcomeProfile(
                 hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
-                protection_mode="aimrce_frr",
+                protection_mode="aimrce_rule_based_frr",
                 monitored_app_index=0,
                 packet_size_bits=256.0 * 8.0,
                 send_interval_s=0.01,
@@ -782,8 +394,48 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 protection_expected=True,
                 traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+                runtime_model_type="rule_based",
             ),
-            "RegionalBackboneFailureComparisonHybridDegradedLink": OutcomeProfile(
+            "RegionalBackboneFailureDegradedLinkAiMrceLogReg": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_logistic_regression_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+                runtime_model_type="logistic_regression",
+                runtime_model_path="aimrce_runtime_logreg.csv",
+            ),
+            "RegionalBackboneFailureDegradedLinkAiMrceLinearSvm": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_linear_svm_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+                runtime_model_type="linear_svm",
+                runtime_model_path="aimrce_runtime_linsvm.csv",
+            ),
+            "RegionalBackboneFailureDegradedLinkAiMrceShallowTree": OutcomeProfile(
+                hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+                protection_mode="aimrce_shallow_tree_frr",
+                monitored_app_index=0,
+                packet_size_bits=256.0 * 8.0,
+                send_interval_s=0.01,
+                flow_start_time_s=20.0,
+                protection_expected=True,
+                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+                runtime_model_type="shallow_tree",
+                runtime_model_path="aimrce_runtime_shallow_tree.csv",
+            ),
+            "RegionalBackboneFailureDegradedLinkHybrid": OutcomeProfile(
                 hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
                 protection_mode="hybrid_bfd_like_aimrce_frr",
                 monitored_app_index=0,
@@ -793,6 +445,7 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 protection_expected=True,
                 traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+                runtime_model_type="rule_based",
             ),
         }
         profile = profiles.get(config_name)
@@ -813,22 +466,86 @@ def default_sim_time_limit_for_config(
     return default_sim_time_limits_by_config.get(config_name, default_sim_time_limit)
 
 
-def last_value_before_or_at(series: list[tuple[float, float]], time_point: float) -> float | None:
-    last_value = None
-    for timestamp, value in series:
-        if timestamp <= time_point:
-            last_value = value
-        else:
-            break
-    return last_value
+@dataclass(frozen=True)
+class IndexedTimeSeries:
+    # OMNeT++ vector samples are emitted in timestamp order per vector. The
+    # previous implementation relied on the same ordering; indexing keeps those
+    # semantics while avoiding repeated full-series scans for every window.
+    times: list[float]
+    values: list[float]
+
+    @classmethod
+    def from_series(cls, series: list[tuple[float, float]]) -> "IndexedTimeSeries":
+        return cls(
+            [timestamp for timestamp, _ in series],
+            [value for _, value in series],
+        )
+
+    def __bool__(self) -> bool:
+        return bool(self.times)
+
+    def window_values(self, window_start: float, window_end: float) -> list[float]:
+        start_index = bisect_left(self.times, window_start)
+        end_index = bisect_left(self.times, window_end)
+        return self.values[start_index:end_index]
+
+    def window_items(self, window_start: float, window_end: float) -> list[tuple[float, float]]:
+        start_index = bisect_left(self.times, window_start)
+        end_index = bisect_left(self.times, window_end)
+        return list(zip(self.times[start_index:end_index], self.values[start_index:end_index]))
+
+    def last_value_before_or_at(self, time_point: float) -> float | None:
+        index = bisect_right(self.times, time_point) - 1
+        if index < 0:
+            return None
+        return self.values[index]
+
+    def items_until(self, end_time_s: float | None = None) -> list[tuple[float, float]]:
+        if end_time_s is None:
+            return list(zip(self.times, self.values))
+        end_index = bisect_right(self.times, end_time_s)
+        return list(zip(self.times[:end_index], self.values[:end_index]))
 
 
-def values_in_window(series: list[tuple[float, float]], window_start: float, window_end: float) -> list[float]:
-    return [value for timestamp, value in series if window_start <= timestamp < window_end]
+SeriesLike = IndexedTimeSeries | list[tuple[float, float]]
+
+
+def indexed_series(series: SeriesLike) -> IndexedTimeSeries:
+    if isinstance(series, IndexedTimeSeries):
+        return series
+    return IndexedTimeSeries.from_series(series)
+
+
+@dataclass(frozen=True)
+class PacketContinuitySeries:
+    samples: list[tuple[float, float]]
+    times: list[float]
+
+    @classmethod
+    def from_series(cls, series: list[tuple[float, float]], flow_start_time_s: float) -> "PacketContinuitySeries":
+        samples = sorted((timestamp, value) for timestamp, value in series if timestamp >= flow_start_time_s)
+        return cls(samples, [timestamp for timestamp, _ in samples])
+
+    def __bool__(self) -> bool:
+        return bool(self.samples)
+
+    def samples_until(self, end_time_s: float | None = None) -> list[tuple[float, float]]:
+        if end_time_s is None:
+            return self.samples
+        end_index = bisect_right(self.times, end_time_s)
+        return self.samples[:end_index]
+
+
+def last_value_before_or_at(series: SeriesLike, time_point: float) -> float | None:
+    return indexed_series(series).last_value_before_or_at(time_point)
+
+
+def values_in_window(series: SeriesLike, window_start: float, window_end: float) -> list[float]:
+    return indexed_series(series).window_values(window_start, window_end)
 
 
 def sample_summary(
-    series: list[tuple[float, float]],
+    series: SeriesLike,
     window_start: float,
     window_end: float,
     *,
@@ -850,26 +567,22 @@ def sample_summary(
     }
 
 
-def state_summary(series: list[tuple[float, float]], window_start: float, window_end: float) -> dict[str, float | str]:
-    if not series:
+def state_summary(series: SeriesLike, window_start: float, window_end: float) -> dict[str, float | str]:
+    indexed = indexed_series(series)
+    if not indexed:
         return {"mean": "", "max": "", "last": ""}
 
     window_duration = window_end - window_start
     if window_duration <= 0:
         return {"mean": "", "max": "", "last": ""}
 
-    current_value = last_value_before_or_at(series, window_start)
+    current_value = indexed.last_value_before_or_at(window_start)
     current_time = window_start
     integral = 0.0
     max_value = current_value
     had_state = current_value is not None
 
-    for timestamp, value in series:
-        if timestamp < window_start:
-            continue
-        if timestamp >= window_end:
-            break
-
+    for timestamp, value in indexed.window_items(window_start, window_end):
         if current_value is not None and timestamp > current_time:
             integral += current_value * (timestamp - current_time)
 
@@ -892,15 +605,16 @@ def state_summary(series: list[tuple[float, float]], window_start: float, window
     }
 
 
-def sequence_summary(series: list[tuple[float, float]], window_start: float, window_end: float) -> dict[str, int | str]:
-    if not series:
+def sequence_summary(series: SeriesLike, window_start: float, window_end: float) -> dict[str, int | str]:
+    indexed = indexed_series(series)
+    if not indexed:
         return {"count": 0, "progress": 0, "last": ""}
 
-    window_events = [(timestamp, value) for timestamp, value in series if window_start <= timestamp < window_end]
+    window_events = indexed.window_items(window_start, window_end)
     count = len(window_events)
 
-    start_value = last_value_before_or_at(series, window_start)
-    end_value = last_value_before_or_at(series, window_end)
+    start_value = indexed.last_value_before_or_at(window_start)
+    end_value = indexed.last_value_before_or_at(window_end)
 
     if start_value is not None and end_value is not None:
         progress = max(0, int(round(end_value - start_value)))
@@ -916,11 +630,12 @@ def sequence_summary(series: list[tuple[float, float]], window_start: float, win
     }
 
 
-def packet_bytes_summary(series: list[tuple[float, float]], window_start: float, window_end: float) -> dict[str, float | int | str]:
-    if not series:
+def packet_bytes_summary(series: SeriesLike, window_start: float, window_end: float) -> dict[str, float | int | str]:
+    indexed = indexed_series(series)
+    if not indexed:
         return {"count": 0, "bytes": "", "goodput_bps": ""}
 
-    values = [max(0.0, value) for timestamp, value in series if window_start <= timestamp < window_end]
+    values = [max(0.0, value) for value in indexed.window_values(window_start, window_end)]
     if not values:
         return {"count": 0, "bytes": 0.0, "goodput_bps": 0.0}
 
@@ -941,20 +656,7 @@ def init_run_data(scenario: str) -> dict:
         "receiver_apps": {},
         "scalars": {},
     }
-    if scenario == "linkdegradation":
-        run_data["controller"] = {
-            "appliedDelay": [],
-            "appliedPacketErrorRate": [],
-        }
-    elif scenario == "congestiondegradation":
-        run_data["bottleneck_queue"] = {
-            "queueLength": [],
-            "queueBitLength": [],
-            "queueingTime": [],
-        }
-    elif scenario in {"reactivefailure", "proactiveswitch"}:
-        pass
-    elif scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
+    if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
         run_data["controller"] = {
             "appliedDelay": [],
             "appliedPacketErrorRate": [],
@@ -985,11 +687,8 @@ def register_vector_target(
     module: str,
     name: str,
 ) -> tuple[str, int | str | None] | None:
-    if scenario in {"linkdegradation", *REGIONALBACKBONE_FAMILY_SCENARIOS} and module.endswith(".degradationController") and name in {"appliedDelay", "appliedPacketErrorRate"}:
+    if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS and module.endswith(".degradationController") and name in {"appliedDelay", "appliedPacketErrorRate"}:
         return ("controller", name)
-
-    if scenario == "congestiondegradation" and module.endswith(BOTTLE_NECK_QUEUE_MODULE_SUFFIX) and name in {"queueLength", "queueBitLength", "queueingTime"}:
-        return ("bottleneck_queue", name)
 
     if (
         scenario in REGIONALBACKBONE_FAMILY_SCENARIOS
@@ -1008,19 +707,6 @@ def register_vector_target(
             # INET TCP applications expose received payload through
             # packetReceived byte vectors when enabled. We summarize those
             # endpoint-observable bytes as a project-local useful-goodput proxy.
-            return ("packetBytes", app_index)
-
-    match = HOSTA_TCP_REPLY_APP_RE.match(module)
-    if scenario == "regionalbackbone_mixed_traffic_protection" and match:
-        app_index = int(match.group(1))
-        if name == "endToEndDelay":
-            return (name, app_index)
-        if name == "packetReceived" or name.startswith("packetReceived:"):
-            # In the mixed TCP branch hostA is the TCP client and receives
-            # small server replies. The forward-direction service proxy is
-            # dominated by hostB-side request bytes when present, but retaining
-            # this client-side byte vector keeps the parser compatible with
-            # earlier smoke outputs and records both application endpoints.
             return ("packetBytes", app_index)
 
     return None
@@ -1078,6 +764,9 @@ def parse_vec_file(
     }
     run_data = init_run_data(scenario)
     vector_targets: dict[int, tuple[str, int | str | None]] = {}
+    targeted_vector_count = 0
+    targeted_sample_count = 0
+    vec_parse_start = time.perf_counter()
 
     with vec_path.open("r", encoding="utf-8") as handle:
         for raw_line in handle:
@@ -1087,6 +776,9 @@ def parse_vec_file(
 
             if line.startswith("attr configname "):
                 metadata["configname"] = line.split(" ", 2)[2]
+                normalized_name = normalize_config_name(metadata["configname"] or "", config_aliases)
+                if normalized_name not in supported_configs:
+                    return None
                 continue
 
             if line.startswith("attr runnumber "):
@@ -1114,6 +806,7 @@ def parse_vec_file(
                 target = register_vector_target(scenario, configname, run_data, module, name)
                 if target is not None:
                     vector_targets[vector_id] = target
+                    targeted_vector_count += 1
                 continue
 
             if not line[0].isdigit():
@@ -1130,6 +823,7 @@ def parse_vec_file(
 
             timestamp = float(parts[2])
             value = float(parts[-1])
+            targeted_sample_count += 1
 
             target_type, target_key = target
             if target_type == "controller":
@@ -1155,7 +849,14 @@ def parse_vec_file(
         else default_sim_time_limit_for_config(default_sim_time_limit, configname, default_sim_time_limits_by_config)
     )
     run_data["metadata"] = metadata
+    scalar_start = time.perf_counter()
     run_data["scalars"] = parse_scalar_file(vec_path.with_suffix(".sca"))
+    run_data["diagnostics"] = {
+        "vec_parse_time_s": time.perf_counter() - vec_parse_start,
+        "scalar_parse_time_s": time.perf_counter() - scalar_start,
+        "targeted_vector_count": targeted_vector_count,
+        "targeted_sample_count": targeted_sample_count,
+    }
     return run_data
 
 
@@ -1359,7 +1060,7 @@ def service_gap_metrics(
 
 
 def packet_continuity_metrics(
-    series: list[tuple[float, float]],
+    series: list[tuple[float, float]] | PacketContinuitySeries,
     reference_time_s: float | None,
     expected_send_interval_s: float,
     flow_start_time_s: float,
@@ -1404,11 +1105,12 @@ def packet_continuity_metrics(
             "first_packet_after_reference_delay_s": None,
         }
 
-    samples = sorted(
-        (timestamp, value)
-        for timestamp, value in series
-        if timestamp >= flow_start_time_s and (end_time_s is None or timestamp <= end_time_s)
+    continuity_series = (
+        series
+        if isinstance(series, PacketContinuitySeries)
+        else PacketContinuitySeries.from_series(series, flow_start_time_s)
     )
+    samples = continuity_series.samples_until(end_time_s)
     if len(samples) < 2:
         first_after = next((timestamp for timestamp, _ in samples if timestamp >= reference_time_s), None)
         return {
@@ -1584,6 +1286,15 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
     repair_route_install_time_s = run_data["scalars"].get("repairRouteInstallTime")
     enable_aimrce_decision = run_data["scalars"].get("enableAimrceDecision")
     enable_bfd_like_detection = run_data["scalars"].get("enableBfdLikeDetection")
+    aimrce_policy_code = run_data["scalars"].get("aimrcePolicyCode")
+    runtime_model_artifact_required = run_data["scalars"].get("runtimeModelArtifactRequired")
+    runtime_model_loaded = run_data["scalars"].get("runtimeModelLoaded")
+    runtime_model_feature_count = run_data["scalars"].get("runtimeModelFeatureCount")
+    runtime_model_threshold = run_data["scalars"].get("runtimeModelThreshold")
+    runtime_model_fallback_used = run_data["scalars"].get("runtimeModelFallbackUsed")
+    runtime_model_fallback_reason_code = run_data["scalars"].get("runtimeModelFallbackReasonCode")
+    aimrce_evaluation_interval_s = run_data["scalars"].get("aimrceEvaluationInterval")
+    aimrce_activation_consecutive_cycles_configured = run_data["scalars"].get("aimrceActivationConsecutiveCyclesConfigured")
     bfd_like_detection_activated = run_data["scalars"].get("bfdLikeDetectionActivated")
     bfd_like_detection_time_s = run_data["scalars"].get("bfdLikeDetectionTime")
     bfd_like_detect_multiplier = run_data["scalars"].get("bfdLikeDetectMultiplier")
@@ -1744,33 +1455,37 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         reference_time_s,
     )
     monitored_sequence_series = run_data["receiver_apps"].get(profile.monitored_app_index, {}).get("rcvdPkSeqNo", [])
-    packet_continuity = packet_continuity_metrics(
+    monitored_continuity_series = PacketContinuitySeries.from_series(
         monitored_sequence_series,
+        profile.flow_start_time_s,
+    )
+    packet_continuity = packet_continuity_metrics(
+        monitored_continuity_series,
         reference_time_s,
         profile.send_interval_s,
         profile.flow_start_time_s,
     )
     packet_continuity_after_hard_failure = packet_continuity_metrics(
-        monitored_sequence_series,
+        monitored_continuity_series,
         hard_failure_time_s,
         profile.send_interval_s,
         profile.flow_start_time_s,
     )
     packet_continuity_after_protection_activation = packet_continuity_metrics(
-        monitored_sequence_series,
+        monitored_continuity_series,
         protection_activation_time_s if protection_activated else None,
         profile.send_interval_s,
         profile.flow_start_time_s,
     )
     packet_continuity_between_activation_and_failure = packet_continuity_metrics(
-        monitored_sequence_series,
+        monitored_continuity_series,
         protection_activation_time_s if protection_activated_before_failure else None,
         profile.send_interval_s,
         profile.flow_start_time_s,
         end_time_s=hard_failure_time_s,
     )
     packet_continuity_after_critical_start = packet_continuity_metrics(
-        monitored_sequence_series,
+        monitored_continuity_series,
         profile.packet_continuity_critical_start_time_s,
         profile.send_interval_s,
         profile.flow_start_time_s,
@@ -1801,6 +1516,16 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         "repair_route_install_time_s": optional_numeric(repair_route_install_time_s),
         "enable_aimrce_decision": bool_flag(enable_aimrce_decision > 0.5) if enable_aimrce_decision is not None else "",
         "enable_bfd_like_detection": bool_flag(enable_bfd_like_detection > 0.5) if enable_bfd_like_detection is not None else "",
+        "aimrce_policy_name": profile.runtime_model_type,
+        "aimrce_policy_code": optional_numeric(aimrce_policy_code),
+        "runtime_model_artifact_required": bool_flag(runtime_model_artifact_required > 0.5) if runtime_model_artifact_required is not None else "",
+        "runtime_model_loaded": bool_flag(runtime_model_loaded > 0.5) if runtime_model_loaded is not None else "",
+        "runtime_model_feature_count": optional_numeric(runtime_model_feature_count),
+        "runtime_model_threshold": optional_numeric(runtime_model_threshold),
+        "runtime_model_fallback_used": bool_flag(runtime_model_fallback_used > 0.5) if runtime_model_fallback_used is not None else "",
+        "runtime_model_fallback_reason_code": optional_numeric(runtime_model_fallback_reason_code),
+        "aimrce_evaluation_interval_s": optional_numeric(aimrce_evaluation_interval_s),
+        "aimrce_activation_consecutive_cycles_configured": optional_numeric(aimrce_activation_consecutive_cycles_configured),
         "bfd_like_detection_activated": bool_flag(bfd_like_detection_activated > 0.5) if bfd_like_detection_activated is not None else "",
         "bfd_like_detection_time_s": optional_nonnegative_numeric(bfd_like_detection_time_s),
         "bfd_like_detect_multiplier": optional_numeric(bfd_like_detect_multiplier),
@@ -1930,6 +1655,21 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
     receiver_apps = run_data["receiver_apps"]
     expected_packets_per_window, packet_progress_floor, throughput_floor_bps = availability_thresholds(outcome_profile)
     expected_throughput_bps = outcome_profile.packet_size_bits / outcome_profile.send_interval_s
+    controller_series = {
+        name: indexed_series(values)
+        for name, values in run_data.get("controller", {}).items()
+    }
+    bottleneck_queue_series = {
+        name: indexed_series(values)
+        for name, values in run_data.get("bottleneck_queue", {}).items()
+    }
+    receiver_app_series = {
+        app_index: {
+            name: indexed_series(values)
+            for name, values in metrics.items()
+        }
+        for app_index, metrics in receiver_apps.items()
+    }
 
     rows = []
     for window_index in range(num_windows):
@@ -1944,6 +1684,8 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             "label": label_for_window(scenario, metadata["configname"], window_start),
             "protection_mode": outcome_profile.protection_mode,
             "traffic_profile": outcome_profile.traffic_profile,
+            "runtime_model_type": outcome_profile.runtime_model_type,
+            "runtime_model_path": outcome_profile.runtime_model_path,
             "monitored_flow_app_index": outcome_profile.monitored_app_index,
             "monitored_flow_packet_size_bytes": outcome_profile.packet_size_bits / 8.0,
             "monitored_flow_send_interval_s": outcome_profile.send_interval_s,
@@ -1956,9 +1698,9 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             "tcp_useful_goodput_floor_bps": optional_numeric(outcome_profile.tcp_useful_goodput_floor_bps),
         }
 
-        if scenario in {"linkdegradation", *REGIONALBACKBONE_FAMILY_SCENARIOS}:
-            delay_summary = state_summary(run_data["controller"]["appliedDelay"], window_start, window_end)
-            per_summary = state_summary(run_data["controller"]["appliedPacketErrorRate"], window_start, window_end)
+        if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
+            delay_summary = state_summary(controller_series["appliedDelay"], window_start, window_end)
+            per_summary = state_summary(controller_series["appliedPacketErrorRate"], window_start, window_end)
             row.update({
                 "controller_delay_mean_s": delay_summary["mean"],
                 "controller_delay_max_s": delay_summary["max"],
@@ -1968,10 +1710,10 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
                 "controller_packet_error_rate_last": per_summary["last"],
             })
 
-        if scenario in {"congestiondegradation", *REGIONALBACKBONE_FAMILY_SCENARIOS}:
-            queue_length_summary = state_summary(run_data["bottleneck_queue"]["queueLength"], window_start, window_end)
-            queue_bit_length_summary = state_summary(run_data["bottleneck_queue"]["queueBitLength"], window_start, window_end)
-            queueing_time_summary = state_summary(run_data["bottleneck_queue"]["queueingTime"], window_start, window_end)
+        if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
+            queue_length_summary = state_summary(bottleneck_queue_series["queueLength"], window_start, window_end)
+            queue_bit_length_summary = state_summary(bottleneck_queue_series["queueBitLength"], window_start, window_end)
+            queueing_time_summary = state_summary(bottleneck_queue_series["queueingTime"], window_start, window_end)
             row.update({
                 "bottleneck_queue_length_mean_pk": queue_length_summary["mean"],
                 "bottleneck_queue_length_max_pk": queue_length_summary["max"],
@@ -1983,15 +1725,13 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
                 "bottleneck_queueing_time_max_s": queueing_time_summary["max"],
                 "bottleneck_queueing_time_last_s": queueing_time_summary["last"],
             })
-        elif scenario not in {"linkdegradation", "reactivefailure", "proactiveswitch"}:
-            raise SystemExit(f"Unsupported scenario '{scenario}' for dataset row generation")
 
         total_packets = 0
         tcp_total_received_bytes = 0.0
         tcp_total_goodput_bps = 0.0
         tcp_active_app_count = 0
         for app_index in sorted(receiver_apps.keys()):
-            metrics = receiver_apps[app_index]
+            metrics = receiver_app_series[app_index]
             seq = sequence_summary(metrics["rcvdPkSeqNo"], window_start, window_end)
             delay = sample_summary(metrics["endToEndDelay"], window_start, window_end)
             throughput = sample_summary(metrics["throughput"], window_start, window_end, nonnegative_only=True)
@@ -2078,7 +1818,19 @@ def collect_rows(
     default_sim_time_limits_by_config: dict[str, float] | None,
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    for vec_path in sorted(results_dir.glob("*.vec")):
+    vec_paths = sorted(results_dir.glob("*.vec"))
+    if not vec_paths:
+        return rows
+
+    total_start = time.perf_counter()
+    print(f"[build_dataset] Found {len(vec_paths)} .vec file(s) in {results_dir}")
+    for index, vec_path in enumerate(vec_paths, start=1):
+        sca_path = vec_path.with_suffix(".sca")
+        run_start = time.perf_counter()
+        print(
+            f"[build_dataset] ({index}/{len(vec_paths)}) parsing vec={vec_path} "
+            f"size={file_size_text(vec_path)} sca={sca_path if sca_path.exists() else 'missing'}"
+        )
         run_data = parse_vec_file(
             vec_path,
             scenario,
@@ -2088,24 +1840,32 @@ def collect_rows(
             default_sim_time_limits_by_config,
         )
         if run_data is None:
+            print(f"[build_dataset] ({index}/{len(vec_paths)}) skipped unsupported config in {vec_path.name}")
             continue
-        rows.extend(build_rows_for_run(run_data, scenario))
+        parse_elapsed = elapsed_text(run_start)
+        diagnostics = run_data.get("diagnostics", {})
+        row_start = time.perf_counter()
+        run_rows = build_rows_for_run(run_data, scenario)
+        rows.extend(run_rows)
+        print(
+            f"[build_dataset] ({index}/{len(vec_paths)}) config={run_data['metadata']['configname']} "
+            f"run={run_data['metadata']['runnumber']} rows={len(run_rows)} "
+            f"vectors={diagnostics.get('targeted_vector_count', 'n/a')} "
+            f"samples={diagnostics.get('targeted_sample_count', 'n/a')} "
+            f"parse={parse_elapsed} scalar={diagnostics.get('scalar_parse_time_s', 0.0):.2f}s "
+            f"row_build={elapsed_text(row_start)} total={elapsed_text(run_start)}"
+        )
+    print(f"[build_dataset] Collected {len(rows)} row(s) in {elapsed_text(total_start)}")
     return rows
 
 
 def write_dataset(rows: list[dict[str, object]], output_file: Path) -> None:
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-
     fieldnames: list[str] = []
     for row in rows:
         for key in row.keys():
             if key not in fieldnames:
                 fieldnames.append(key)
-
-    with output_file.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
+    atomic_write_csv(output_file, rows, fieldnames)
 
 
 def main() -> None:
@@ -2122,6 +1882,28 @@ def main() -> None:
     if not results_dir.exists():
         raise SystemExit(f"Results directory not found: {results_dir}")
 
+    vec_paths = sorted(results_dir.glob("*.vec"))
+    discovered_runs = sorted(
+        {
+            int(match.group(1))
+            for path in vec_paths
+            for match in [re.search(r"-(\d+)$", path.stem)]
+            if match
+        }
+    )
+    discovered_configs = sorted({path.stem.rsplit("-", 1)[0] for path in vec_paths if "-" in path.stem})
+    print(f"[build_dataset] Scenario: {args.scenario}")
+    print(f"[build_dataset] Results directory: {results_dir}")
+    print(f"[build_dataset] Output dataset: {output_file}")
+    print(f"[build_dataset] Discovered configs: {len(discovered_configs)}")
+    print(f"[build_dataset] Discovered runs from filenames: {', '.join(map(str, discovered_runs)) or 'none'}")
+    warn_if_existing_output_stale(
+        output_file,
+        [path for vec_path in vec_paths for path in (vec_path, vec_path.with_suffix(".sca"), vec_path.with_suffix(".vci"))],
+        f"py -3 analysis\\build_dataset.py --scenario {args.scenario}",
+    )
+
+    total_start = time.perf_counter()
     rows = collect_rows(
         results_dir,
         args.scenario,
@@ -2134,7 +1916,8 @@ def main() -> None:
         raise SystemExit(f"No supported {args.scenario} .vec files were found in {results_dir}.")
 
     write_dataset(rows, output_file)
-    print(f"Wrote {len(rows)} dataset rows to {output_file}")
+    print(f"[build_dataset] Wrote {len(rows)} dataset rows to {output_file}")
+    print(f"[build_dataset] Total elapsed: {elapsed_text(total_start)}")
 
 
 if __name__ == "__main__":

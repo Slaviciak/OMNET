@@ -1,8 +1,10 @@
 // Controlled synthetic degradation proxy for dissertation experiments.
 //
 // This controller varies ordinary OMNeT++ channel delay and packet error rate
-// over time so the platform can generate pre-failure telemetry. The profiles
-// are intentionally deterministic and interpretable; they are not presented as
+// over time so the platform can generate pre-failure telemetry. It models the
+// impairment period only; the final hard failure remains a separate
+// ScenarioManager disconnect in the scenario configuration. The profiles are
+// intentionally deterministic and interpretable; they are not presented as
 // real carrier impairment traces. The staged profile is specifically meant to
 // approximate intermittent deterioration or gray-failure-style brownouts using
 // observable delay variation and loss symptoms, while remaining reproducible.
@@ -10,6 +12,7 @@
 #include "LinkDegradationController.h"
 
 #include <cmath>
+#include <string>
 
 #include "omnetpp/cdataratechannel.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -19,6 +22,41 @@ using namespace omnetpp;
 namespace {
 
 constexpr double PI = 3.14159265358979323846;
+constexpr const char *PROFILE_MILD_LINEAR = "mildLinear";
+constexpr const char *PROFILE_STRONG_LINEAR = "strongLinear";
+constexpr const char *PROFILE_UNSTABLE_LINEAR = "unstableLinear";
+constexpr const char *PROFILE_STAGED_REALISTIC = "stagedRealistic";
+constexpr const char *SUPPORTED_PROFILES_DESCRIPTION = "mildLinear, strongLinear, unstableLinear, stagedRealistic";
+
+constexpr double STAGED_EARLY_END = 0.30;
+constexpr double STAGED_MIDDLE_END = 0.75;
+constexpr double STAGED_EARLY_DELAY_PROGRESS_MAX = 0.12;
+constexpr double STAGED_EARLY_PER_PROGRESS_MAX = 0.02;
+constexpr double STAGED_MIDDLE_DELAY_PROGRESS_BASE = 0.12;
+constexpr double STAGED_MIDDLE_DELAY_PROGRESS_RISE = 0.26;
+constexpr double STAGED_MIDDLE_PER_PROGRESS_BASE = 0.02;
+constexpr double STAGED_MIDDLE_PER_PROGRESS_RISE = 0.16;
+constexpr double STAGED_MIDDLE_BROWNOUT_ENVELOPE_BASE = 0.25;
+constexpr double STAGED_MIDDLE_BROWNOUT_ENVELOPE_RISE = 0.75;
+constexpr double STAGED_MIDDLE_BROWNOUT_CYCLES = 2.5;
+constexpr double STAGED_MIDDLE_BROWNOUT_SHARPNESS = 4.0;
+constexpr double STAGED_MIDDLE_BROWNOUT_DELAY_GAIN = 0.18;
+constexpr double STAGED_MIDDLE_BROWNOUT_PER_GAIN = 0.32;
+constexpr double STAGED_LATE_BROWNOUT_ENVELOPE_BASE = 0.55;
+constexpr double STAGED_LATE_BROWNOUT_ENVELOPE_RISE = 0.45;
+constexpr double STAGED_LATE_BROWNOUT_CYCLES = 4.0;
+constexpr double STAGED_LATE_BROWNOUT_PHASE_OFFSET = 0.15;
+constexpr double STAGED_LATE_BROWNOUT_SHARPNESS = 2.5;
+constexpr double STAGED_LATE_DELAY_PROGRESS_BASE = 0.38;
+constexpr double STAGED_LATE_DELAY_PROGRESS_RISE = 0.62;
+constexpr double STAGED_LATE_DELAY_EXPONENT = 1.25;
+constexpr double STAGED_LATE_DELAY_BROWNOUT_GAIN = 0.20;
+constexpr double STAGED_LATE_PER_PROGRESS_BASE = 0.18;
+constexpr double STAGED_LATE_PER_PROGRESS_RISE = 0.82;
+constexpr double STAGED_LATE_PER_EXPONENT = 1.35;
+constexpr double STAGED_LATE_PER_BROWNOUT_GAIN = 0.25;
+constexpr double UNSTABLE_LINEAR_OSCILLATION_AMPLITUDE = 0.08;
+constexpr double UNSTABLE_LINEAR_OSCILLATION_PI_MULTIPLIER = 6.0;
 
 struct ProfileProgress
 {
@@ -56,6 +94,14 @@ double positivePulse(double phase, double sharpness)
     return std::pow(sineValue, sharpness);
 }
 
+bool isSupportedProfile(const std::string& profile)
+{
+    return profile == PROFILE_MILD_LINEAR
+        || profile == PROFILE_STRONG_LINEAR
+        || profile == PROFILE_UNSTABLE_LINEAR
+        || profile == PROFILE_STAGED_REALISTIC;
+}
+
 ProfileProgress stagedRealisticProgress(double progress)
 {
     // This profile is a deterministic intermittent-deterioration proxy. It is
@@ -69,34 +115,50 @@ ProfileProgress stagedRealisticProgress(double progress)
     // - early phase: mild sustained delay/loss drift
     // - middle phase: intermittent brownout episodes with elevated delay and loss
     // - late phase: denser and more severe brownouts before the scripted outage
-    if (progress <= 0.30) {
-        auto phaseProgress = smoothstep01(normalizeSegment(progress, 0.0, 0.30));
+    if (progress <= STAGED_EARLY_END) {
+        auto phaseProgress = smoothstep01(normalizeSegment(progress, 0.0, STAGED_EARLY_END));
         return {
-            0.12 * phaseProgress,
-            0.02 * phaseProgress,
+            STAGED_EARLY_DELAY_PROGRESS_MAX * phaseProgress,
+            STAGED_EARLY_PER_PROGRESS_MAX * phaseProgress,
         };
     }
 
-    if (progress <= 0.75) {
-        auto phaseProgress = normalizeSegment(progress, 0.30, 0.75);
-        auto delayTrend = 0.12 + 0.26 * phaseProgress;
-        auto lossTrend = 0.02 + 0.16 * phaseProgress;
-        auto brownoutEnvelope = 0.25 + 0.75 * phaseProgress;
+    if (progress <= STAGED_MIDDLE_END) {
+        auto phaseProgress = normalizeSegment(progress, STAGED_EARLY_END, STAGED_MIDDLE_END);
+        auto delayTrend = STAGED_MIDDLE_DELAY_PROGRESS_BASE + STAGED_MIDDLE_DELAY_PROGRESS_RISE * phaseProgress;
+        auto perTrend = STAGED_MIDDLE_PER_PROGRESS_BASE + STAGED_MIDDLE_PER_PROGRESS_RISE * phaseProgress;
+        auto brownoutEnvelope = STAGED_MIDDLE_BROWNOUT_ENVELOPE_BASE
+            + STAGED_MIDDLE_BROWNOUT_ENVELOPE_RISE * phaseProgress;
         // Deterministic brownout windows create short worse-than-trend periods
         // without introducing randomness into the dataset generation path.
-        auto brownoutPulse = positivePulse(2.5 * phaseProgress, 4.0);
+        auto brownoutPulse = positivePulse(
+            STAGED_MIDDLE_BROWNOUT_CYCLES * phaseProgress,
+            STAGED_MIDDLE_BROWNOUT_SHARPNESS
+        );
         return {
-            clamp01(delayTrend + 0.18 * brownoutEnvelope * brownoutPulse),
-            clamp01(lossTrend + 0.32 * brownoutEnvelope * brownoutPulse),
+            clamp01(delayTrend + STAGED_MIDDLE_BROWNOUT_DELAY_GAIN * brownoutEnvelope * brownoutPulse),
+            clamp01(perTrend + STAGED_MIDDLE_BROWNOUT_PER_GAIN * brownoutEnvelope * brownoutPulse),
         };
     }
 
-    auto phaseProgress = normalizeSegment(progress, 0.75, 1.0);
-    auto lateBrownoutEnvelope = 0.55 + 0.45 * phaseProgress;
-    auto lateBrownoutPulse = positivePulse(4.0 * phaseProgress + 0.15, 2.5);
+    auto phaseProgress = normalizeSegment(progress, STAGED_MIDDLE_END, 1.0);
+    auto lateBrownoutEnvelope = STAGED_LATE_BROWNOUT_ENVELOPE_BASE
+        + STAGED_LATE_BROWNOUT_ENVELOPE_RISE * phaseProgress;
+    auto lateBrownoutPulse = positivePulse(
+        STAGED_LATE_BROWNOUT_CYCLES * phaseProgress + STAGED_LATE_BROWNOUT_PHASE_OFFSET,
+        STAGED_LATE_BROWNOUT_SHARPNESS
+    );
     return {
-        clamp01(0.38 + 0.62 * std::pow(phaseProgress, 1.25) + 0.20 * lateBrownoutEnvelope * lateBrownoutPulse),
-        clamp01(0.18 + 0.82 * std::pow(phaseProgress, 1.35) + 0.25 * lateBrownoutEnvelope * lateBrownoutPulse),
+        clamp01(
+            STAGED_LATE_DELAY_PROGRESS_BASE
+            + STAGED_LATE_DELAY_PROGRESS_RISE * std::pow(phaseProgress, STAGED_LATE_DELAY_EXPONENT)
+            + STAGED_LATE_DELAY_BROWNOUT_GAIN * lateBrownoutEnvelope * lateBrownoutPulse
+        ),
+        clamp01(
+            STAGED_LATE_PER_PROGRESS_BASE
+            + STAGED_LATE_PER_PROGRESS_RISE * std::pow(phaseProgress, STAGED_LATE_PER_EXPONENT)
+            + STAGED_LATE_PER_BROWNOUT_GAIN * lateBrownoutEnvelope * lateBrownoutPulse
+        ),
     };
 }
 
@@ -125,8 +187,8 @@ void LinkDegradationController::initialize()
         throw cRuntimeError("targetDelay must be non-negative");
     if (targetPacketErrorRate < 0 || targetPacketErrorRate > 1)
         throw cRuntimeError("targetPacketErrorRate must be between 0 and 1");
-    if (profile != "mildLinear" && profile != "strongLinear" && profile != "unstableLinear" && profile != "stagedRealistic")
-        throw cRuntimeError("Unsupported degradation profile '%s'", profile.c_str());
+    if (!isSupportedProfile(profile))
+        throw cRuntimeError("Unsupported degradation profile '%s'. Supported profiles: %s", profile.c_str(), SUPPORTED_PROFILES_DESCRIPTION);
 
     channels[0] = resolveTransmitChannel(par("firstInterfaceModule"));
     channels[1] = resolveTransmitChannel(par("secondInterfaceModule"));
@@ -206,24 +268,33 @@ void LinkDegradationController::applyProfile(simtime_t now)
 
     double delayProgress = progress;
     double packetErrorRateProgress = progress;
-    if (profile == "unstableLinear") {
+    if (profile == PROFILE_UNSTABLE_LINEAR) {
         // Small deterministic oscillations around the upward trend provide a
         // simple non-monotonic proxy without introducing randomness.
-        auto oscillation = 0.08 * std::sin(6.0 * PI * progress);
+        auto oscillation = UNSTABLE_LINEAR_OSCILLATION_AMPLITUDE
+            * std::sin(UNSTABLE_LINEAR_OSCILLATION_PI_MULTIPLIER * PI * progress);
         delayProgress = clamp01(progress + oscillation * progress);
         packetErrorRateProgress = delayProgress;
     }
-    else if (profile == "stagedRealistic") {
+    else if (profile == PROFILE_STAGED_REALISTIC) {
         auto stagedProgress = stagedRealisticProgress(progress);
         delayProgress = stagedProgress.delay;
         packetErrorRateProgress = stagedProgress.packetErrorRate;
     }
 
+    // Interpolate from each direction's original simulator channel settings to
+    // the configured target impairment. targetPacketErrorRate is the OMNeT++
+    // cDatarateChannel packet error rate in [0, 1]; high values in the
+    // regional degraded-link cohort represent severe stress/brownout, not a
+    // calibrated operator trace.
     auto appliedDelay = channels[0].initialDelay + (targetDelay - channels[0].initialDelay) * delayProgress;
     auto appliedPacketErrorRate = channels[0].initialPacketErrorRate + (targetPacketErrorRate - channels[0].initialPacketErrorRate) * packetErrorRateProgress;
 
-    for (auto& channelState : channels)
-        applyToChannel(channelState, channelState.initialDelay + (targetDelay - channelState.initialDelay) * delayProgress, channelState.initialPacketErrorRate + (targetPacketErrorRate - channelState.initialPacketErrorRate) * packetErrorRateProgress);
+    for (auto& channelState : channels) {
+        auto channelDelay = channelState.initialDelay + (targetDelay - channelState.initialDelay) * delayProgress;
+        auto channelPacketErrorRate = channelState.initialPacketErrorRate + (targetPacketErrorRate - channelState.initialPacketErrorRate) * packetErrorRateProgress;
+        applyToChannel(channelState, channelDelay, channelPacketErrorRate);
+    }
 
     recordAppliedValues(appliedDelay, appliedPacketErrorRate);
 }

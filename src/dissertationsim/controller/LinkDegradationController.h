@@ -2,6 +2,7 @@
 //
 // The controller manipulates ordinary OMNeT++ channel delay and packet error
 // rate on a protected span to generate interpretable pre-failure telemetry.
+// Hard failure itself is configured separately by ScenarioManager disconnects.
 // These profiles are controlled synthetic proxies for experiments; they are
 // not empirically calibrated field-failure traces. The most realistic profile
 // intentionally approximates intermittent deterioration or "brownout"-style
@@ -26,9 +27,11 @@ namespace dissertationsim::controller {
  * Applies deterministic channel-impairment profiles to a protected span.
  *
  * Experimentally, this controller provides a reusable way to stage synthetic
- * pre-failure behavior without changing routing protocol internals. The
- * profiles are deterministic so the scenario family remains reproducible even
- * when a profile is meant to approximate intermittent deterioration.
+ * pre-failure behavior without changing routing protocol internals. Delay and
+ * packet error rate are current-time channel impairments, not future-failure
+ * labels. The profiles are deterministic so the scenario family remains
+ * reproducible even when a profile is meant to approximate intermittent
+ * deterioration.
  */
 class LinkDegradationController : public omnetpp::cSimpleModule
 {

@@ -1,6 +1,7 @@
 // Reusable helper for scheduled administrative withdrawal experiments.
-// This is a conservative project-local control mechanism, not a protocol
-// extension or a runtime AI-MRCE inference module.
+// This is a deterministic auxiliary/reference control mechanism, not a
+// protocol extension, runtime AI-MRCE inference module, or dissertation-core
+// repair-route actuator.
 
 package dissertationsim.controller;
 

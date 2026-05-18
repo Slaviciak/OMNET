@@ -72,9 +72,16 @@ simple AiMrceController
         double packetCountFloorRatio = default(0.85);
         double ruleRiskThreshold = default(0.6);
         // Controlled EV logging for manual Qtenv/Cmdenv demonstration.
+        // These flags are diagnostic only; they must not change decision,
+        // BFD-like detection, or repair-route activation semantics.
+        bool verboseInitializationLogging = default(false);
+        bool verboseModelLoadingLogging = default(false);
         bool verboseTelemetryLogging = default(false);
         double telemetryLogInterval @unit(s) = default(5s);
         bool verboseDecisionLogging = default(false);
+        double decisionLogInterval @unit(s) = default(5s);
+        bool logOnlyPositiveDecisions = default(false);
+        bool verboseTriggerLogging = default(false);
         bool verboseRepairRouteLogging = default(false);
         bool verboseBfdLikeLogging = default(false);
         @display("i=block/cogwheel");
