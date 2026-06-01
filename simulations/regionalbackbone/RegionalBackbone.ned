@@ -22,6 +22,10 @@ network RegionalBackbone
         // Enables the fixed 10 Mbps preferred-span bottleneck used by the
         // traffic-driven congestion approximation branch.
         bool enableCoreBottleneck = default(false);
+        // Enables a mild data-plane penalty on the southern repair corridor.
+        // This is used only by the cost-aware backup-path cohort; legacy
+        // degraded-link cohorts keep the original 100 Mbps southern corridor.
+        bool enableCostAwareBackupPenalty = default(false);
         // Enables the project-local runtime protection controller. Standard
         // OSPF behavior still comes from the underlying INET routers; optional
         // AI-MRCE and BFD-like trigger paths are configured per INI config.
@@ -39,6 +43,15 @@ network RegionalBackbone
             // Simple fixed-capacity bottleneck for the congestion branch.
             delay = 0.1us;
             datarate = 10Mbps;
+            thruputDisplayFormat = "#N";
+        }
+        channel BackupEth100MDelayPenalty extends ThruputMeteringChannel
+        {
+            // Mildly less preferred but still QoS-capable repair corridor for
+            // the cost-aware backup-path cohort. Five southern corridor hops
+            // add about 5 ms total propagation delay after repair activation.
+            delay = 1ms;
+            datarate = 100Mbps;
             thruputDisplayFormat = "#N";
         }
     submodules:
@@ -168,12 +181,15 @@ network RegionalBackbone
     connections:
         hostA.ethg[0] <--> Eth100M <--> accessA.ethg[0];
         accessA.ethg[1] <--> Eth100M <--> west1.ethg[0];
-        accessA.ethg[2] <--> Eth100M <--> west2.ethg[0];
+        accessA.ethg[2] <--> Eth100M <--> west2.ethg[0] if !enableCostAwareBackupPenalty;
+        accessA.ethg[2] <--> BackupEth100MDelayPenalty <--> west2.ethg[0] if enableCostAwareBackupPenalty;
         west1.ethg[1] <--> Eth100M <--> coreNW.ethg[0];
-        west2.ethg[1] <--> Eth100M <--> coreSW.ethg[0];
+        west2.ethg[1] <--> Eth100M <--> coreSW.ethg[0] if !enableCostAwareBackupPenalty;
+        west2.ethg[1] <--> BackupEth100MDelayPenalty <--> coreSW.ethg[0] if enableCostAwareBackupPenalty;
         coreNW.ethg[1] <--> Eth100M <--> coreNE.ethg[0] if !enableCoreBottleneck;
         coreNW.ethg[1] <--> BottleneckEth10M <--> coreNE.ethg[0] if enableCoreBottleneck;
-        coreSW.ethg[1] <--> Eth100M <--> coreSE.ethg[0];
+        coreSW.ethg[1] <--> Eth100M <--> coreSE.ethg[0] if !enableCostAwareBackupPenalty;
+        coreSW.ethg[1] <--> BackupEth100MDelayPenalty <--> coreSE.ethg[0] if enableCostAwareBackupPenalty;
         coreNW.ethg[2] <--> Eth100M <--> coreSW.ethg[2];
         coreNE.ethg[1] <--> Eth100M <--> coreSE.ethg[1];
         coreNW.ethg[3] <--> Eth100M <--> coreC1.ethg[0];
@@ -181,8 +197,10 @@ network RegionalBackbone
         coreSW.ethg[3] <--> Eth100M <--> coreC2.ethg[0];
         coreC2.ethg[1] <--> Eth100M <--> coreNE.ethg[2];
         coreNE.ethg[3] <--> Eth100M <--> east1.ethg[0];
-        coreSE.ethg[3] <--> Eth100M <--> east2.ethg[0];
+        coreSE.ethg[3] <--> Eth100M <--> east2.ethg[0] if !enableCostAwareBackupPenalty;
+        coreSE.ethg[3] <--> BackupEth100MDelayPenalty <--> east2.ethg[0] if enableCostAwareBackupPenalty;
         east1.ethg[1] <--> Eth100M <--> accessB.ethg[0];
-        east2.ethg[1] <--> Eth100M <--> accessB.ethg[1];
+        east2.ethg[1] <--> Eth100M <--> accessB.ethg[1] if !enableCostAwareBackupPenalty;
+        east2.ethg[1] <--> BackupEth100MDelayPenalty <--> accessB.ethg[1] if enableCostAwareBackupPenalty;
         accessB.ethg[2] <--> Eth100M <--> hostB.ethg[0];
 }

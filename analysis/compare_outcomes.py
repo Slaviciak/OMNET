@@ -50,6 +50,10 @@ OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
 SUPPORTED_SCENARIOS = (
     "regionalbackbone",
     "regionalbackbone_failure_detection_degraded_link_model_family",
+    "regionalbackbone_failure_detection_degradation_sensitivity",
+    "regionalbackbone_failure_detection_cost_aware_backup",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented",
 )
 DEFAULT_SCENARIOS = (
     "regionalbackbone_failure_detection_degraded_link_model_family",
@@ -134,6 +138,9 @@ TCP_NUMERIC_METRICS = [
     "tcp_endpoint_receive_event_count_after_reference",
     "tcp_first_endpoint_receive_delay_after_reference_s",
     "tcp_max_endpoint_receive_gap_after_reference_s",
+    "receiver_tcp_total_received_bytes",
+    "receiver_tcp_goodput_mean_bps",
+    "receiver_tcp_active_app_count",
 ]
 
 PROTECTION_ACTION_NUMERIC_METRICS = [
@@ -204,6 +211,8 @@ PACKET_FLAG_METRICS = [
 TCP_FLAG_METRICS = [
     "tcp_service_interruption_observed",
     "tcp_useful_goodput_restored_after_failure",
+    "tcp_service_available_operational",
+    "tcp_service_materially_degraded_operational",
 ]
 
 PROTECTION_ACTION_FLAG_METRICS = [
@@ -228,7 +237,26 @@ BASE_PASSTHROUGH_COLUMNS = [
 
 OPTIONAL_PASSTHROUGH_COLUMNS = (
     [
+        "degradation_profile",
+        "degradation_profile_key",
+        "degradation_start_time_s",
+        "degradation_end_time_s",
+        "degradation_target_delay_s",
+        "degradation_target_packet_error_rate",
+        "degradation_hard_failure_time_s",
+        "backup_path_penalty_model",
+        "backup_path_data_rate_bps",
+        "backup_path_extra_delay_s",
+        "primary_path_normal_data_rate_bps",
+        "primary_path_normal_extra_delay_s",
         "traffic_profile",
+        "traffic_mix_model",
+        "tcp_app_indices",
+        "tcp_flow_start_time_s",
+        "tcp_metric_scope",
+        "instrumentation_mode",
+        "tcp_receiver_app_indices",
+        "tcp_useful_goodput_floor_bps",
         "runtime_model_type",
         "runtime_model_path",
         "aimrce_policy_name",
@@ -252,6 +280,10 @@ REQUIRED_COLUMNS = set(BASE_PASSTHROUGH_COLUMNS)
 SCENARIO_PRESETS = {
     "regionalbackbone": OUTCOMES_DIR / "regionalbackbone_outcome_summary.csv",
     "regionalbackbone_failure_detection_degraded_link_model_family": OUTCOMES_DIR / "regionalbackbone_failure_detection_degraded_link_model_family_outcome_summary.csv",
+    "regionalbackbone_failure_detection_degradation_sensitivity": OUTCOMES_DIR / "regionalbackbone_failure_detection_degradation_sensitivity_outcome_summary.csv",
+    "regionalbackbone_failure_detection_cost_aware_backup": OUTCOMES_DIR / "regionalbackbone_failure_detection_cost_aware_backup_outcome_summary.csv",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact": OUTCOMES_DIR / "regionalbackbone_failure_detection_cost_aware_transport_impact_outcome_summary.csv",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": OUTCOMES_DIR / "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented_outcome_summary.csv",
 }
 
 MECHANISM_LABELS = {
@@ -303,6 +335,10 @@ COHORT_LABELS = {
     "regionalbackbone_failure_detection_comparison_ms_traffic": "Regional backbone failure-detection 2 ms monitored-traffic cohort",
     "regionalbackbone_failure_detection_degraded_link": "Regional backbone failure-detection degraded-link cohort",
     "regionalbackbone_failure_detection_degraded_link_model_family": "Regional backbone degraded-link AI-MRCE model-family cohort",
+    "regionalbackbone_failure_detection_degradation_sensitivity": "Regional backbone degradation-sensitivity cohort",
+    "regionalbackbone_failure_detection_cost_aware_backup": "Regional backbone cost-aware backup-path cohort",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact": "Regional backbone cost-aware mixed UDP/TCP transport-impact cohort",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": "Regional backbone instrumented cost-aware mixed UDP/TCP transport-impact cohort",
     "regionalbackbone_other": "Regional backbone other cohort",
 }
 
@@ -319,7 +355,11 @@ COHORT_ORDER = {
     "regionalbackbone_failure_detection_comparison_ms_traffic": 9,
     "regionalbackbone_failure_detection_degraded_link": 10,
     "regionalbackbone_failure_detection_degraded_link_model_family": 11,
-    "regionalbackbone_other": 12,
+    "regionalbackbone_failure_detection_degradation_sensitivity": 12,
+    "regionalbackbone_failure_detection_cost_aware_backup": 13,
+    "regionalbackbone_failure_detection_cost_aware_transport_impact": 14,
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": 15,
+    "regionalbackbone_other": 16,
 }
 
 
@@ -580,6 +620,36 @@ def normalize_mechanism_family(protection_mode: str, config_name: str) -> str:
         return "aimrce_shallow_tree_frr"
     if config_name == "RegionalBackboneFailureDegradedLinkHybrid":
         return "hybrid_bfd_like_aimrce_frr"
+    if config_name.startswith("RegionalBackboneSensitivity"):
+        if config_name.endswith("OspfOnly"):
+            return "ospf_only"
+        if config_name.endswith("BfdLikeFrr"):
+            return "bfd_like_frr"
+        if config_name.endswith("AiMrceRuleBased"):
+            return "aimrce_rule_based_frr"
+        if config_name.endswith("AiMrceLogReg"):
+            return "aimrce_logistic_regression_frr"
+        if config_name.endswith("AiMrceLinearSvm"):
+            return "aimrce_linear_svm_frr"
+        if config_name.endswith("AiMrceShallowTree"):
+            return "aimrce_shallow_tree_frr"
+        if config_name.endswith("Hybrid"):
+            return "hybrid_bfd_like_aimrce_frr"
+    if config_name.startswith("RegionalBackboneCostAware"):
+        if config_name.endswith("OspfOnly"):
+            return "ospf_only"
+        if config_name.endswith("BfdLikeFrr"):
+            return "bfd_like_frr"
+        if config_name.endswith("AiMrceRuleBased"):
+            return "aimrce_rule_based_frr"
+        if config_name.endswith("AiMrceLogReg"):
+            return "aimrce_logistic_regression_frr"
+        if config_name.endswith("AiMrceLinearSvm"):
+            return "aimrce_linear_svm_frr"
+        if config_name.endswith("AiMrceShallowTree"):
+            return "aimrce_shallow_tree_frr"
+        if config_name.endswith("Hybrid"):
+            return "hybrid_bfd_like_aimrce_frr"
     return "unknown_mechanism"
 
 
@@ -604,6 +674,18 @@ def resolve_comparison_cohort(scenario_name: str, config_name: str, mechanism_fa
 
     if scenario_name == "regionalbackbone_failure_detection_degraded_link_model_family":
         return "regionalbackbone_failure_detection_degraded_link_model_family"
+
+    if scenario_name == "regionalbackbone_failure_detection_degradation_sensitivity":
+        return "regionalbackbone_failure_detection_degradation_sensitivity"
+
+    if scenario_name == "regionalbackbone_failure_detection_cost_aware_backup":
+        return "regionalbackbone_failure_detection_cost_aware_backup"
+
+    if scenario_name == "regionalbackbone_failure_detection_cost_aware_transport_impact":
+        return "regionalbackbone_failure_detection_cost_aware_transport_impact"
+
+    if scenario_name == "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented":
+        return "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
 
     if scenario_name == "regionalbackbone":
         if config_name == "RegionalBackboneBaseline" or mechanism_family == "no_protection_baseline":
@@ -722,12 +804,18 @@ def summarize_flags(values: list[int]) -> dict[str, float | int | str]:
 
 
 def grouped_summary_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
-    grouped: dict[tuple[str, str], list[dict[str, object]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str], list[dict[str, object]]] = defaultdict(list)
     for row in rows:
-        grouped[(str(row["comparison_cohort"]), str(row["mechanism_family"]))].append(row)
+        grouped[
+            (
+                str(row["comparison_cohort"]),
+                str(row.get("degradation_profile", "")),
+                str(row["mechanism_family"]),
+            )
+        ].append(row)
 
     summary_rows: list[dict[str, object]] = []
-    for (comparison_cohort, mechanism_family), group_rows in grouped.items():
+    for (comparison_cohort, degradation_profile, mechanism_family), group_rows in grouped.items():
         config_names = sorted({str(row["config_name"]) for row in group_rows})
         source_scenarios = sorted({str(row["source_scenario"]) for row in group_rows})
         dataset_variants = sorted({str(row["source_dataset_variant"]) for row in group_rows})
@@ -740,6 +828,7 @@ def grouped_summary_rows(rows: list[dict[str, object]]) -> list[dict[str, object
         summary_row: dict[str, object] = {
             "comparison_cohort": comparison_cohort,
             "comparison_cohort_label": COHORT_LABELS.get(comparison_cohort, humanize_identifier(comparison_cohort)),
+            "degradation_profile": degradation_profile,
             "mechanism_family": mechanism_family,
             "mechanism_label": MECHANISM_LABELS.get(mechanism_family, humanize_identifier(mechanism_family)),
             "run_count": len(group_rows),
@@ -789,6 +878,7 @@ def grouped_summary_rows(rows: list[dict[str, object]]) -> list[dict[str, object
         key=lambda row: (
             COHORT_ORDER.get(str(row["comparison_cohort"]), 999),
             str(row["comparison_cohort"]),
+            str(row.get("degradation_profile", "")),
             MECHANISM_ORDER.get(str(row["mechanism_family"]), 999),
             str(row["mechanism_family"]),
         ),
@@ -837,7 +927,18 @@ def format_counter(counter: Counter) -> list[str]:
 
 DEGRADED_LINK_COHORT = "regionalbackbone_failure_detection_degraded_link"
 DEGRADED_LINK_MODEL_FAMILY_COHORT = "regionalbackbone_failure_detection_degraded_link_model_family"
-DEGRADED_LINK_HEADLINE_COHORTS = {DEGRADED_LINK_COHORT, DEGRADED_LINK_MODEL_FAMILY_COHORT}
+DEGRADATION_SENSITIVITY_COHORT = "regionalbackbone_failure_detection_degradation_sensitivity"
+COST_AWARE_BACKUP_COHORT = "regionalbackbone_failure_detection_cost_aware_backup"
+COST_AWARE_TRANSPORT_COHORT = "regionalbackbone_failure_detection_cost_aware_transport_impact"
+COST_AWARE_TRANSPORT_INSTRUMENTED_COHORT = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
+DEGRADED_LINK_HEADLINE_COHORTS = {
+    DEGRADED_LINK_COHORT,
+    DEGRADED_LINK_MODEL_FAMILY_COHORT,
+    DEGRADATION_SENSITIVITY_COHORT,
+    COST_AWARE_BACKUP_COHORT,
+    COST_AWARE_TRANSPORT_COHORT,
+    COST_AWARE_TRANSPORT_INSTRUMENTED_COHORT,
+}
 
 
 def summary_mean(summary_row: dict[str, object], metric: str) -> object:
@@ -849,6 +950,7 @@ def summary_rate(summary_row: dict[str, object], metric: str) -> object:
 
 
 def degraded_link_short_interpretation(summary_row: dict[str, object]) -> str:
+    comparison_cohort = str(summary_row.get("comparison_cohort", ""))
     mechanism_family = str(summary_row.get("mechanism_family", ""))
     if mechanism_family == "ospf_only":
         return (
@@ -856,6 +958,12 @@ def degraded_link_short_interpretation(summary_row: dict[str, object]) -> str:
             "post-hard-failure unobserved-gap baseline."
         )
     if mechanism_family == "bfd_like_frr":
+        if comparison_cohort == DEGRADATION_SENSITIVITY_COHORT:
+            return (
+                "Project-local BFD-like detection is profile-sensitive in the "
+                "degradation-sensitivity cohort; inspect trigger time, lead "
+                "time, and post-failure unobserved gaps per profile."
+            )
         return (
             "Project-local BFD-like detection triggers before hard failure only "
             "after modeled probe loss is severe; it removes post-failure "
@@ -911,6 +1019,7 @@ def build_degraded_link_headline_rows(summary_rows: list[dict[str, object]]) -> 
     ]
     selected_rows.sort(
         key=lambda row: (
+            str(row.get("degradation_profile", "")),
             MECHANISM_ORDER.get(str(row.get("mechanism_family", "")), 999),
             str(row.get("mechanism_family", "")),
         )
@@ -946,13 +1055,16 @@ def build_degraded_link_headline_rows(summary_rows: list[dict[str, object]]) -> 
                 "mechanism_family": row.get("mechanism_family", ""),
                 "mechanism_label": row.get("mechanism_label", ""),
                 "comparison_cohort": row.get("comparison_cohort", ""),
+                "degradation_profile": row.get("degradation_profile", ""),
                 "runtime_model_type": row.get("runtime_model_types", ""),
                 "runtime_model_path": row.get("runtime_model_paths", ""),
                 "trigger_source_summary": row.get("protection_trigger_sources", ""),
                 "run_count": row.get("run_count", ""),
                 "protection_before_failure_rate": summary_rate(row, "protection_activated_before_failure"),
                 "mean_activation_time_s": summary_mean(row, "protection_activation_time_s"),
+                "activation_time_mean": summary_mean(row, "protection_activation_time_s"),
                 "mean_lead_time_before_failure_s": summary_mean(row, "protection_lead_time_before_failure_s"),
+                "lead_time_mean": summary_mean(row, "protection_lead_time_before_failure_s"),
                 "mean_activation_queue_pk": summary_mean(row, "activation_queue_length_pk"),
                 "mean_runtime_model_loaded": summary_mean(row, "runtime_model_loaded")
                 if mechanism_family in {
@@ -998,7 +1110,15 @@ def build_degraded_link_headline_rows(summary_rows: list[dict[str, object]]) -> 
                     row,
                     "packet_sequence_gap_total_unobserved_after_hard_failure",
                 ),
+                "post_failure_unobserved_mean": summary_mean(
+                    row,
+                    "packet_sequence_gap_total_unobserved_after_hard_failure",
+                ),
                 "mean_activation_to_failure_unobserved": summary_mean(
+                    row,
+                    "packet_sequence_gap_total_unobserved_between_activation_and_failure",
+                ),
+                "activation_to_failure_unobserved_mean": summary_mean(
                     row,
                     "packet_sequence_gap_total_unobserved_between_activation_and_failure",
                 ),
@@ -1006,7 +1126,12 @@ def build_degraded_link_headline_rows(summary_rows: list[dict[str, object]]) -> 
                     row,
                     "packet_sequence_gap_total_reordered_between_activation_and_failure",
                 ),
+                "activation_to_failure_reordered_mean": summary_mean(
+                    row,
+                    "packet_sequence_gap_total_reordered_between_activation_and_failure",
+                ),
                 "short_interpretation": degraded_link_short_interpretation(row),
+                "interpretation": degraded_link_short_interpretation(row),
             }
         )
     return headline_rows
@@ -1017,9 +1142,15 @@ def render_degraded_link_headline_summary(headline_rows: list[dict[str, object]]
     lines = [title, "=" * len(title), ""]
     lines.append("Method note")
     lines.append(
-        "  This compact summary is descriptive and scenario-conditioned. BFD-like "
-        "is a project-local reactive detector, AI-MRCE is a proactive telemetry "
+        "  This compact summary is descriptive and scenario-conditioned to the "
+        "deterministic progressive degraded-link/brownout cohort. BFD-like is a "
+        "project-local reactive detector, AI-MRCE is a proactive telemetry "
         "trigger, and repair routes are project-local FRR-like abstractions."
+    )
+    lines.append(
+        "  Five publication runs provide reproducibility and workflow coverage for "
+        "this controlled cohort; they are not broad stochastic statistical "
+        "significance evidence."
     )
     lines.append(
         "  Use post-hard-failure unobserved gaps as the headline loss-like metric. "
@@ -1028,7 +1159,11 @@ def render_degraded_link_headline_summary(headline_rows: list[dict[str, object]]
     )
     lines.append("")
     for row in headline_rows:
-        lines.append(f"{row['mechanism_label']} ({row['mechanism_family']})")
+        profile = str(row.get("degradation_profile", "")).strip()
+        profile_suffix = f", profile={profile}" if profile else ""
+        lines.append(f"{row['mechanism_label']} ({row['mechanism_family']}{profile_suffix})")
+        if profile:
+            lines.append(f"  degradation_profile: {profile}")
         lines.append(f"  runtime_model_type: {row['runtime_model_type']}")
         lines.append(f"  runtime_model_path: {row['runtime_model_path']}")
         lines.append(f"  trigger_source_summary: {row['trigger_source_summary']}")
@@ -1089,6 +1224,8 @@ def render_report(
     lines.append("  Packet sequence-gap diagnostics are receiver-observed continuity evidence;")
     lines.append("  they complement, rather than replace, the coarse one-second availability")
     lines.append("  and zero-progress-window metrics.")
+    lines.append("  The active cohort is deterministic and scenario-conditioned; its five runs")
+    lines.append("  provide reproducibility/coverage rather than broad stochastic significance.")
     lines.append("  Use post-hard-failure unobserved gaps as the headline loss-like comparison.")
     lines.append("  Use activation-to-failure reordered/out-of-order fields to report AI-MRCE")
     lines.append("  repair-route switch side effects. Legacy missing fields are forward jumps")
@@ -1224,10 +1361,15 @@ def render_report(
         cohort_label = COHORT_LABELS.get(comparison_cohort, humanize_identifier(comparison_cohort))
         lines.append(f"  {cohort_label}")
         for summary_row in cohort_rows:
+            profile_text = (
+                f", profile={summary_row.get('degradation_profile')}"
+                if str(summary_row.get("degradation_profile", "")).strip()
+                else ""
+            )
             lines.append(
                 "    "
                 f"{summary_row['mechanism_label']} ({summary_row['mechanism_family']}): "
-                f"runs={summary_row['run_count']}, configs={summary_row['config_names']}"
+                f"runs={summary_row['run_count']}, configs={summary_row['config_names']}{profile_text}"
             )
             lines.append(
                 "      "

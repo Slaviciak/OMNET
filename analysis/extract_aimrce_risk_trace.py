@@ -26,11 +26,29 @@ SCENARIO_RESULTS = {
     "regionalbackbone_failure_detection_degraded_link_model_family": (
         PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_degraded_link_model_family"
     ),
+    "regionalbackbone_failure_detection_degradation_sensitivity": (
+        PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_degradation_sensitivity"
+    ),
+    "regionalbackbone_failure_detection_cost_aware_backup": (
+        PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_cost_aware_backup"
+    ),
+    "regionalbackbone_failure_detection_cost_aware_transport_impact": (
+        PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_cost_aware_transport_impact"
+    ),
 }
 
 SCENARIO_OUTCOME_SUMMARIES = {
     "regionalbackbone_failure_detection_degraded_link_model_family": (
         OUTCOME_OUTPUT_DIR / "regionalbackbone_failure_detection_degraded_link_model_family_outcome_summary.csv"
+    ),
+    "regionalbackbone_failure_detection_degradation_sensitivity": (
+        OUTCOME_OUTPUT_DIR / "regionalbackbone_failure_detection_degradation_sensitivity_outcome_summary.csv"
+    ),
+    "regionalbackbone_failure_detection_cost_aware_backup": (
+        OUTCOME_OUTPUT_DIR / "regionalbackbone_failure_detection_cost_aware_backup_outcome_summary.csv"
+    ),
+    "regionalbackbone_failure_detection_cost_aware_transport_impact": (
+        OUTCOME_OUTPUT_DIR / "regionalbackbone_failure_detection_cost_aware_transport_impact_outcome_summary.csv"
     ),
 }
 
@@ -46,6 +64,57 @@ CONFIG_RUNTIME_MODEL_TYPES = {
     "RegionalBackboneFailureDegradedLinkHybrid": "rule_based",
     "RegionalBackboneFailureDegradedLinkHybridCohort": "rule_based",
 }
+
+for _profile in ("MildSlow", "Moderate", "SevereFast"):
+    CONFIG_RUNTIME_MODEL_TYPES.update(
+        {
+            f"RegionalBackboneSensitivity{_profile}AiMrceRuleBased": "rule_based",
+            f"RegionalBackboneSensitivity{_profile}AiMrceRuleBasedCohort": "rule_based",
+            f"RegionalBackboneSensitivity{_profile}AiMrceLogReg": "logistic_regression",
+            f"RegionalBackboneSensitivity{_profile}AiMrceLogRegCohort": "logistic_regression",
+            f"RegionalBackboneSensitivity{_profile}AiMrceLinearSvm": "linear_svm",
+            f"RegionalBackboneSensitivity{_profile}AiMrceLinearSvmCohort": "linear_svm",
+            f"RegionalBackboneSensitivity{_profile}AiMrceShallowTree": "shallow_tree",
+            f"RegionalBackboneSensitivity{_profile}AiMrceShallowTreeCohort": "shallow_tree",
+            f"RegionalBackboneSensitivity{_profile}Hybrid": "rule_based",
+            f"RegionalBackboneSensitivity{_profile}HybridCohort": "rule_based",
+        }
+    )
+del _profile
+
+for _profile in ("Mild", "Moderate", "FastWarning"):
+    CONFIG_RUNTIME_MODEL_TYPES.update(
+        {
+            f"RegionalBackboneCostAware{_profile}AiMrceRuleBased": "rule_based",
+            f"RegionalBackboneCostAware{_profile}AiMrceRuleBasedCohort": "rule_based",
+            f"RegionalBackboneCostAware{_profile}AiMrceLogReg": "logistic_regression",
+            f"RegionalBackboneCostAware{_profile}AiMrceLogRegCohort": "logistic_regression",
+            f"RegionalBackboneCostAware{_profile}AiMrceLinearSvm": "linear_svm",
+            f"RegionalBackboneCostAware{_profile}AiMrceLinearSvmCohort": "linear_svm",
+            f"RegionalBackboneCostAware{_profile}AiMrceShallowTree": "shallow_tree",
+            f"RegionalBackboneCostAware{_profile}AiMrceShallowTreeCohort": "shallow_tree",
+            f"RegionalBackboneCostAware{_profile}Hybrid": "rule_based",
+            f"RegionalBackboneCostAware{_profile}HybridCohort": "rule_based",
+        }
+    )
+del _profile
+
+for _profile in ("TransportMild", "TransportModerate", "TransportFastWarning"):
+    CONFIG_RUNTIME_MODEL_TYPES.update(
+        {
+            f"RegionalBackboneCostAware{_profile}AiMrceRuleBased": "rule_based",
+            f"RegionalBackboneCostAware{_profile}AiMrceRuleBasedCohort": "rule_based",
+            f"RegionalBackboneCostAware{_profile}AiMrceLogReg": "logistic_regression",
+            f"RegionalBackboneCostAware{_profile}AiMrceLogRegCohort": "logistic_regression",
+            f"RegionalBackboneCostAware{_profile}AiMrceLinearSvm": "linear_svm",
+            f"RegionalBackboneCostAware{_profile}AiMrceLinearSvmCohort": "linear_svm",
+            f"RegionalBackboneCostAware{_profile}AiMrceShallowTree": "shallow_tree",
+            f"RegionalBackboneCostAware{_profile}AiMrceShallowTreeCohort": "shallow_tree",
+            f"RegionalBackboneCostAware{_profile}Hybrid": "rule_based",
+            f"RegionalBackboneCostAware{_profile}HybridCohort": "rule_based",
+        }
+    )
+del _profile
 
 VECTOR_NAME_MAP = {
     "riskScore": "risk_score",

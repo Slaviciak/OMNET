@@ -36,6 +36,18 @@ EXPECTED_MECHANISMS = [
 ]
 
 
+def experiment_batch_command(scenario: str) -> str:
+    if scenario == "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented":
+        return "regional-cost-aware-transport-impact-instrumented-batch"
+    if scenario == "regionalbackbone_failure_detection_cost_aware_transport_impact":
+        return "regional-cost-aware-transport-impact-batch"
+    if scenario == "regionalbackbone_failure_detection_cost_aware_backup":
+        return "regional-cost-aware-backup-batch"
+    if scenario == "regionalbackbone_failure_detection_degradation_sensitivity":
+        return "regional-degradation-sensitivity-batch"
+    return "regional-failure-detection-degraded-link-model-family-batch"
+
+
 @dataclass(frozen=True)
 class CopySpec:
     source: Path
@@ -108,20 +120,23 @@ def project_path(*parts: str) -> Path:
 
 def build_copy_specs(scenario: str, package_dir: Path) -> list[CopySpec]:
     outcomes = project_path("analysis", "output", "outcomes")
+    datasets = project_path("analysis", "output", "datasets")
     reports = project_path("analysis", "output", "reports")
     debug = project_path("analysis", "output", "debug")
+    network_impact = project_path("analysis", "output", "network_impact")
+    ml_audit = project_path("analysis", "output", "ml_audit")
     runtime = project_path("simulations", "regionalbackbone")
 
-    return [
+    specs = [
         CopySpec(
             outcomes / f"{scenario}_headline_summary.csv",
             package_dir / "summaries" / "headline_summary.csv",
-            "Degraded-link headline summary table",
+            "Scenario headline summary table",
         ),
         CopySpec(
             outcomes / f"{scenario}_headline_summary.txt",
             package_dir / "summaries" / "headline_summary.txt",
-            "Human-readable headline summary",
+            "Human-readable scenario headline summary",
         ),
         CopySpec(
             outcomes / f"{scenario}_outcome_summary.csv",
@@ -155,6 +170,66 @@ def build_copy_specs(scenario: str, package_dir: Path) -> list[CopySpec]:
             "Run-0 model-action event summary",
         ),
         CopySpec(
+            network_impact / f"{scenario}_network_impact_summary.csv",
+            package_dir / "network_impact" / "network_impact_summary.csv",
+            "Mechanism-level UDP/QoS network-impact summary",
+        ),
+        CopySpec(
+            network_impact / f"{scenario}_network_impact_by_run.csv",
+            package_dir / "network_impact" / "network_impact_by_run.csv",
+            "Run-level UDP/QoS network-impact diagnostics",
+        ),
+        CopySpec(
+            network_impact / f"{scenario}_network_impact_report.txt",
+            package_dir / "network_impact" / "network_impact_report.txt",
+            "Human-readable network-impact report",
+        ),
+        CopySpec(
+            datasets / f"{scenario}_extended_dataset.csv",
+            package_dir / "extended_telemetry" / "extended_dataset.csv",
+            "Optional telemetry-v2 extended dataset",
+        ),
+        CopySpec(
+            reports / f"{scenario}_extended_dataset_report.txt",
+            package_dir / "extended_telemetry" / "extended_dataset_report.txt",
+            "Optional telemetry-v2 dataset report",
+        ),
+        CopySpec(
+            reports / f"{scenario}_extended_feature_classification.txt",
+            package_dir / "extended_telemetry" / "extended_feature_classification.txt",
+            "Optional telemetry-v2 feature classification and leakage notes",
+        ),
+        CopySpec(
+            ml_audit / f"{scenario}_extended_feature_quality_report.txt",
+            package_dir / "ml_audit" / "extended_feature_quality_report.txt",
+            "Optional offline telemetry-v2 feature-quality report",
+        ),
+        CopySpec(
+            ml_audit / f"{scenario}_extended_feature_quality.csv",
+            package_dir / "ml_audit" / "extended_feature_quality.csv",
+            "Optional offline telemetry-v2 feature-quality table",
+        ),
+        CopySpec(
+            ml_audit / f"{scenario}_offline_ml_benchmark_report.txt",
+            package_dir / "ml_audit" / "offline_ml_benchmark_report.txt",
+            "Optional offline ML benchmark report",
+        ),
+        CopySpec(
+            ml_audit / f"{scenario}_offline_ml_benchmark.csv",
+            package_dir / "ml_audit" / "offline_ml_benchmark.csv",
+            "Optional offline ML benchmark table",
+        ),
+        CopySpec(
+            ml_audit / f"{scenario}_offline_decision_timing.csv",
+            package_dir / "ml_audit" / "offline_decision_timing.csv",
+            "Optional offline decision-timing proxy table",
+        ),
+        CopySpec(
+            ml_audit / f"{scenario}_feature_importance.csv",
+            package_dir / "ml_audit" / "feature_importance.csv",
+            "Optional offline feature-importance table",
+        ),
+        CopySpec(
             runtime / "aimrce_runtime_manifest.csv",
             package_dir / "runtime_models" / "aimrce_runtime_manifest.csv",
             "Runtime model manifest",
@@ -175,6 +250,63 @@ def build_copy_specs(scenario: str, package_dir: Path) -> list[CopySpec]:
             "Shallow-tree runtime artifact",
         ),
     ]
+    if scenario in {
+        "regionalbackbone_failure_detection_cost_aware_transport_impact",
+        "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented",
+    }:
+        # The mixed transport-impact package is primarily a transport/QoS
+        # package. Run-0 model traces remain optional and are generated only
+        # when the reviewer explicitly requests model-action trace inspection.
+        specs = [spec for spec in specs if spec.destination.parent.name != "traces"]
+    if scenario == "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented":
+        # The instrumented transport-impact smoke is a scalar/histogram
+        # telemetry validation layer, not a new offline-ML audit cohort.
+        # Omitting absent ML-audit artifacts keeps package warnings focused
+        # on the expected run-0-only publication-readiness limitation.
+        specs = [spec for spec in specs if spec.destination.parent.name != "ml_audit"]
+    if scenario in {
+        "regionalbackbone_failure_detection_cost_aware_backup",
+        "regionalbackbone_failure_detection_cost_aware_transport_impact",
+        "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented",
+    }:
+        specs.extend(
+            [
+                CopySpec(
+                    network_impact / f"{scenario}_backup_path_cost_by_run.csv",
+                    package_dir / "network_impact" / "backup_path_cost_by_run.csv",
+                    "Cost-aware backup-path cost components by run",
+                ),
+                CopySpec(
+                    network_impact / f"{scenario}_backup_path_cost_summary.csv",
+                    package_dir / "network_impact" / "backup_path_cost_summary.csv",
+                    "Cost-aware backup-path cost components summary",
+                ),
+            ]
+        )
+    if scenario in {
+        "regionalbackbone_failure_detection_cost_aware_transport_impact",
+        "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented",
+    }:
+        specs.extend(
+            [
+                CopySpec(
+                    network_impact / f"{scenario}_transport_by_run.csv",
+                    package_dir / "network_impact" / "transport_by_run.csv",
+                    "Mixed UDP/TCP transport-impact endpoint diagnostics by run",
+                ),
+                CopySpec(
+                    network_impact / f"{scenario}_transport_summary.csv",
+                    package_dir / "network_impact" / "transport_summary.csv",
+                    "Mixed UDP/TCP transport-impact endpoint diagnostics summary",
+                ),
+                CopySpec(
+                    network_impact / f"{scenario}_inet_metrics_summary.csv",
+                    package_dir / "network_impact" / "inet_metrics_summary.csv",
+                    "Instrumented INET transport/network metric summary when available",
+                ),
+            ]
+        )
+    return specs
 
 
 def read_outcome_rows(outcome_summary_path: Path) -> list[dict[str, str]]:
@@ -286,6 +418,11 @@ OSPF backbone. It evaluates current telemetry with rule-based and compact
 runtime ML policies, then activates project-local FRR-like static repair routes
 when risk remains positive for the configured decision streak.
 
+The current package should be read narrowly: it documents a deterministic
+progressive degraded-link/brownout stress cohort. The five-run publication mode
+provides reproducibility and workflow coverage for this controlled cohort, not
+broad stochastic statistical significance.
+
 The active model-family cohort compares:
 
 - `ospf_only`
@@ -300,7 +437,28 @@ All mechanisms use the same regional topology, traffic, progressive
 degraded-link/brownout profile, hard-failure time, and repair-route semantics.
 AI-MRCE model-family rows differ only by decision policy/runtime model.
 
+The learned runtime policies are compact simulator-derived policy variants based
+on four runtime features. They are not production-grade general predictors.
+
+Recommended publication table fields are mechanism family, runtime model type,
+trigger source, activation time, lead time before hard failure,
+post-hard-failure unobserved packet gaps, activation-to-failure unobserved
+packet gaps, activation-to-failure reordered packets, activation queue length,
+fallback used, and repairRouteCount.
+
 Most useful files for review are in `summaries/`, `integrity/`, and `traces/`.
+When generated, `network_impact/` adds an analysis-only UDP/QoS view derived
+from existing dataset and outcome artifacts.
+For cost-aware backup-path and mixed UDP/TCP transport-impact scenarios,
+`network_impact/` also includes separate backup-usage and backup-cost component
+tables. For the mixed transport-impact scenario it additionally includes
+endpoint-observed TCP received-byte/goodput/progress proxy tables; TCP
+retransmission, RTT, cwnd, and exact flow-completion metrics are not claimed.
+When generated, `extended_telemetry/` carries optional telemetry-v2 candidate
+features and leakage-classification notes for future ML work.
+When generated, `ml_audit/` carries offline-only feature-quality, benchmark,
+decision-timing, and feature-importance diagnostics. These files are not
+deployed runtime artifacts.
 Raw OMNeT++ `.vec`, `.vci`, `.sca`, `.elog`, packet captures, and build outputs
 are intentionally not included because they are large and reproducible.
 """
@@ -311,31 +469,46 @@ def build_limitations_text() -> str:
 
 - AI-MRCE is evaluated in a scenario-conditioned degraded-link/brownout profile.
 - The current result is not a universal failure-prediction claim.
+- The five runs provide reproducibility/coverage for this controlled cohort,
+  not broad stochastic statistical significance.
+- Learned AI-MRCE runtime policies are compact simulator-derived variants based
+  on four runtime features; they are not production-grade predictors.
 - BFD-like detection is project-local and BFD-inspired; it is not RFC-compliant BFD.
 - FRR-like repair routes are project-local static `/32` routes; they are not standards-compliant LFA, TI-LFA, RSVP-TE FRR, or OSPF FRR.
+- OSPF-only is a no-protection INET OSPF baseline, not a tuned fast-recovery baseline.
 - The severe packet-error-rate profile is a stress/brownout scenario, not a calibrated field trace.
 - Reordering and activation-to-failure transition costs remain visible and must be reported.
 - Packet sequence gaps are receiver-observed operational diagnostics, not direct proof of packet loss without the unobserved/reordered distinction.
+- Legacy `missing` fields are forward-jump compatibility diagnostics, not direct packet-loss claims.
+- Network-impact delivery/loss-like ratios are proxies unless exact sent/received accounting is available for the selected phase.
+- Network-impact delay-variation fields are window-mean delta proxies, not full RFC 5481 IPDV.
+- TCP impact is not evaluated in the active UDP-only cohort.
+- Generated package paths may include absolute local Windows source paths for provenance; reproduce from your own clone path for public review.
 - Do not generalize these results to all topologies, traffic mixes, failure classes, or production router implementations.
 """
 
 
 def build_reproduce_bat(scenario: str) -> str:
+    batch_command = experiment_batch_command(scenario)
     return f"""@echo off
 setlocal
 cd /d "%~dp0\\..\\..\\..\\..\\.."
 
-cmd /c run_experiments.bat regional-failure-detection-degraded-link-model-family-batch --clean --yes --skip-runtime-export --skip-build
+cmd /c run_experiments.bat {batch_command} --clean --yes --skip-runtime-export --skip-build
 py -3 analysis\\build_dataset.py --scenario {scenario}
+py -3 analysis\\build_dataset.py --scenario {scenario} --feature-set extended
 py -3 analysis\\dataset_report.py --scenario {scenario}
+py -3 analysis\\dataset_report.py --scenario {scenario} --feature-set extended
 py -3 analysis\\compare_outcomes.py --inputs analysis\\output\\outcomes\\{scenario}_outcome_summary.csv --output-prefix analysis\\output\\outcomes\\{scenario}
 py -3 analysis\\extract_aimrce_risk_trace.py --scenario {scenario} --runs 0 --start 78 --end 86
+cmd /c run_analysis.bat network-impact --scenario {scenario}
 cmd /c run_analysis.bat pipeline-integrity --scenario {scenario}
 cmd /c run_analysis.bat package-current-experiment --scenario {scenario}
 """
 
 
 def build_useful_commands(scenario: str) -> str:
+    batch_command = experiment_batch_command(scenario)
     return f"""Useful current-experiment commands
 ==================================
 
@@ -343,18 +516,23 @@ Package compact current outputs:
 cmd /c run_analysis.bat package-current-experiment --scenario {scenario}
 
 Run full five-run publication cohort:
-cmd /c run_experiments.bat regional-failure-detection-degraded-link-model-family-batch --clean --yes --skip-runtime-export --skip-build
+cmd /c run_experiments.bat {batch_command} --clean --yes --skip-runtime-export --skip-build
 
 Run run-0 smoke/regression mode:
-cmd /c run_experiments.bat regional-failure-detection-degraded-link-model-family-batch --runs 0 --clean --yes --skip-runtime-export --skip-build
+cmd /c run_experiments.bat {batch_command} --runs 0 --clean --yes --skip-runtime-export --skip-build
 
 Regenerate dataset/report/comparison from existing raw results:
 py -3 analysis\\build_dataset.py --scenario {scenario}
+py -3 analysis\\build_dataset.py --scenario {scenario} --feature-set extended
 py -3 analysis\\dataset_report.py --scenario {scenario}
+py -3 analysis\\dataset_report.py --scenario {scenario} --feature-set extended
 py -3 analysis\\compare_outcomes.py --inputs analysis\\output\\outcomes\\{scenario}_outcome_summary.csv --output-prefix analysis\\output\\outcomes\\{scenario}
 
 Regenerate graph-ready risk trace:
 py -3 analysis\\extract_aimrce_risk_trace.py --scenario {scenario} --runs 0 --start 78 --end 86
+
+Generate analysis-only UDP/QoS network-impact report:
+cmd /c run_analysis.bat network-impact --scenario {scenario}
 
 Check integrity:
 cmd /c run_analysis.bat pipeline-integrity --scenario {scenario}
@@ -423,6 +601,11 @@ Workspace mode: **{mode}**
 
 Pipeline integrity status: **{pipeline_status}**
 
+If this package reports full five-run publication mode, those runs should be
+read as reproducibility and mechanism-family coverage for the controlled
+deterministic degraded-link/brownout cohort, not as broad stochastic statistical
+significance.
+
 ## Mechanism Families
 
 {os.linesep.join(mechanism_lines)}
@@ -436,6 +619,9 @@ Pipeline integrity status: **{pipeline_status}**
 - `integrity/pipeline_integrity_report.txt`
 - `traces/risk_trace_run0.csv`
 - `traces/model_action_events_run0.csv`
+- `network_impact/network_impact_report.txt` when generated
+- `extended_telemetry/extended_feature_classification.txt` when generated
+- `ml_audit/offline_ml_benchmark_report.txt` when generated
 - `methodology/limitations_and_nonclaims.md`
 
 ## Not Included
@@ -446,6 +632,10 @@ The package intentionally excludes large or reproducible artifacts:
 - OMNeT++ build outputs;
 - full `results/` folders;
 - analysis virtual environments and caches.
+
+Copied file metadata may contain absolute local Windows source paths or
+timestamps for provenance. Those paths are not requirements for public users;
+regenerate the package from the project root in your own clone.
 
 ## Copied Files
 
@@ -460,11 +650,14 @@ The package intentionally excludes large or reproducible artifacts:
 Run from the project root:
 
 ```bat
-cmd /c run_experiments.bat regional-failure-detection-degraded-link-model-family-batch --clean --yes --skip-runtime-export --skip-build
+cmd /c run_experiments.bat {experiment_batch_command(scenario)} --clean --yes --skip-runtime-export --skip-build
 py -3 analysis\\build_dataset.py --scenario {scenario}
+py -3 analysis\\build_dataset.py --scenario {scenario} --feature-set extended
 py -3 analysis\\dataset_report.py --scenario {scenario}
+py -3 analysis\\dataset_report.py --scenario {scenario} --feature-set extended
 py -3 analysis\\compare_outcomes.py --inputs analysis\\output\\outcomes\\{scenario}_outcome_summary.csv --output-prefix analysis\\output\\outcomes\\{scenario}
 py -3 analysis\\extract_aimrce_risk_trace.py --scenario {scenario} --runs 0 --start 78 --end 86
+cmd /c run_analysis.bat network-impact --scenario {scenario}
 cmd /c run_analysis.bat pipeline-integrity --scenario {scenario}
 cmd /c run_analysis.bat package-current-experiment --scenario {scenario}
 ```

@@ -12,6 +12,9 @@ Assumptions:
   methodological evaluation performed by analysis/train_risk_model.py.
 - Runtime features remain intentionally compact and observable at runtime:
   queue occupancy plus probe-flow delay, throughput, and packet continuity.
+- Telemetry-v2 extended dataset columns are not exported by default. They are
+  future candidate features that require separate leakage review, retraining,
+  and run-0/full-cohort validation before any runtime artifact changes.
 - The additional learned candidates are chosen for interpretability and simple
   auditable export rather than novelty or black-box complexity.
 """

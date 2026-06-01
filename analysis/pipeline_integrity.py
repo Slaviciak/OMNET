@@ -23,7 +23,12 @@ OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
 DEBUG_DIR = OUTPUT_ROOT / "debug"
 RUNTIME_ARTIFACT_DIR = PROJECT_ROOT / "simulations" / "regionalbackbone"
 
-SCENARIO = "regionalbackbone_failure_detection_degraded_link_model_family"
+CORE_SCENARIO = "regionalbackbone_failure_detection_degraded_link_model_family"
+SENSITIVITY_SCENARIO = "regionalbackbone_failure_detection_degradation_sensitivity"
+COST_AWARE_BACKUP_SCENARIO = "regionalbackbone_failure_detection_cost_aware_backup"
+COST_AWARE_TRANSPORT_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact"
+COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
+SCENARIO = CORE_SCENARIO
 RESULTS_DIR = RESULTS_ROOT / "regionalbackbone" / "failure_detection_degraded_link_model_family"
 
 EXPECTED_CONFIGS = {
@@ -65,6 +70,119 @@ EXPECTED_CONFIGS = {
 }
 
 EXPECTED_MECHANISMS = {value["mechanism"] for value in EXPECTED_CONFIGS.values()}
+CORE_EXPECTED_CONFIGS = EXPECTED_CONFIGS.copy()
+SENSITIVITY_PROFILE_TITLES = ("MildSlow", "Moderate", "SevereFast")
+COST_AWARE_PROFILE_TITLES = ("Mild", "Moderate", "FastWarning")
+TRANSPORT_PROFILE_TITLES = ("TransportMild", "TransportModerate", "TransportFastWarning")
+TRANSPORT_INSTRUMENTED_PROFILE_TITLES = (
+    "TransportInstrumentedMild",
+    "TransportInstrumentedModerate",
+    "TransportInstrumentedFastWarning",
+)
+SENSITIVITY_MECHANISMS = {
+    "OspfOnly": ("ospf_only", ""),
+    "BfdLikeFrr": ("bfd_like_frr", ""),
+    "AiMrceRuleBased": ("aimrce_rule_based_frr", "rule_based"),
+    "AiMrceLogReg": ("aimrce_logistic_regression_frr", "logistic_regression"),
+    "AiMrceLinearSvm": ("aimrce_linear_svm_frr", "linear_svm"),
+    "AiMrceShallowTree": ("aimrce_shallow_tree_frr", "shallow_tree"),
+    "Hybrid": ("hybrid_bfd_like_aimrce_frr", "rule_based"),
+}
+
+
+def build_sensitivity_expected_configs() -> dict[str, dict[str, str]]:
+    configs: dict[str, dict[str, str]] = {}
+    for profile_title in SENSITIVITY_PROFILE_TITLES:
+        for mechanism_suffix, (mechanism, runtime_model_type) in SENSITIVITY_MECHANISMS.items():
+            config_name = f"RegionalBackboneSensitivity{profile_title}{mechanism_suffix}"
+            configs[config_name] = {
+                "mechanism": mechanism,
+                "runtime_model_type": runtime_model_type,
+                "cohort_config": f"{config_name}Cohort",
+            }
+    return configs
+
+
+def build_cost_aware_expected_configs() -> dict[str, dict[str, str]]:
+    configs: dict[str, dict[str, str]] = {}
+    for profile_title in COST_AWARE_PROFILE_TITLES:
+        for mechanism_suffix, (mechanism, runtime_model_type) in SENSITIVITY_MECHANISMS.items():
+            config_name = f"RegionalBackboneCostAware{profile_title}{mechanism_suffix}"
+            configs[config_name] = {
+                "mechanism": mechanism,
+                "runtime_model_type": runtime_model_type,
+                "cohort_config": f"{config_name}Cohort",
+            }
+    return configs
+
+
+def build_transport_expected_configs() -> dict[str, dict[str, str]]:
+    configs: dict[str, dict[str, str]] = {}
+    for profile_title in TRANSPORT_PROFILE_TITLES:
+        for mechanism_suffix, (mechanism, runtime_model_type) in SENSITIVITY_MECHANISMS.items():
+            config_name = f"RegionalBackboneCostAware{profile_title}{mechanism_suffix}"
+            configs[config_name] = {
+                "mechanism": mechanism,
+                "runtime_model_type": runtime_model_type,
+                "cohort_config": f"{config_name}Cohort",
+            }
+    return configs
+
+
+def build_transport_instrumented_expected_configs() -> dict[str, dict[str, str]]:
+    configs: dict[str, dict[str, str]] = {}
+    for profile_title in TRANSPORT_INSTRUMENTED_PROFILE_TITLES:
+        for mechanism_suffix, (mechanism, runtime_model_type) in SENSITIVITY_MECHANISMS.items():
+            config_name = f"RegionalBackboneCostAware{profile_title}{mechanism_suffix}"
+            configs[config_name] = {
+                "mechanism": mechanism,
+                "runtime_model_type": runtime_model_type,
+                "cohort_config": f"{config_name}Cohort",
+            }
+    return configs
+
+
+def expected_configs_for_scenario(scenario: str) -> dict[str, dict[str, str]]:
+    if scenario == CORE_SCENARIO:
+        return CORE_EXPECTED_CONFIGS.copy()
+    if scenario == SENSITIVITY_SCENARIO:
+        return build_sensitivity_expected_configs()
+    if scenario == COST_AWARE_BACKUP_SCENARIO:
+        return build_cost_aware_expected_configs()
+    if scenario == COST_AWARE_TRANSPORT_SCENARIO:
+        return build_transport_expected_configs()
+    if scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
+        return build_transport_instrumented_expected_configs()
+    raise SystemExit(f"Unsupported scenario '{scenario}'.")
+
+
+def results_dir_for_scenario(scenario: str) -> Path:
+    if scenario == SENSITIVITY_SCENARIO:
+        result_leaf = "failure_detection_degradation_sensitivity"
+    elif scenario == COST_AWARE_BACKUP_SCENARIO:
+        result_leaf = "failure_detection_cost_aware_backup"
+    elif scenario == COST_AWARE_TRANSPORT_SCENARIO:
+        result_leaf = "failure_detection_cost_aware_transport_impact"
+    elif scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
+        result_leaf = "ti_inst"
+    else:
+        result_leaf = "failure_detection_degraded_link_model_family"
+    return RESULTS_ROOT / "regionalbackbone" / result_leaf
+
+
+def artifacts_for_scenario(scenario: str) -> dict[str, Path]:
+    return {
+        "dataset": OUTPUT_ROOT / "datasets" / f"{scenario}_dataset.csv",
+        "dataset_report": OUTPUT_ROOT / "reports" / f"{scenario}_report.txt",
+        "outcome_summary": OUTCOMES_DIR / f"{scenario}_outcome_summary.csv",
+        "comparison_runs": OUTCOMES_DIR / f"{scenario}_runs.csv",
+        "comparison_summary": OUTCOMES_DIR / f"{scenario}_summary.csv",
+        "comparison_report": OUTCOMES_DIR / f"{scenario}_report.txt",
+        "headline_summary_csv": OUTCOMES_DIR / f"{scenario}_headline_summary.csv",
+        "headline_summary_txt": OUTCOMES_DIR / f"{scenario}_headline_summary.txt",
+        "risk_trace": DEBUG_DIR / f"aimrce_model_family_risk_trace_{scenario}.csv",
+        "event_summary": DEBUG_DIR / f"aimrce_model_action_events_{scenario}.csv",
+    }
 
 ARTIFACTS = {
     "dataset": OUTPUT_ROOT / "datasets" / f"{SCENARIO}_dataset.csv",
@@ -88,17 +206,23 @@ RUNTIME_ARTIFACTS = {
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Write a pipeline-integrity report for the active model-family cohort.")
+    parser = argparse.ArgumentParser(description="Write a pipeline-integrity report for supported AI-MRCE cohorts.")
     parser.add_argument(
         "--scenario",
         default=SCENARIO,
-        choices=[SCENARIO],
+        choices=[
+            CORE_SCENARIO,
+            SENSITIVITY_SCENARIO,
+            COST_AWARE_BACKUP_SCENARIO,
+            COST_AWARE_TRANSPORT_SCENARIO,
+            COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO,
+        ],
         help="Scenario preset to inspect.",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=DEBUG_DIR / f"pipeline_integrity_{SCENARIO}.txt",
+        default=None,
         help="Report path. Defaults under analysis/output/debug/.",
     )
     return parser.parse_args()
@@ -178,12 +302,19 @@ def count_result_triplets() -> dict[str, dict[int, set[str]]]:
 
 def main() -> None:
     args = parse_args()
+    global SCENARIO, RESULTS_DIR, EXPECTED_CONFIGS, EXPECTED_MECHANISMS, ARTIFACTS
+    SCENARIO = args.scenario
+    RESULTS_DIR = results_dir_for_scenario(SCENARIO)
+    EXPECTED_CONFIGS = expected_configs_for_scenario(SCENARIO)
+    EXPECTED_MECHANISMS = {value["mechanism"] for value in EXPECTED_CONFIGS.values()}
+    ARTIFACTS = artifacts_for_scenario(SCENARIO)
+    output_path = args.output or (DEBUG_DIR / f"pipeline_integrity_{SCENARIO}.txt")
     lines: list[str] = [
         f"Pipeline integrity report: {args.scenario}",
         f"Generated: {datetime.now().isoformat(timespec='seconds')}",
         "",
         "Scope:",
-        "- This report checks generated artifacts for the active degraded-link AI-MRCE model-family cohort.",
+        "- This report checks generated artifacts for the requested AI-MRCE degraded-link cohort.",
         "- It is diagnostic only and does not modify simulation or analysis semantics.",
         "",
         "Artifacts:",
@@ -389,8 +520,8 @@ def main() -> None:
     status = "FAIL" if errors else "OK_WITH_WARNINGS" if warnings else "OK"
     lines.extend(["", f"Overall status: {status}"])
 
-    atomic_write_text(args.output, "\n".join(lines) + "\n")
-    print(f"Wrote pipeline integrity report to {args.output}")
+    atomic_write_text(output_path, "\n".join(lines) + "\n")
+    print(f"Wrote pipeline integrity report to {output_path}")
     print(f"Overall status: {status}")
 
     if errors:

@@ -7,9 +7,46 @@ Active scenario:
 
 `regionalbackbone_failure_detection_degraded_link_model_family`
 
+Optional robustness/sensitivity scenario:
+
+`regionalbackbone_failure_detection_degradation_sensitivity`
+
+Optional cost-aware backup-path scenario:
+
+`regionalbackbone_failure_detection_cost_aware_backup`
+
+Optional mixed UDP/TCP transport-impact scenario:
+
+`regionalbackbone_failure_detection_cost_aware_transport_impact`
+
+Optional instrumented mixed UDP/TCP transport-impact scenario:
+
+`regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented`
+
 The standalone legacy scenario trees were removed during publication cleanup.
 This directory is now the simulation-layer focus for reproducing and explaining
 the current dissertation result.
+
+## Final Calibrated Configuration
+
+The paper-facing configuration uses explicit OSPF timer assumptions in
+`ASConfig.xml` rather than relying on implicit INET defaults:
+
+- hello interval: 10 s;
+- dead interval: 40 s;
+- retransmission interval: 5 s;
+- interface transmission delay: 1 s.
+
+The project-local BFD-like comparator remains a fast reactive baseline using a
+300 ms probe interval and a 3-miss detection threshold where enabled. This is
+deliberately faster than conventional OSPF dead-timer detection, but it remains
+reactive and BFD-inspired only; it is not RFC-compliant BFD.
+
+The three main manuscript roles are the core concept-validation cohort, the
+cost-aware backup-path cohort, and the instrumented mixed UDP/TCP
+transport-impact cohort. The degradation-sensitivity and baseline mixed
+transport cohorts remain supplementary traceability layers unless they are
+explicitly rerun and promoted again.
 
 ## Active Model-Family Configs
 
@@ -38,6 +75,10 @@ All seven mechanisms share the same topology, traffic profile, progressive
 degraded-link/brownout profile, hard-failure time, and repair-route semantics.
 They differ by detection/decision policy and whether protection is enabled.
 
+The five publication runs are reproducibility and workflow coverage for this
+controlled cohort. They are not broad stochastic statistical significance
+evidence because the active impairment profile is largely deterministic.
+
 ## Retained Configs
 
 `omnetpp.ini` is intentionally compact after the deeper cleanup pass. It keeps:
@@ -49,6 +90,109 @@ They differ by detection/decision policy and whether protection is enabled.
 
 The retained non-model-family config is implementation support, not a separate
 current publication claim.
+
+## Degradation-Sensitivity Configs
+
+The sensitivity cohort keeps the same seven mechanism families and varies only
+the degradation profile:
+
+- `mild_slow`;
+- `moderate`;
+- `severe_fast`.
+
+Each profile has OSPF-only, BFD-like, AI-MRCE rule-based, AI-MRCE logistic
+regression, AI-MRCE linear SVM, AI-MRCE shallow tree, and hybrid configs. The
+wrapper command is:
+
+```bat
+cmd /c run_experiments.bat regional-degradation-sensitivity-batch --runs 0 --clean --yes --skip-runtime-export --skip-build
+```
+
+Omit `--runs 0` only when intentionally regenerating the full 3-profile x
+7-mechanism x 5-run sensitivity cohort. The sensitivity cohort is for
+robustness and telemetry-feasibility analysis; it does not change the validated
+core model-family result.
+
+## Cost-Aware Backup-Path Configs
+
+The cost-aware cohort keeps the same seven mechanism families and adds a mild
+persistent backup-corridor penalty by setting
+`*.enableCostAwareBackupPenalty = true` in the cost-aware base configs. The
+southern repair corridor remains QoS-capable at 100 Mbps and adds about 5 ms
+total extra delay across the five repair-corridor hops. The normal primary path
+remains the preferred lower-cost path.
+
+Profiles:
+
+- `cost_aware_mild`;
+- `cost_aware_moderate`;
+- `cost_aware_fast_warning`.
+
+Wrapper command:
+
+```bat
+cmd /c run_experiments.bat regional-cost-aware-backup-batch --runs 0 --clean --yes --skip-runtime-export --skip-build
+```
+
+Omit `--runs 0` only when intentionally regenerating the full 3-profile x
+7-mechanism x 5-run cost-aware cohort. The cost-aware package and network-impact
+outputs include separate backup-cost component tables for early backup usage,
+avoided receiver-observed gaps, transition reordering, and UDP delay/queueing
+impact.
+
+## Mixed UDP/TCP Transport-Impact Configs
+
+The transport-impact cohort derives from the cost-aware backup-path configs and
+adds one lightweight INET TCP request-reply flow:
+
+- client: `TcpBasicClientApp` on `hostA.app[7]`;
+- server: `TcpGenericServerApp` on `hostB.app[7]`;
+- request/reply pattern: 512 B requests with 128 KiB replies, repeated with a
+  one-second idle interval;
+- UDP monitoring and staged UDP traffic remain enabled for AI-MRCE telemetry.
+
+Profiles:
+
+- `transport_mild`;
+- `transport_moderate`;
+- `transport_fast_warning`.
+
+Wrapper command:
+
+```bat
+cmd /c run_experiments.bat regional-cost-aware-transport-impact-batch --runs 0 --clean --yes --skip-runtime-export --skip-build
+```
+
+Omit `--runs 0` only when intentionally regenerating the full 3-profile x
+7-mechanism x 5-run transport-impact cohort. TCP metrics are endpoint-observed
+received-byte/goodput/progress proxies only; TCP RTT, retransmissions,
+congestion window, and exact finite-flow completion are not claimed.
+
+## Instrumented Mixed UDP/TCP Configs
+
+The instrumented transport-impact cohort derives from the mixed UDP/TCP
+transport-impact configs and preserves the same profiles, mechanisms, traffic,
+thresholds, and repair-route behavior. Its purpose is measurement quality: it
+records targeted INET scalar/histogram telemetry into the isolated short raw
+result folder `results/regionalbackbone/ti_inst/`.
+
+Enabled/targeted metrics include exact aggregate UDP sent/received/loss counts
+across configured UDP application flows, histogram-derived UDP delay
+percentiles over received packets, TCP endpoint received-byte/goodput/progress
+proxies, TCP RTT and congestion-window scalar summaries when exported by INET,
+and queue drop/queueing summaries where present. IPDV-like jitter, broad link
+utilization vectors, TCP duplicate ACKs, and exact finite-flow completion remain
+future instrumentation items unless explicitly enabled.
+
+Run-0 smoke command:
+
+```bat
+cmd /c run_experiments.bat regional-cost-aware-transport-impact-instrumented-batch --runs 0 --clean --yes --skip-runtime-export --skip-build --jobs 1
+cmd /c run_analysis.bat network-impact --scenario regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented
+```
+
+The expected run-0 integrity state is `OK_WITH_WARNINGS`; full publication
+coverage requires the five-run matrix.
 
 ## Runtime Model Artifacts
 
@@ -68,6 +212,22 @@ cmd /c run_analysis.bat export-runtime-models --configs RegionalBackboneCongesti
 
 Learned AI-MRCE configs fail fast when a required runtime artifact is missing or
 unloadable. Rule-based AI-MRCE intentionally uses no runtime CSV artifact.
+
+The learned runtime models are compact simulator-derived policy variants based
+on a four-feature runtime snapshot. They are not production-grade predictors
+and should not be described as generalizing beyond this scenario workflow.
+
+## Repair-Route Scope
+
+The protection action installs ten project-local static `/32` repair routes.
+Five routes protect the `hostA -> hostB` direction along the southern backup
+corridor through `accessA`, `west2`, `coreSW`, `coreSE`, and `east2`; five
+routes protect the reverse `hostB -> hostA` direction through `accessB`,
+`east2`, `coreSE`, `coreSW`, and `west2`.
+
+The same repair-route set is used for BFD-like, AI-MRCE, and hybrid protected
+runs. It is an FRR-like local repair abstraction only; it is not LFA, TI-LFA,
+RSVP-TE FRR, OSPF FRR, or seamless make-before-break behavior.
 
 ## Reproduction
 
@@ -110,6 +270,8 @@ The log prefixes are:
 - The degraded-link profile is deterministic and brownout-like; it is not a
   calibrated operator trace.
 - BFD-like is project-local and BFD-inspired; it is not RFC BFD.
+- OSPF-only is a no-protection INET OSPF baseline, not a tuned fast-recovery
+  baseline.
 - FRR-like repair-route activation installs project-local static `/32` repair
   routes; it is not standards-compliant LFA, TI-LFA, or FRR.
 - Results are scenario-conditioned and should not be generalized to all network

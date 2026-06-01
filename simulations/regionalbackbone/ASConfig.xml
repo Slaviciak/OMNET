@@ -1,4 +1,4 @@
-<?xml version="1.0"?>
+﻿<?xml version="1.0"?>
 <OSPFASConfig xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="OSPF.xsd">
 
   <Area id="0.0.0.0">
@@ -39,73 +39,74 @@
   </Area>
 
   <Router name="accessA" RFC1583Compatible="true">
-    <BroadcastInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" routerPriority="1" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" />
-    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="4" />
+    <BroadcastInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" routerPriority="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="4" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="west1" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="west2" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="coreNW" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" />
-    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="5" />
-    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="6" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="5" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="6" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="coreNE" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="5" />
-    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="7" />
-    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="1" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="5" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="7" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="coreSW" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" />
-    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="5" />
-    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="7" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="5" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="7" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="coreSE" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="5" />
-    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="6" />
-    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="4" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="5" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="6" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth3" areaID="0.0.0.0" interfaceOutputCost="4" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="coreC1" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="6" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="6" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="6" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="6" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="coreC2" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="7" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="7" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="7" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="7" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="east1" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="east2" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="4" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
   <Router name="accessB" RFC1583Compatible="true">
-    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" />
-    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" />
-    <BroadcastInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="1" routerPriority="1" />
+    <PointToPointInterface ifName="eth0" areaID="0.0.0.0" interfaceOutputCost="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <PointToPointInterface ifName="eth1" areaID="0.0.0.0" interfaceOutputCost="4" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
+    <BroadcastInterface ifName="eth2" areaID="0.0.0.0" interfaceOutputCost="1" routerPriority="1" retransmissionInterval="5" interfaceTransmissionDelay="1" helloInterval="10" routerDeadInterval="40" />
   </Router>
 
 </OSPFASConfig>
+

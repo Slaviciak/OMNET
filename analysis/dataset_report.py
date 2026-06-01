@@ -98,12 +98,69 @@ REPORTS_DIR = OUTPUT_ROOT / "reports"
 OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
 DEBUG_OUTPUT_DIR = OUTPUT_ROOT / "debug"
 DEFAULT_SCENARIO = "regionalbackbone"
+DEGRADATION_SENSITIVITY_SCENARIO = "regionalbackbone_failure_detection_degradation_sensitivity"
+COST_AWARE_BACKUP_SCENARIO = "regionalbackbone_failure_detection_cost_aware_backup"
+COST_AWARE_TRANSPORT_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact"
+COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
+SUPPORTED_FEATURE_SETS = ("baseline", "extended")
+SENSITIVITY_PROFILES = ("MildSlow", "Moderate", "SevereFast")
+SENSITIVITY_MECHANISMS = (
+    "OspfOnly",
+    "BfdLikeFrr",
+    "AiMrceRuleBased",
+    "AiMrceLogReg",
+    "AiMrceLinearSvm",
+    "AiMrceShallowTree",
+    "Hybrid",
+)
+DEGRADATION_SENSITIVITY_CONFIGS = [
+    f"RegionalBackboneSensitivity{profile}{mechanism}"
+    for profile in SENSITIVITY_PROFILES
+    for mechanism in SENSITIVITY_MECHANISMS
+]
+COST_AWARE_PROFILES = ("Mild", "Moderate", "FastWarning")
+COST_AWARE_CONFIGS = [
+    f"RegionalBackboneCostAware{profile}{mechanism}"
+    for profile in COST_AWARE_PROFILES
+    for mechanism in SENSITIVITY_MECHANISMS
+]
+TRANSPORT_IMPACT_PROFILES = ("TransportMild", "TransportModerate", "TransportFastWarning")
+TRANSPORT_IMPACT_CONFIGS = [
+    f"RegionalBackboneCostAware{profile}{mechanism}"
+    for profile in TRANSPORT_IMPACT_PROFILES
+    for mechanism in SENSITIVITY_MECHANISMS
+]
+TRANSPORT_IMPACT_INSTRUMENTED_PROFILES = ("TransportInstrumentedMild", "TransportInstrumentedModerate", "TransportInstrumentedFastWarning")
+TRANSPORT_IMPACT_INSTRUMENTED_CONFIGS = [
+    f"RegionalBackboneCostAware{profile}{mechanism}"
+    for profile in TRANSPORT_IMPACT_INSTRUMENTED_PROFILES
+    for mechanism in SENSITIVITY_MECHANISMS
+]
 
 OUTCOME_COLUMNS = [
     "config_name",
     "run_number",
+    "degradation_profile",
+    "degradation_profile_key",
+    "degradation_start_time_s",
+    "degradation_end_time_s",
+    "degradation_target_delay_s",
+    "degradation_target_packet_error_rate",
+    "degradation_hard_failure_time_s",
+    "backup_path_penalty_model",
+    "backup_path_data_rate_bps",
+    "backup_path_extra_delay_s",
+    "primary_path_normal_data_rate_bps",
+    "primary_path_normal_extra_delay_s",
     "protection_mode",
     "traffic_profile",
+    "traffic_mix_model",
+    "tcp_app_indices",
+    "tcp_flow_start_time_s",
+    "tcp_metric_scope",
+    "instrumentation_mode",
+    "tcp_receiver_app_indices",
+    "tcp_useful_goodput_floor_bps",
     "runtime_model_type",
     "runtime_model_path",
     "monitored_flow_app_index",
@@ -250,6 +307,11 @@ OUTCOME_COLUMNS = [
     "tcp_endpoint_receive_event_count_after_reference",
     "tcp_first_endpoint_receive_delay_after_reference_s",
     "tcp_max_endpoint_receive_gap_after_reference_s",
+    "receiver_tcp_total_received_bytes",
+    "receiver_tcp_goodput_mean_bps",
+    "receiver_tcp_active_app_count",
+    "tcp_service_available_operational",
+    "tcp_service_materially_degraded_operational",
     "unnecessary_protection",
     "missed_protection",
 ]
@@ -322,6 +384,133 @@ SCENARIO_PRESETS = {
             "max_packet_interarrival_gap_after_hard_failure_s",
         ],
     },
+    DEGRADATION_SENSITIVITY_SCENARIO: {
+        "dataset_path": DATASETS_DIR / f"{DEGRADATION_SENSITIVITY_SCENARIO}_dataset.csv",
+        "report_path": REPORTS_DIR / f"{DEGRADATION_SENSITIVITY_SCENARIO}_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / f"{DEGRADATION_SENSITIVITY_SCENARIO}_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / f"{DEGRADATION_SENSITIVITY_SCENARIO}_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / f"{DEGRADATION_SENSITIVITY_SCENARIO}_outcome_summary.csv",
+        "report_title": "RegionalBackbone Degradation-Sensitivity AI-MRCE Dataset Sanity Report",
+        "expected_configs": DEGRADATION_SENSITIVITY_CONFIGS,
+        "key_numeric_columns": [
+            "degradation_start_time_s",
+            "degradation_end_time_s",
+            "degradation_target_delay_s",
+            "degradation_target_packet_error_rate",
+            "controller_packet_error_rate_mean",
+            "controller_packet_error_rate_max",
+            "monitored_flow_send_interval_s",
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+            "protection_lead_time_before_failure_s",
+            "runtime_model_loaded",
+            "runtime_model_fallback_used",
+            "activation_risk_score",
+            "activation_decision_threshold",
+            "activation_queue_length_pk",
+            "bfd_like_detection_time_s",
+            "bfd_like_lead_time_before_failure_s",
+            "packet_sequence_gap_total_unobserved_after_hard_failure",
+            "packet_sequence_gap_total_unobserved_between_activation_and_failure",
+            "packet_sequence_gap_total_reordered_between_activation_and_failure",
+        ],
+    },
+    COST_AWARE_BACKUP_SCENARIO: {
+        "dataset_path": DATASETS_DIR / f"{COST_AWARE_BACKUP_SCENARIO}_dataset.csv",
+        "report_path": REPORTS_DIR / f"{COST_AWARE_BACKUP_SCENARIO}_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / f"{COST_AWARE_BACKUP_SCENARIO}_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / f"{COST_AWARE_BACKUP_SCENARIO}_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / f"{COST_AWARE_BACKUP_SCENARIO}_outcome_summary.csv",
+        "report_title": "RegionalBackbone Cost-Aware Backup-Path AI-MRCE Dataset Sanity Report",
+        "expected_configs": COST_AWARE_CONFIGS,
+        "key_numeric_columns": [
+            "degradation_start_time_s",
+            "degradation_end_time_s",
+            "degradation_target_delay_s",
+            "degradation_target_packet_error_rate",
+            "backup_path_data_rate_bps",
+            "backup_path_extra_delay_s",
+            "controller_packet_error_rate_mean",
+            "controller_packet_error_rate_max",
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+            "protection_lead_time_before_failure_s",
+            "runtime_model_loaded",
+            "runtime_model_fallback_used",
+            "activation_risk_score",
+            "activation_decision_threshold",
+            "activation_queue_length_pk",
+            "bfd_like_detection_time_s",
+            "bfd_like_lead_time_before_failure_s",
+            "packet_sequence_gap_total_unobserved_after_hard_failure",
+            "packet_sequence_gap_total_unobserved_between_activation_and_failure",
+            "packet_sequence_gap_total_reordered_between_activation_and_failure",
+        ],
+    },
+    COST_AWARE_TRANSPORT_SCENARIO: {
+        "dataset_path": DATASETS_DIR / f"{COST_AWARE_TRANSPORT_SCENARIO}_dataset.csv",
+        "report_path": REPORTS_DIR / f"{COST_AWARE_TRANSPORT_SCENARIO}_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / f"{COST_AWARE_TRANSPORT_SCENARIO}_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / f"{COST_AWARE_TRANSPORT_SCENARIO}_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / f"{COST_AWARE_TRANSPORT_SCENARIO}_outcome_summary.csv",
+        "report_title": "RegionalBackbone Cost-Aware Mixed UDP/TCP Transport-Impact Dataset Sanity Report",
+        "expected_configs": TRANSPORT_IMPACT_CONFIGS,
+        "key_numeric_columns": [
+            "degradation_start_time_s",
+            "degradation_end_time_s",
+            "degradation_target_delay_s",
+            "degradation_target_packet_error_rate",
+            "backup_path_data_rate_bps",
+            "backup_path_extra_delay_s",
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+            "receiver_tcp_total_received_bytes",
+            "receiver_tcp_goodput_mean_bps",
+            "tcp_service_interruption_duration_s",
+            "tcp_zero_goodput_window_count_after_reference",
+            "tcp_max_endpoint_receive_gap_after_reference_s",
+            "protection_lead_time_before_failure_s",
+            "runtime_model_loaded",
+            "runtime_model_fallback_used",
+            "packet_sequence_gap_total_unobserved_after_hard_failure",
+            "packet_sequence_gap_total_unobserved_between_activation_and_failure",
+            "packet_sequence_gap_total_reordered_between_activation_and_failure",
+        ],
+    },
+    COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO: {
+        "dataset_path": DATASETS_DIR / f"{COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}_dataset.csv",
+        "report_path": REPORTS_DIR / f"{COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / f"{COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / f"{COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / f"{COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}_outcome_summary.csv",
+        "report_title": "RegionalBackbone Instrumented Cost-Aware Mixed UDP/TCP Transport-Impact Dataset Sanity Report",
+        "expected_configs": TRANSPORT_IMPACT_INSTRUMENTED_CONFIGS,
+        "key_numeric_columns": [
+            "degradation_start_time_s",
+            "degradation_end_time_s",
+            "degradation_target_delay_s",
+            "degradation_target_packet_error_rate",
+            "backup_path_data_rate_bps",
+            "backup_path_extra_delay_s",
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+            "receiver_tcp_total_received_bytes",
+            "receiver_tcp_goodput_mean_bps",
+            "tcp_service_interruption_duration_s",
+            "tcp_zero_goodput_window_count_after_reference",
+            "tcp_max_endpoint_receive_gap_after_reference_s",
+            "protection_lead_time_before_failure_s",
+            "runtime_model_loaded",
+            "runtime_model_fallback_used",
+            "packet_sequence_gap_total_unobserved_after_hard_failure",
+            "packet_sequence_gap_total_unobserved_between_activation_and_failure",
+            "packet_sequence_gap_total_reordered_between_activation_and_failure",
+        ],
+    },
 }
 
 
@@ -331,6 +520,15 @@ def parse_args() -> argparse.Namespace:
         "--scenario",
         default=DEFAULT_SCENARIO,
         help=f"Scenario preset to use for defaults. Currently supported: {', '.join(sorted(SCENARIO_PRESETS))}.",
+    )
+    parser.add_argument(
+        "--feature-set",
+        choices=SUPPORTED_FEATURE_SETS,
+        default="baseline",
+        help=(
+            "Dataset feature set to report. 'baseline' preserves current report paths and semantics. "
+            "'extended' reads *_extended_dataset.csv and writes separate extended report/debug artifacts."
+        ),
     )
     parser.add_argument(
         "--input",
@@ -375,6 +573,35 @@ def get_scenario_preset(scenario: str) -> dict[str, object]:
     return preset
 
 
+def feature_set_default_paths(preset: dict[str, object], scenario: str, feature_set: str) -> dict[str, Path | str | list[str]]:
+    if feature_set == "baseline":
+        return preset
+
+    extended_key_columns = list(preset["key_numeric_columns"]) + [
+        "feat_delay_delta_from_previous_window_s",
+        "feat_delay_abs_delta_from_previous_window_s",
+        "feat_throughput_ratio_to_expected",
+        "feat_throughput_drop_ratio_from_expected",
+        "feat_queue_length_growth_rate_pk_per_s",
+        "feat_queueing_time_slope_s_per_s",
+        "feat_continuity_window_unobserved_ratio_proxy",
+        "feat_impairment_packet_error_rate_mean",
+        "feat_bfd_modeled_loss_probability_last",
+        "feat_aimrce_risk_score_last",
+        "label_time_to_hard_failure_s",
+    ]
+    return {
+        **preset,
+        "dataset_path": DATASETS_DIR / f"{scenario}_extended_dataset.csv",
+        "report_path": REPORTS_DIR / f"{scenario}_extended_dataset_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / f"{scenario}_extended_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / f"{scenario}_extended_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / f"{scenario}_extended_outcome_summary.csv",
+        "report_title": f"{preset['report_title']} (Extended Telemetry)",
+        "key_numeric_columns": extended_key_columns,
+    }
+
+
 def load_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
@@ -401,6 +628,26 @@ def count_missing(rows: list[dict[str, str]], columns: list[str]) -> dict[str, i
     for column in columns:
         missing[column] = sum(1 for row in rows if row.get(column, "") == "")
     return missing
+
+
+def classify_extended_column(column: str) -> tuple[str, str]:
+    if column.startswith("id_") or column.startswith("meta_"):
+        return ("metadata", "not_runtime_feature")
+    if column.startswith("label_"):
+        return ("label/target", "leakage_risk")
+    if column.startswith("phase_"):
+        return ("offline_diagnostic", "leakage_risk")
+    if column.startswith(("feat_delay_", "feat_throughput_", "feat_goodput_", "feat_queue_", "feat_queueing_", "feat_continuity_")):
+        return ("runtime-safe candidate", "current_or_previous_telemetry")
+    if column.startswith("feat_impairment_"):
+        return ("offline diagnostic", "simulator_impairment_context")
+    if column.startswith(("feat_bfd_", "feat_aimrce_")):
+        return ("offline diagnostic", "controller_state_diagnostic")
+    return ("offline diagnostic", "unclassified")
+
+
+def extended_feature_columns(columns: list[str]) -> list[str]:
+    return [column for column in columns if column.startswith(("id_", "meta_", "phase_", "feat_", "label_"))]
 
 
 def numeric_values(rows: list[dict[str, str]], column: str) -> list[float]:
@@ -677,6 +924,66 @@ def format_numeric_section(title: str, rows: list[dict[str, str]], columns: list
     return lines
 
 
+def format_extended_feature_section(rows: list[dict[str, str]], columns: list[str]) -> list[str]:
+    extended_columns = extended_feature_columns(columns)
+    lines = ["Extended Telemetry Feature Summary"]
+    if not extended_columns:
+        lines.append("  feature_set: baseline")
+        lines.append("  extended telemetry columns: 0")
+        return lines
+
+    classification_counts: Counter = Counter()
+    note_counts: Counter = Counter()
+    group_counts: Counter = Counter()
+    for column in extended_columns:
+        classification, note = classify_extended_column(column)
+        classification_counts[classification] += 1
+        note_counts[note] += 1
+        if column.startswith("feat_"):
+            parts = column.split("_", 2)
+            group = parts[1] if len(parts) > 1 else "unknown"
+        elif column.startswith("label_"):
+            group = "label"
+        elif column.startswith("phase_"):
+            group = "phase"
+        elif column.startswith("id_"):
+            group = "identifier"
+        else:
+            group = "metadata"
+        group_counts[group] += 1
+
+    lines.append("  feature_set: extended")
+    lines.append(f"  extended telemetry columns: {len(extended_columns)}")
+    lines.append("  classification counts:")
+    for classification, count in sorted(classification_counts.items()):
+        lines.append(f"    {classification}: {count}")
+    lines.append("  leakage/runtime notes:")
+    for note, count in sorted(note_counts.items()):
+        lines.append(f"    {note}: {count}")
+    lines.append("  feature groups:")
+    for group, count in sorted(group_counts.items()):
+        lines.append(f"    {group}: {count}")
+
+    important_columns = [
+        "feat_delay_delta_from_previous_window_s",
+        "feat_delay_abs_delta_from_previous_window_s",
+        "feat_throughput_ratio_to_expected",
+        "feat_throughput_drop_ratio_from_expected",
+        "feat_queue_length_growth_rate_pk_per_s",
+        "feat_queueing_time_slope_s_per_s",
+        "feat_continuity_window_unobserved_ratio_proxy",
+        "feat_impairment_packet_error_rate_mean",
+        "feat_bfd_modeled_loss_probability_last",
+        "feat_aimrce_risk_score_last",
+        "label_time_to_hard_failure_s",
+    ]
+    present_important = [column for column in important_columns if column in columns]
+    if present_important:
+        lines.append("")
+        lines.extend(format_numeric_section("Extended Feature Key Numeric Stats", rows, present_important))
+    return lines
+
+
 def format_outcome_summary_section(run_rows: list[dict[str, str]]) -> list[str]:
     lines = ["Run-Level Outcome Summary"]
     if not run_rows:
@@ -687,6 +994,9 @@ def format_outcome_summary_section(run_rows: list[dict[str, str]]) -> list[str]:
     lines.append("    Outcome fields are derived from receiver-side continuity and throughput plus")
     lines.append("    known scripted event times and shared controller scalars where available.")
     lines.append("    They are project-local operational metrics, not RFC-defined protocol fields.")
+    lines.append("    In the active model-family cohort, five runs provide reproducibility and")
+    lines.append("    workflow coverage for a largely deterministic degraded-link/brownout profile,")
+    lines.append("    not broad stochastic statistical significance.")
     lines.append("    Packet sequence-gap fields expose receiver-observed continuity effects")
     lines.append("    that can be hidden by coarse one-second service-availability windows.")
     lines.append("    Use unobserved packet-gap fields as loss-like evidence and reordered/out-of-order")
@@ -836,6 +1146,7 @@ def build_report(
     columns = list(rows[0].keys())
     run_rows = dedupe_run_rows(rows)
     config_counts = Counter(row.get("config_name", "") for row in rows)
+    profile_counts = Counter(row.get("degradation_profile", "") for row in rows if row.get("degradation_profile", ""))
     label_counts = Counter(row.get("label", "") for row in rows)
     run_counts = Counter(row.get("run_number", "") for row in rows)
     missing_counts = count_missing(rows, columns)
@@ -857,6 +1168,9 @@ def build_report(
     lines.append("")
     lines.extend(format_counter("Rows Per Config", config_counts))
     lines.append("")
+    if profile_counts:
+        lines.extend(format_counter("Rows Per Degradation Profile", profile_counts))
+        lines.append("")
     lines.extend(format_counter("Rows Per Label", label_counts))
     lines.append("")
     lines.extend(format_counter("Rows Per Run", run_counts))
@@ -877,6 +1191,9 @@ def build_report(
         lines.append("")
     lines.extend(format_numeric_section("Descriptive Stats For Key Numeric Columns", rows, key_columns_present))
     lines.append("")
+    if extended_feature_columns(columns):
+        lines.extend(format_extended_feature_section(rows, columns))
+        lines.append("")
 
     per_config_rows = per_config_numeric_summary(rows, key_columns_present)
     lines.append("Per-Config Summary For Key Features")
@@ -908,7 +1225,7 @@ def build_report(
 
 def main() -> None:
     args = parse_args()
-    preset = get_scenario_preset(args.scenario)
+    preset = feature_set_default_paths(get_scenario_preset(args.scenario), args.scenario, args.feature_set)
 
     dataset_path = resolve_project_path(args.input) if args.input is not None else preset["dataset_path"]
     report_path = resolve_project_path(args.output) if args.output is not None else preset["report_path"]
@@ -926,7 +1243,7 @@ def main() -> None:
     print(f"[dataset_report] Scenario: {args.scenario}")
     print(f"[dataset_report] Dataset: {dataset_path}")
     print(f"[dataset_report] Report: {report_path}")
-    regenerate_command = f"py -3 analysis\\dataset_report.py --scenario {args.scenario}"
+    regenerate_command = f"py -3 analysis\\dataset_report.py --scenario {args.scenario} --feature-set {args.feature_set}"
     for output_path in (report_path, missing_csv_path, per_config_csv_path, outcome_csv_path):
         warn_if_existing_output_stale(output_path, dataset_path, regenerate_command)
 

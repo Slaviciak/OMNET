@@ -27,6 +27,8 @@ ANALYSIS_OUTPUT_DIRS = (
     ANALYSIS_OUTPUT_ROOT / "training",
 )
 
+FINAL_EVALUATION_ROOT = ANALYSIS_OUTPUT_ROOT / "final_evaluation"
+
 SCENARIO_RESULT_DIRS = {
     "regionalbackbone": RESULTS_ROOT / "regionalbackbone" / "eval",
     "regionalbackbone_congestion_protection": RESULTS_ROOT / "regionalbackbone" / "congestion_protection_cohort",
@@ -45,6 +47,17 @@ SCENARIO_RESULT_DIRS = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Preview or clean generated analysis/result artifacts without touching source files."
+    )
+    parser.add_argument(
+        "--scope",
+        choices=("all", "final-evaluation"),
+        default="all",
+        help="Cleanup scope. final-evaluation only targets generated image files under final_evaluation figure folders.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Explicit dry-run alias. Cleanup is dry-run by default unless --clean --yes are both provided.",
     )
     parser.add_argument(
         "--include-results",
@@ -86,6 +99,22 @@ def iter_files(root: Path) -> list[Path]:
 
 
 def collect_targets(args: argparse.Namespace) -> list[Path]:
+    if args.scope == "final-evaluation":
+        figure_roots = [
+            resolve_inside(FINAL_EVALUATION_ROOT / name, (FINAL_EVALUATION_ROOT,))
+            for name in ("main_figures", "scenario_figures", "diagnostic_figures", "figures")
+        ]
+        targets: list[Path] = []
+        for root in figure_roots:
+            if not root.exists():
+                continue
+            targets.extend(
+                path
+                for path in root.iterdir()
+                if path.is_file() and path.suffix.lower() in {".png", ".svg", ".pdf"}
+            )
+        return sorted(set(targets))
+
     roots: list[Path] = []
     for path in ANALYSIS_OUTPUT_DIRS:
         roots.append(resolve_inside(path, (ANALYSIS_OUTPUT_ROOT,)))
@@ -102,6 +131,11 @@ def collect_targets(args: argparse.Namespace) -> list[Path]:
 
 
 def targeted_roots(args: argparse.Namespace) -> list[Path]:
+    if args.scope == "final-evaluation":
+        return [
+            resolve_inside(FINAL_EVALUATION_ROOT / name, (FINAL_EVALUATION_ROOT,))
+            for name in ("main_figures", "scenario_figures", "diagnostic_figures", "figures")
+        ]
     roots = [resolve_inside(path, (ANALYSIS_OUTPUT_ROOT,)) for path in ANALYSIS_OUTPUT_DIRS]
     if args.include_results and args.scenario:
         roots.append(resolve_inside(SCENARIO_RESULT_DIRS[args.scenario], (RESULTS_ROOT,)))
@@ -117,6 +151,9 @@ def main() -> None:
     mode = "DELETE" if actually_delete else "DRY RUN"
     print(f"Mode: {mode}")
     print("Scope: generated artifacts only. Source, config, docs, INET/OSPF internals, and runtime model CSV examples are not targeted.")
+    if args.scope == "final-evaluation":
+        print("Final-evaluation scope only removes generated image files from final_evaluation figure folders.")
+        print("Tables, reports, packages, datasets, outcomes, raw results, source files, and runtime model CSVs are not targeted.")
     print("Target roots:")
     for root in targeted_roots(args):
         print(f"  {root}")

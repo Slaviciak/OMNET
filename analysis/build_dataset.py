@@ -72,9 +72,15 @@ REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS = 125.0
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 DATASETS_DIR = OUTPUT_ROOT / "datasets"
+REPORTS_DIR = OUTPUT_ROOT / "reports"
 DEFAULT_SCENARIO = "regionalbackbone"
+DEGRADATION_SENSITIVITY_SCENARIO = "regionalbackbone_failure_detection_degradation_sensitivity"
+COST_AWARE_BACKUP_SCENARIO = "regionalbackbone_failure_detection_cost_aware_backup"
+COST_AWARE_TRANSPORT_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact"
+COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
 BOTTLE_NECK_QUEUE_MODULE_SUFFIX = ".r2.eth[1].queue"
 REGIONAL_BOTTLENECK_QUEUE_MODULE_SUFFIX = ".coreNW.eth[1].queue"
+HOSTA_APP_RE = re.compile(r".*\.hostA\.app\[(\d+)\]$")
 HOSTB_APP_RE = re.compile(r".*\.hostB\.app\[(\d+)\]$")
 TARGET_CONTROLLER_SCALAR_NAMES = {
     "protectionActivated",
@@ -128,6 +134,10 @@ TARGET_CONTROLLER_SCALAR_NAMES = {
 REGIONALBACKBONE_FAMILY_SCENARIOS = {
     "regionalbackbone",
     "regionalbackbone_failure_detection_degraded_link_model_family",
+    DEGRADATION_SENSITIVITY_SCENARIO,
+    COST_AWARE_BACKUP_SCENARIO,
+    COST_AWARE_TRANSPORT_SCENARIO,
+    COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO,
 }
 
 REGIONALBACKBONE_DATASET_CONFIGS = {
@@ -143,9 +153,307 @@ REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_MODEL_FAMILY_CONFIGS = {
     "RegionalBackboneFailureDegradedLinkAiMrceShallowTree",
     "RegionalBackboneFailureDegradedLinkHybrid",
 }
+SENSITIVITY_PROFILE_PARAMETERS = {
+    "mild_slow": {
+        "title": "MildSlow",
+        "label": "mild_slow",
+        "start_time_s": 90.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.025,
+        "target_packet_error_rate": 0.35,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+    },
+    "moderate": {
+        "title": "Moderate",
+        "label": "moderate",
+        "start_time_s": 100.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.035,
+        "target_packet_error_rate": 0.65,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+    },
+    "severe_fast": {
+        "title": "SevereFast",
+        "label": "severe_fast",
+        "start_time_s": 112.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.045,
+        "target_packet_error_rate": 0.95,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+    },
+}
+COST_AWARE_PROFILE_PARAMETERS = {
+    "cost_aware_mild": {
+        "title": "Mild",
+        "label": "cost_aware_mild",
+        "start_time_s": 65.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.060,
+        "target_packet_error_rate": 0.55,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+        "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
+    },
+    "cost_aware_moderate": {
+        "title": "Moderate",
+        "label": "cost_aware_moderate",
+        "start_time_s": 85.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.070,
+        "target_packet_error_rate": 0.70,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+        "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
+    },
+    "cost_aware_fast_warning": {
+        "title": "FastWarning",
+        "label": "cost_aware_fast_warning",
+        "start_time_s": 108.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.080,
+        "target_packet_error_rate": 0.90,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+        "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
+    },
+}
+TRANSPORT_IMPACT_PROFILE_PARAMETERS = {
+    "transport_mild": {
+        "title": "TransportMild",
+        "label": "transport_mild",
+        "start_time_s": 65.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.060,
+        "target_packet_error_rate": 0.55,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+        "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
+        "traffic_mix": "udp_monitoring_plus_repeated_tcp_request_reply",
+    },
+    "transport_moderate": {
+        "title": "TransportModerate",
+        "label": "transport_moderate",
+        "start_time_s": 85.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.070,
+        "target_packet_error_rate": 0.70,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+        "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
+        "traffic_mix": "udp_monitoring_plus_repeated_tcp_request_reply",
+    },
+    "transport_fast_warning": {
+        "title": "TransportFastWarning",
+        "label": "transport_fast_warning",
+        "start_time_s": 108.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.080,
+        "target_packet_error_rate": 0.90,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+        "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
+        "traffic_mix": "udp_monitoring_plus_repeated_tcp_request_reply",
+    },
+}
+TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS = {
+    "transport_mild": {
+        "title": "TransportInstrumentedMild",
+        "label": "transport_mild",
+        "start_time_s": 65.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.060,
+        "target_packet_error_rate": 0.55,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+        "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
+        "traffic_mix": "udp_monitoring_plus_repeated_tcp_request_reply",
+        "instrumentation_mode": "targeted_inet_transport_network_telemetry",
+    },
+    "transport_moderate": {
+        "title": "TransportInstrumentedModerate",
+        "label": "transport_moderate",
+        "start_time_s": 85.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.070,
+        "target_packet_error_rate": 0.70,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+        "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
+        "traffic_mix": "udp_monitoring_plus_repeated_tcp_request_reply",
+        "instrumentation_mode": "targeted_inet_transport_network_telemetry",
+    },
+    "transport_fast_warning": {
+        "title": "TransportInstrumentedFastWarning",
+        "label": "transport_fast_warning",
+        "start_time_s": 108.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.080,
+        "target_packet_error_rate": 0.90,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+        "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
+        "traffic_mix": "udp_monitoring_plus_repeated_tcp_request_reply",
+        "instrumentation_mode": "targeted_inet_transport_network_telemetry",
+    },
+}
+SENSITIVITY_MECHANISM_SPECS = {
+    "OspfOnly": {
+        "protection_mode": "ospf_only",
+        "runtime_model_type": "",
+        "runtime_model_path": "",
+        "protection_expected": False,
+    },
+    "BfdLikeFrr": {
+        "protection_mode": "bfd_like_frr",
+        "runtime_model_type": "",
+        "runtime_model_path": "",
+        "protection_expected": False,
+    },
+    "AiMrceRuleBased": {
+        "protection_mode": "aimrce_rule_based_frr",
+        "runtime_model_type": "rule_based",
+        "runtime_model_path": "",
+        "protection_expected": True,
+    },
+    "AiMrceLogReg": {
+        "protection_mode": "aimrce_logistic_regression_frr",
+        "runtime_model_type": "logistic_regression",
+        "runtime_model_path": "aimrce_runtime_logreg.csv",
+        "protection_expected": True,
+    },
+    "AiMrceLinearSvm": {
+        "protection_mode": "aimrce_linear_svm_frr",
+        "runtime_model_type": "linear_svm",
+        "runtime_model_path": "aimrce_runtime_linsvm.csv",
+        "protection_expected": True,
+    },
+    "AiMrceShallowTree": {
+        "protection_mode": "aimrce_shallow_tree_frr",
+        "runtime_model_type": "shallow_tree",
+        "runtime_model_path": "aimrce_runtime_shallow_tree.csv",
+        "protection_expected": True,
+    },
+    "Hybrid": {
+        "protection_mode": "hybrid_bfd_like_aimrce_frr",
+        "runtime_model_type": "rule_based",
+        "runtime_model_path": "",
+        "protection_expected": True,
+    },
+}
+
+
+def sensitivity_config_name(profile_key: str, mechanism_suffix: str) -> str:
+    return f"RegionalBackboneSensitivity{SENSITIVITY_PROFILE_PARAMETERS[profile_key]['title']}{mechanism_suffix}"
+
+
+def cost_aware_config_name(profile_key: str, mechanism_suffix: str) -> str:
+    return f"RegionalBackboneCostAware{COST_AWARE_PROFILE_PARAMETERS[profile_key]['title']}{mechanism_suffix}"
+
+
+def transport_impact_config_name(profile_key: str, mechanism_suffix: str) -> str:
+    return f"RegionalBackboneCostAware{TRANSPORT_IMPACT_PROFILE_PARAMETERS[profile_key]['title']}{mechanism_suffix}"
+
+
+def transport_impact_instrumented_config_name(profile_key: str, mechanism_suffix: str) -> str:
+    return f"RegionalBackboneCostAware{TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS[profile_key]['title']}{mechanism_suffix}"
+
+
+REGIONALBACKBONE_DEGRADATION_SENSITIVITY_CONFIGS = {
+    sensitivity_config_name(profile_key, mechanism_suffix)
+    for profile_key in SENSITIVITY_PROFILE_PARAMETERS
+    for mechanism_suffix in SENSITIVITY_MECHANISM_SPECS
+}
+COST_AWARE_BACKUP_CONFIGS = {
+    cost_aware_config_name(profile_key, mechanism_suffix)
+    for profile_key in COST_AWARE_PROFILE_PARAMETERS
+    for mechanism_suffix in SENSITIVITY_MECHANISM_SPECS
+}
+COST_AWARE_TRANSPORT_CONFIGS = {
+    transport_impact_config_name(profile_key, mechanism_suffix)
+    for profile_key in TRANSPORT_IMPACT_PROFILE_PARAMETERS
+    for mechanism_suffix in SENSITIVITY_MECHANISM_SPECS
+}
+COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIGS = {
+    transport_impact_instrumented_config_name(profile_key, mechanism_suffix)
+    for profile_key in TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS
+    for mechanism_suffix in SENSITIVITY_MECHANISM_SPECS
+}
+COST_AWARE_BACKUP_ALIASES = {
+    f"{config_name}Cohort": config_name
+    for config_name in COST_AWARE_BACKUP_CONFIGS
+}
+COST_AWARE_TRANSPORT_ALIASES = {
+    f"{config_name}Cohort": config_name
+    for config_name in COST_AWARE_TRANSPORT_CONFIGS
+}
+COST_AWARE_TRANSPORT_INSTRUMENTED_ALIASES = {
+    f"{config_name}Cohort": config_name
+    for config_name in COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIGS
+}
+REGIONALBACKBONE_DEGRADATION_SENSITIVITY_ALIASES = {
+    f"{config_name}Cohort": config_name
+    for config_name in REGIONALBACKBONE_DEGRADATION_SENSITIVITY_CONFIGS
+}
+SENSITIVITY_CONFIG_INFO = {
+    sensitivity_config_name(profile_key, mechanism_suffix): {
+        **SENSITIVITY_PROFILE_PARAMETERS[profile_key],
+        **mechanism_spec,
+        "profile_key": profile_key,
+        "mechanism_suffix": mechanism_suffix,
+    }
+    for profile_key in SENSITIVITY_PROFILE_PARAMETERS
+    for mechanism_suffix, mechanism_spec in SENSITIVITY_MECHANISM_SPECS.items()
+}
+COST_AWARE_CONFIG_INFO = {
+    cost_aware_config_name(profile_key, mechanism_suffix): {
+        **COST_AWARE_PROFILE_PARAMETERS[profile_key],
+        **mechanism_spec,
+        "profile_key": profile_key,
+        "mechanism_suffix": mechanism_suffix,
+    }
+    for profile_key in COST_AWARE_PROFILE_PARAMETERS
+    for mechanism_suffix, mechanism_spec in SENSITIVITY_MECHANISM_SPECS.items()
+}
+COST_AWARE_TRANSPORT_CONFIG_INFO = {
+    transport_impact_config_name(profile_key, mechanism_suffix): {
+        **TRANSPORT_IMPACT_PROFILE_PARAMETERS[profile_key],
+        **mechanism_spec,
+        "profile_key": profile_key,
+        "mechanism_suffix": mechanism_suffix,
+    }
+    for profile_key in TRANSPORT_IMPACT_PROFILE_PARAMETERS
+    for mechanism_suffix, mechanism_spec in SENSITIVITY_MECHANISM_SPECS.items()
+}
+COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIG_INFO = {
+    transport_impact_instrumented_config_name(profile_key, mechanism_suffix): {
+        **TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS[profile_key],
+        **mechanism_spec,
+        "profile_key": profile_key,
+        "mechanism_suffix": mechanism_suffix,
+    }
+    for profile_key in TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS
+    for mechanism_suffix, mechanism_spec in SENSITIVITY_MECHANISM_SPECS.items()
+}
 REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS = {
     "RegionalBackboneCongestionDegradation",
     *REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_MODEL_FAMILY_CONFIGS,
+    *REGIONALBACKBONE_DEGRADATION_SENSITIVITY_CONFIGS,
+    *COST_AWARE_BACKUP_CONFIGS,
+    *COST_AWARE_TRANSPORT_CONFIGS,
+    *COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIGS,
+}
+
+SUPPORTED_FEATURE_SETS = ("baseline", "extended")
+EXTENDED_TELEMETRY_VERSION = "telemetry_v2_analysis_only"
+
+AI_MRCE_VECTOR_NAMES = {
+    "observedQueueLengthPk",
+    "observedQueueBitLengthB",
+    "observedProbeDelayMeanS",
+    "observedProbeThroughputBps",
+    "observedProbePacketCount",
+    "riskScore",
+    "decisionPositive",
+    "positiveDecisionStreak",
+    "protectionActive",
+    "repairRoutesInstalled",
+    "protectionTriggerSourceCode",
+    "bfdLikeMissedProbeCount",
+    "bfdLikeDetectionActive",
+    "bfdLikeProtectedSpanUp",
+    "bfdLikeModeledProbeLossProbability",
+    "bfdLikeProbeMissed",
 }
 
 
@@ -204,6 +512,46 @@ SCENARIO_PRESETS = {
             "RegionalBackboneFailureDegradedLinkHybrid": 150.0,
         },
     },
+    DEGRADATION_SENSITIVITY_SCENARIO: {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_degradation_sensitivity",
+        "output_file": DATASETS_DIR / f"{DEGRADATION_SENSITIVITY_SCENARIO}_dataset.csv",
+        "supported_configs": REGIONALBACKBONE_DEGRADATION_SENSITIVITY_CONFIGS,
+        "config_aliases": REGIONALBACKBONE_DEGRADATION_SENSITIVITY_ALIASES,
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            config_name: 150.0 for config_name in REGIONALBACKBONE_DEGRADATION_SENSITIVITY_CONFIGS
+        },
+    },
+    COST_AWARE_BACKUP_SCENARIO: {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_cost_aware_backup",
+        "output_file": DATASETS_DIR / f"{COST_AWARE_BACKUP_SCENARIO}_dataset.csv",
+        "supported_configs": COST_AWARE_BACKUP_CONFIGS,
+        "config_aliases": COST_AWARE_BACKUP_ALIASES,
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            config_name: 150.0 for config_name in COST_AWARE_BACKUP_CONFIGS
+        },
+    },
+    COST_AWARE_TRANSPORT_SCENARIO: {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_cost_aware_transport_impact",
+        "output_file": DATASETS_DIR / f"{COST_AWARE_TRANSPORT_SCENARIO}_dataset.csv",
+        "supported_configs": COST_AWARE_TRANSPORT_CONFIGS,
+        "config_aliases": COST_AWARE_TRANSPORT_ALIASES,
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            config_name: 150.0 for config_name in COST_AWARE_TRANSPORT_CONFIGS
+        },
+    },
+    COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO: {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "ti_inst",
+        "output_file": DATASETS_DIR / f"{COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}_dataset.csv",
+        "supported_configs": COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIGS,
+        "config_aliases": COST_AWARE_TRANSPORT_INSTRUMENTED_ALIASES,
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            config_name: 150.0 for config_name in COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIGS
+        },
+    },
 }
 
 
@@ -233,6 +581,16 @@ def parse_args() -> argparse.Namespace:
         "--output",
         type=Path,
         help="Output CSV path. Defaults to analysis/output/datasets/<scenario>_dataset.csv.",
+    )
+    parser.add_argument(
+        "--feature-set",
+        choices=SUPPORTED_FEATURE_SETS,
+        default="baseline",
+        help=(
+            "Dataset feature set to write. 'baseline' preserves the validated dataset schema. "
+            "'extended' writes a separate *_extended_dataset.csv with appended telemetry-v2 "
+            "candidate features and a feature-classification report."
+        ),
     )
     parser.add_argument(
         "--include-runtime-protection-configs",
@@ -267,6 +625,17 @@ def atomic_write_csv(path: Path, rows: list[dict[str, object]], fieldnames: list
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(rows)
+        temp_path.replace(path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = atomic_temp_path(path)
+    try:
+        temp_path.write_text(text, encoding="utf-8", newline="\n")
         temp_path.replace(path)
     finally:
         if temp_path.exists():
@@ -317,6 +686,18 @@ def get_scenario_preset(scenario: str) -> dict[str, object]:
     return preset
 
 
+def feature_set_output_file(output_file: Path, feature_set: str, explicit_output: bool) -> Path:
+    if feature_set == "baseline" or explicit_output:
+        return output_file
+    if output_file.name.endswith("_dataset.csv"):
+        return output_file.with_name(output_file.name.replace("_dataset.csv", "_extended_dataset.csv"))
+    return output_file.with_name(f"{output_file.stem}_extended{output_file.suffix}")
+
+
+def extended_feature_classification_path(scenario: str) -> Path:
+    return REPORTS_DIR / f"{scenario}_extended_feature_classification.txt"
+
+
 def effective_supported_configs(preset: dict[str, object], include_runtime_protection_configs: bool) -> set[str]:
     supported_configs = set(preset["supported_configs"])
     if include_runtime_protection_configs:
@@ -352,8 +733,121 @@ def label_for_window(scenario: str, config_name: str, window_start: float) -> st
     raise SystemExit(f"Unsupported scenario '{scenario}' for labeling")
 
 
+def sensitivity_outcome_profile(config_name: str) -> OutcomeProfile | None:
+    info = SENSITIVITY_CONFIG_INFO.get(config_name)
+    if info is None:
+        return None
+    return OutcomeProfile(
+        hard_failure_time_s=float(info["hard_failure_time_s"]),
+        protection_mode=str(info["protection_mode"]),
+        monitored_app_index=0,
+        packet_size_bits=256.0 * 8.0,
+        send_interval_s=0.01,
+        flow_start_time_s=20.0,
+        protection_expected=bool(info["protection_expected"]),
+        traffic_profile=f"udp_probe_10ms_degradation_sensitivity_{info['profile_key']}",
+        packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
+        runtime_model_type=str(info["runtime_model_type"]),
+        runtime_model_path=str(info["runtime_model_path"]),
+    )
+
+
+def cost_aware_outcome_profile(config_name: str) -> OutcomeProfile | None:
+    info = COST_AWARE_CONFIG_INFO.get(config_name)
+    if info is None:
+        return None
+    return OutcomeProfile(
+        hard_failure_time_s=float(info["hard_failure_time_s"]),
+        protection_mode=str(info["protection_mode"]),
+        monitored_app_index=0,
+        packet_size_bits=256.0 * 8.0,
+        send_interval_s=0.01,
+        flow_start_time_s=20.0,
+        protection_expected=bool(info["protection_expected"]),
+        traffic_profile=f"udp_probe_10ms_cost_aware_backup_{info['profile_key']}",
+        packet_continuity_critical_start_time_s=float(info["start_time_s"]),
+        runtime_model_type=str(info["runtime_model_type"]),
+        runtime_model_path=str(info["runtime_model_path"]),
+    )
+
+
+def transport_impact_outcome_profile(config_name: str) -> OutcomeProfile | None:
+    info = COST_AWARE_TRANSPORT_CONFIG_INFO.get(config_name)
+    if info is None:
+        info = COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIG_INFO.get(config_name)
+    if info is None:
+        return None
+    return OutcomeProfile(
+        hard_failure_time_s=float(info["hard_failure_time_s"]),
+        protection_mode=str(info["protection_mode"]),
+        monitored_app_index=0,
+        packet_size_bits=256.0 * 8.0,
+        send_interval_s=0.01,
+        flow_start_time_s=20.0,
+        protection_expected=bool(info["protection_expected"]),
+        traffic_profile=f"mixed_udp_tcp_cost_aware_transport_{info['profile_key']}",
+        tcp_app_indices=(7,),
+        tcp_flow_start_time_s=25.0,
+        tcp_useful_goodput_floor_bps=500_000.0,
+        packet_continuity_critical_start_time_s=float(info["start_time_s"]),
+        runtime_model_type=str(info["runtime_model_type"]),
+        runtime_model_path=str(info["runtime_model_path"]),
+    )
+
+
+def degradation_metadata_fields(scenario: str, config_name: str) -> dict[str, object]:
+    if scenario == DEGRADATION_SENSITIVITY_SCENARIO:
+        info = SENSITIVITY_CONFIG_INFO.get(config_name)
+    elif scenario == COST_AWARE_BACKUP_SCENARIO:
+        info = COST_AWARE_CONFIG_INFO.get(config_name)
+    elif scenario == COST_AWARE_TRANSPORT_SCENARIO:
+        info = COST_AWARE_TRANSPORT_CONFIG_INFO.get(config_name)
+    elif scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
+        info = COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIG_INFO.get(config_name)
+    else:
+        return {}
+    if info is None:
+        return {}
+    fields = {
+        "degradation_profile": info["label"],
+        "degradation_profile_key": info["profile_key"],
+        "degradation_start_time_s": info["start_time_s"],
+        "degradation_end_time_s": info["end_time_s"],
+        "degradation_target_delay_s": info["target_delay_s"],
+        "degradation_target_packet_error_rate": info["target_packet_error_rate"],
+        "degradation_hard_failure_time_s": info["hard_failure_time_s"],
+    }
+    if scenario in {COST_AWARE_BACKUP_SCENARIO, COST_AWARE_TRANSPORT_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}:
+        fields.update({
+            "backup_path_penalty_model": info.get("backup_path_penalty", ""),
+            "backup_path_data_rate_bps": 100_000_000.0,
+            "backup_path_extra_delay_s": 0.005,
+            "primary_path_normal_data_rate_bps": 100_000_000.0,
+            "primary_path_normal_extra_delay_s": 0.0,
+        })
+    if scenario in {COST_AWARE_TRANSPORT_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}:
+        fields.update({
+            "traffic_mix_model": info.get("traffic_mix", "udp_monitoring_plus_repeated_tcp_request_reply"),
+            "tcp_app_indices": "7",
+            "tcp_flow_start_time_s": 25.0,
+            "tcp_metric_scope": "endpoint_received_bytes_goodput_progress_proxy",
+        })
+    if scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
+        fields["instrumentation_mode"] = info.get("instrumentation_mode", "targeted_inet_transport_network_telemetry")
+    return fields
+
+
 def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
     if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
+        sensitivity_profile = sensitivity_outcome_profile(config_name)
+        if sensitivity_profile is not None:
+            return sensitivity_profile
+        cost_aware_profile = cost_aware_outcome_profile(config_name)
+        if cost_aware_profile is not None:
+            return cost_aware_profile
+        transport_profile = transport_impact_outcome_profile(config_name)
+        if transport_profile is not None:
+            return transport_profile
         profiles = {
             "RegionalBackboneCongestionDegradation": OutcomeProfile(
                 hard_failure_time_s=REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
@@ -651,7 +1145,7 @@ def packet_bytes_summary(series: SeriesLike, window_start: float, window_end: fl
     }
 
 
-def init_run_data(scenario: str) -> dict:
+def init_run_data(scenario: str, feature_set: str = "baseline") -> dict:
     run_data = {
         "receiver_apps": {},
         "scalars": {},
@@ -661,6 +1155,8 @@ def init_run_data(scenario: str) -> dict:
             "appliedDelay": [],
             "appliedPacketErrorRate": [],
         }
+        if feature_set == "extended":
+            run_data["ai_mrce"] = {name: [] for name in AI_MRCE_VECTOR_NAMES}
         run_data["bottleneck_queue"] = {
             "queueLength": [],
             "queueBitLength": [],
@@ -686,9 +1182,18 @@ def register_vector_target(
     run_data: dict,
     module: str,
     name: str,
+    feature_set: str = "baseline",
 ) -> tuple[str, int | str | None] | None:
     if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS and module.endswith(".degradationController") and name in {"appliedDelay", "appliedPacketErrorRate"}:
         return ("controller", name)
+
+    if (
+        feature_set == "extended"
+        and scenario in REGIONALBACKBONE_FAMILY_SCENARIOS
+        and module.endswith(".aiMrceController")
+        and name in AI_MRCE_VECTOR_NAMES
+    ):
+        return ("ai_mrce", name)
 
     if (
         scenario in REGIONALBACKBONE_FAMILY_SCENARIOS
@@ -707,6 +1212,15 @@ def register_vector_target(
             # INET TCP applications expose received payload through
             # packetReceived byte vectors when enabled. We summarize those
             # endpoint-observable bytes as a project-local useful-goodput proxy.
+            return ("packetBytes", app_index)
+
+    match = HOSTA_APP_RE.match(module)
+    if scenario in {COST_AWARE_TRANSPORT_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO} and match:
+        app_index = int(match.group(1))
+        if app_index == 7 and (name == "packetReceived" or name.startswith("packetReceived:")):
+            # The mixed-traffic scenario uses TcpBasicClientApp on hostA and
+            # TcpGenericServerApp on hostB; client-side reply bytes are the TCP
+            # endpoint progress/goodput proxy.
             return ("packetBytes", app_index)
 
     return None
@@ -756,13 +1270,14 @@ def parse_vec_file(
     config_aliases: dict[str, str],
     default_sim_time_limit: float,
     default_sim_time_limits_by_config: dict[str, float] | None,
+    feature_set: str,
 ) -> dict | None:
     metadata = {
         "configname": None,
         "runnumber": None,
         "sim_time_limit": None,
     }
-    run_data = init_run_data(scenario)
+    run_data = init_run_data(scenario, feature_set)
     vector_targets: dict[int, tuple[str, int | str | None]] = {}
     targeted_vector_count = 0
     targeted_sample_count = 0
@@ -803,7 +1318,7 @@ def parse_vec_file(
                 if name.endswith(":vector"):
                     name = name[:-7]
                 configname = normalize_config_name(metadata["configname"] or "", config_aliases)
-                target = register_vector_target(scenario, configname, run_data, module, name)
+                target = register_vector_target(scenario, configname, run_data, module, name, feature_set)
                 if target is not None:
                     vector_targets[vector_id] = target
                     targeted_vector_count += 1
@@ -828,6 +1343,8 @@ def parse_vec_file(
             target_type, target_key = target
             if target_type == "controller":
                 run_data["controller"][target_key].append((timestamp, value))
+            elif target_type == "ai_mrce":
+                run_data["ai_mrce"][target_key].append((timestamp, value))
             elif target_type == "bottleneck_queue":
                 run_data["bottleneck_queue"][target_key].append((timestamp, value))
             else:
@@ -905,6 +1422,68 @@ def ratio_or_none(numerator: float | int | None, denominator: float | int | None
     if denominator_value <= 0:
         return None
     return float(numerator) / denominator_value
+
+
+def delta_or_none(current: float | int | None, previous: float | int | None) -> float | None:
+    if current is None or previous is None:
+        return None
+    return float(current) - float(previous)
+
+
+def rate_or_none(delta: float | int | None, duration_s: float | int | None) -> float | None:
+    if delta is None or duration_s is None or float(duration_s) <= 0:
+        return None
+    return float(delta) / float(duration_s)
+
+
+def is_impairment_active(row: dict[str, object]) -> bool:
+    per_values = [
+        parse_numeric_cell(row.get("controller_packet_error_rate_mean")),
+        parse_numeric_cell(row.get("controller_packet_error_rate_max")),
+        parse_numeric_cell(row.get("controller_packet_error_rate_last")),
+    ]
+    if any(value is not None and value > 0.0 for value in per_values):
+        return True
+
+    delay_values = [
+        parse_numeric_cell(row.get("controller_delay_mean_s")),
+        parse_numeric_cell(row.get("controller_delay_max_s")),
+        parse_numeric_cell(row.get("controller_delay_last_s")),
+    ]
+    # The configured non-degraded channel delay is around 1e-7s, so a small
+    # tolerance avoids marking baseline windows as degraded.
+    return any(value is not None and value > 1e-6 for value in delay_values)
+
+
+def extended_phase_context(row: dict[str, object]) -> str:
+    window_start = parse_numeric_cell(row.get("window_start_s"))
+    hard_failure_time = parse_numeric_cell(row.get("hard_failure_time_s"))
+    activation_time = parse_numeric_cell(row.get("protection_activation_time_s"))
+    if window_start is None:
+        return ""
+    if hard_failure_time is not None and window_start >= hard_failure_time:
+        return "post_hard_failure"
+    if (
+        activation_time is not None
+        and hard_failure_time is not None
+        and activation_time < hard_failure_time
+        and window_start >= activation_time
+    ):
+        return "activation_to_failure"
+    if is_impairment_active(row):
+        return "degradation_pre_activation"
+    return "pre_degradation"
+
+
+def extended_impairment_state(row: dict[str, object]) -> str:
+    if not is_impairment_active(row):
+        return "none"
+    per_mean = parse_numeric_cell(row.get("controller_packet_error_rate_mean")) or 0.0
+    if per_mean >= 0.5:
+        return "severe_brownout"
+    if per_mean >= 0.05:
+        return "moderate_impairment"
+    return "mild_impairment"
 
 
 def protection_trigger_source_from_code(code: float | int | None, protection_mode: str, activated: bool) -> str:
@@ -1647,7 +2226,7 @@ def annotate_run_outcome_metrics(rows: list[dict[str, object]], run_data: dict, 
         row.update(run_outcome_fields)
 
 
-def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]:
+def build_rows_for_run(run_data: dict, scenario: str, feature_set: str = "baseline") -> list[dict[str, object]]:
     metadata = run_data["metadata"]
     outcome_profile = get_outcome_profile(scenario, metadata["configname"])
     sim_time_limit = float(metadata["sim_time_limit"])
@@ -1662,6 +2241,10 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
     bottleneck_queue_series = {
         name: indexed_series(values)
         for name, values in run_data.get("bottleneck_queue", {}).items()
+    }
+    ai_mrce_series = {
+        name: indexed_series(values)
+        for name, values in run_data.get("ai_mrce", {}).items()
     }
     receiver_app_series = {
         app_index: {
@@ -1697,6 +2280,7 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
             "tcp_receiver_app_indices": ";".join(str(app_index) for app_index in outcome_profile.tcp_app_indices),
             "tcp_useful_goodput_floor_bps": optional_numeric(outcome_profile.tcp_useful_goodput_floor_bps),
         }
+        row.update(degradation_metadata_fields(scenario, metadata["configname"]))
 
         if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
             delay_summary = state_summary(controller_series["appliedDelay"], window_start, window_end)
@@ -1724,6 +2308,32 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
                 "bottleneck_queueing_time_mean_s": queueing_time_summary["mean"],
                 "bottleneck_queueing_time_max_s": queueing_time_summary["max"],
                 "bottleneck_queueing_time_last_s": queueing_time_summary["last"],
+            })
+
+        if feature_set == "extended" and scenario in REGIONALBACKBONE_FAMILY_SCENARIOS:
+            def ai_state(name: str) -> dict[str, float | str]:
+                return state_summary(ai_mrce_series.get(name, []), window_start, window_end)
+
+            observed_probe_delay = ai_state("observedProbeDelayMeanS")["last"]
+            row.update({
+                "feat_aimrce_observed_queue_length_last_pk": ai_state("observedQueueLengthPk")["last"],
+                "feat_aimrce_observed_queue_bit_length_last_b": ai_state("observedQueueBitLengthB")["last"],
+                "feat_aimrce_observed_probe_delay_mean_s": optional_nonnegative_numeric(parse_numeric_cell(observed_probe_delay)),
+                "feat_aimrce_observed_probe_throughput_bps": ai_state("observedProbeThroughputBps")["last"],
+                "feat_aimrce_observed_probe_packet_count": ai_state("observedProbePacketCount")["last"],
+                "feat_aimrce_risk_score_last": ai_state("riskScore")["last"],
+                "feat_aimrce_decision_positive_last": ai_state("decisionPositive")["last"],
+                "feat_aimrce_positive_decision_streak_last": ai_state("positiveDecisionStreak")["last"],
+                "feat_aimrce_protection_active_last": ai_state("protectionActive")["last"],
+                "feat_aimrce_repair_routes_installed_last": ai_state("repairRoutesInstalled")["last"],
+                "feat_aimrce_trigger_source_code_last": ai_state("protectionTriggerSourceCode")["last"],
+                "feat_bfd_missed_probe_count_last": ai_state("bfdLikeMissedProbeCount")["last"],
+                "feat_bfd_detection_active_last": ai_state("bfdLikeDetectionActive")["last"],
+                "feat_bfd_protected_span_up_last": ai_state("bfdLikeProtectedSpanUp")["last"],
+                "feat_bfd_modeled_loss_probability_mean": ai_state("bfdLikeModeledProbeLossProbability")["mean"],
+                "feat_bfd_modeled_loss_probability_max": ai_state("bfdLikeModeledProbeLossProbability")["max"],
+                "feat_bfd_modeled_loss_probability_last": ai_state("bfdLikeModeledProbeLossProbability")["last"],
+                "feat_bfd_probe_missed_last": ai_state("bfdLikeProbeMissed")["last"],
             })
 
         total_packets = 0
@@ -1809,6 +2419,212 @@ def build_rows_for_run(run_data: dict, scenario: str) -> list[dict[str, object]]
     return rows
 
 
+def add_extended_telemetry_features(rows: list[dict[str, object]], scenario: str) -> None:
+    grouped: dict[tuple[str, int], list[dict[str, object]]] = {}
+    for row in rows:
+        config_name = str(row.get("config_name", ""))
+        run_number = parse_int_cell(row.get("run_number"))
+        if not config_name or run_number is None:
+            continue
+        grouped.setdefault((config_name, run_number), []).append(row)
+
+    for (config_name, run_number), run_rows in grouped.items():
+        run_rows.sort(key=lambda item: parse_numeric_cell(item.get("window_start_s")) or 0.0)
+        previous: dict[str, object] | None = None
+        for row in run_rows:
+            window_start = parse_numeric_cell(row.get("window_start_s"))
+            previous_window_start = parse_numeric_cell(previous.get("window_start_s")) if previous else None
+            time_delta = (
+                window_start - previous_window_start
+                if window_start is not None and previous_window_start is not None
+                else None
+            )
+
+            delay_mean = parse_numeric_cell(row.get("receiver_app0_e2e_delay_mean_s"))
+            previous_delay_mean = parse_numeric_cell(previous.get("receiver_app0_e2e_delay_mean_s")) if previous else None
+            delay_delta = delta_or_none(delay_mean, previous_delay_mean)
+
+            throughput_mean = parse_numeric_cell(row.get("receiver_app0_throughput_mean_bps"))
+            previous_throughput_mean = parse_numeric_cell(previous.get("receiver_app0_throughput_mean_bps")) if previous else None
+            throughput_delta = delta_or_none(throughput_mean, previous_throughput_mean)
+            expected_throughput = parse_numeric_cell(row.get("monitored_flow_expected_throughput_bps"))
+
+            queue_length = parse_numeric_cell(row.get("bottleneck_queue_length_mean_pk"))
+            previous_queue_length = parse_numeric_cell(previous.get("bottleneck_queue_length_mean_pk")) if previous else None
+            queue_delta = delta_or_none(queue_length, previous_queue_length)
+
+            queueing_time = parse_numeric_cell(row.get("bottleneck_queueing_time_mean_s"))
+            previous_queueing_time = parse_numeric_cell(previous.get("bottleneck_queueing_time_mean_s")) if previous else None
+            queueing_time_delta = delta_or_none(queueing_time, previous_queueing_time)
+
+            packet_count = parse_numeric_cell(row.get("receiver_app0_packet_count"))
+            seq_progress = parse_numeric_cell(row.get("receiver_app0_seq_progress"))
+            expected_packets = parse_numeric_cell(row.get("monitored_flow_expected_packets_per_window"))
+            window_unobserved_proxy = (
+                max(0.0, expected_packets - packet_count)
+                if expected_packets is not None and packet_count is not None
+                else None
+            )
+            hard_failure_time = parse_numeric_cell(row.get("hard_failure_time_s"))
+
+            row.update({
+                "id_scenario": scenario,
+                "id_config_name": config_name,
+                "id_run_number": run_number,
+                "id_window_start_s": optional_numeric(window_start),
+                "id_window_end_s": row.get("window_end_s", ""),
+                "meta_feature_set": "extended",
+                "meta_telemetry_version": EXTENDED_TELEMETRY_VERSION,
+                "meta_source_provenance": "existing_omnetpp_vectors_and_controller_scalars",
+                "meta_mechanism_family": row.get("protection_mode", ""),
+                "meta_runtime_model_type": row.get("runtime_model_type", ""),
+                "phase_context": extended_phase_context(row),
+                "phase_impairment_state": extended_impairment_state(row),
+                "label_time_to_hard_failure_s": optional_numeric(
+                    hard_failure_time - window_start if hard_failure_time is not None and window_start is not None else None
+                ),
+                "label_post_hard_failure": bool_flag(
+                    hard_failure_time is not None and window_start is not None and window_start >= hard_failure_time
+                ),
+                "label_within_activation_to_failure": bool_flag(extended_phase_context(row) == "activation_to_failure"),
+                "label_protection_active_at_window": row.get("feat_aimrce_protection_active_last", ""),
+                "label_post_failure_unobserved": row.get("packet_sequence_gap_total_unobserved_after_hard_failure", ""),
+                "label_activation_to_failure_unobserved": row.get(
+                    "packet_sequence_gap_total_unobserved_between_activation_and_failure", ""
+                ),
+                "label_activation_to_failure_reordered": row.get(
+                    "packet_sequence_gap_total_reordered_between_activation_and_failure", ""
+                ),
+                "feat_delay_mean_s": optional_numeric(delay_mean),
+                "feat_delay_max_s": row.get("receiver_app0_e2e_delay_max_s", ""),
+                "feat_delay_delta_from_previous_window_s": optional_numeric(delay_delta),
+                "feat_delay_abs_delta_from_previous_window_s": optional_numeric(
+                    abs(delay_delta) if delay_delta is not None else None
+                ),
+                "feat_delay_short_slope_s_per_s": optional_numeric(rate_or_none(delay_delta, time_delta)),
+                "feat_throughput_mean_bps": optional_numeric(throughput_mean),
+                "feat_throughput_last_bps": row.get("receiver_app0_throughput_last_bps", ""),
+                "feat_throughput_delta_from_previous_window_bps": optional_numeric(throughput_delta),
+                "feat_throughput_ratio_to_expected": optional_numeric(ratio_or_none(throughput_mean, expected_throughput)),
+                "feat_throughput_drop_ratio_from_expected": optional_numeric(
+                    ratio_or_none(
+                        max(0.0, expected_throughput - throughput_mean)
+                        if expected_throughput is not None and throughput_mean is not None
+                        else None,
+                        expected_throughput,
+                    )
+                ),
+                "feat_goodput_mean_bps": row.get("receiver_app0_goodput_mean_bps", ""),
+                "feat_received_bytes": row.get("receiver_app0_received_bytes", ""),
+                "feat_queue_length_mean_pk": optional_numeric(queue_length),
+                "feat_queue_length_max_pk": row.get("bottleneck_queue_length_max_pk", ""),
+                "feat_queue_length_last_pk": row.get("bottleneck_queue_length_last_pk", ""),
+                "feat_queue_length_delta_from_previous_window_pk": optional_numeric(queue_delta),
+                "feat_queue_length_growth_rate_pk_per_s": optional_numeric(rate_or_none(queue_delta, time_delta)),
+                "feat_queue_bit_length_mean_b": row.get("bottleneck_queue_bit_length_mean_b", ""),
+                "feat_queue_bit_length_max_b": row.get("bottleneck_queue_bit_length_max_b", ""),
+                "feat_queue_bit_length_last_b": row.get("bottleneck_queue_bit_length_last_b", ""),
+                "feat_queueing_time_mean_s": optional_numeric(queueing_time),
+                "feat_queueing_time_max_s": row.get("bottleneck_queueing_time_max_s", ""),
+                "feat_queueing_time_last_s": row.get("bottleneck_queueing_time_last_s", ""),
+                "feat_queueing_time_delta_from_previous_window_s": optional_numeric(queueing_time_delta),
+                "feat_queueing_time_slope_s_per_s": optional_numeric(rate_or_none(queueing_time_delta, time_delta)),
+                "feat_continuity_packet_count": optional_numeric(packet_count),
+                "feat_continuity_seq_progress": optional_numeric(seq_progress),
+                "feat_continuity_expected_packets": optional_numeric(expected_packets),
+                "feat_continuity_packet_count_ratio_proxy": optional_numeric(ratio_or_none(packet_count, expected_packets)),
+                "feat_continuity_seq_progress_ratio_proxy": optional_numeric(ratio_or_none(seq_progress, expected_packets)),
+                "feat_continuity_window_unobserved_proxy": optional_numeric(window_unobserved_proxy),
+                "feat_continuity_window_unobserved_ratio_proxy": optional_numeric(
+                    ratio_or_none(window_unobserved_proxy, expected_packets)
+                ),
+                "feat_impairment_delay_mean_s": row.get("controller_delay_mean_s", ""),
+                "feat_impairment_delay_max_s": row.get("controller_delay_max_s", ""),
+                "feat_impairment_delay_last_s": row.get("controller_delay_last_s", ""),
+                "feat_impairment_packet_error_rate_mean": row.get("controller_packet_error_rate_mean", ""),
+                "feat_impairment_packet_error_rate_max": row.get("controller_packet_error_rate_max", ""),
+                "feat_impairment_packet_error_rate_last": row.get("controller_packet_error_rate_last", ""),
+            })
+            previous = row
+
+
+def classify_extended_column(column: str) -> tuple[str, str, str, str]:
+    if column.startswith("id_"):
+        return ("identifier", "metadata", "dataset identity", "not a runtime feature")
+    if column.startswith("meta_"):
+        return ("metadata", "metadata", "dataset/model context", "not a runtime feature")
+    if column.startswith("degradation_"):
+        return ("degradation_profile_context", "metadata", "scenario/config profile metadata", "not a runtime feature")
+    if column.startswith("label_"):
+        return ("label_target", "label/target", "derived from scripted timing or run outcome", "leakage-risk field")
+    if column.startswith("phase_"):
+        return ("phase_context", "offline diagnostic", "derived from impairment/activation/failure timing", "leakage-risk field")
+    if column.startswith("feat_delay_"):
+        return ("delay", "runtime-safe candidate feature", "hostB.app[0] endToEndDelay vector", "current/previous telemetry only")
+    if column.startswith("feat_throughput_") or column.startswith("feat_goodput_") or column == "feat_received_bytes":
+        return ("throughput_goodput", "runtime-safe candidate feature", "hostB.app[0] throughput/packetReceived vectors", "current/previous telemetry only")
+    if column.startswith("feat_queue_") or column.startswith("feat_queueing_"):
+        return ("queue", "runtime-safe candidate feature", "coreNW.eth[1].queue vectors", "current/previous telemetry only")
+    if column.startswith("feat_continuity_"):
+        return ("continuity", "runtime-safe candidate feature", "hostB.app[0] rcvdPkSeqNo vector plus configured send rate", "receiver-observed proxy")
+    if column.startswith("feat_impairment_"):
+        return ("impairment", "offline diagnostic feature", "LinkDegradationController appliedDelay/appliedPacketErrorRate vectors", "simulator impairment context; not deployment telemetry")
+    if column.startswith("feat_bfd_"):
+        return ("bfd_like", "offline diagnostic feature", "AiMrceController BFD-like diagnostic vectors", "detector-state diagnostic")
+    if column.startswith("feat_aimrce_"):
+        return ("aimrce_controller", "offline diagnostic feature", "AiMrceController telemetry/decision vectors", "policy-state diagnostic, not raw input telemetry")
+    return ("unknown", "offline diagnostic feature", "unclassified generated field", "review before ML use")
+
+
+def extended_columns(rows: list[dict[str, object]]) -> list[str]:
+    columns: list[str] = []
+    for row in rows:
+        for column in row:
+            if column.startswith(("id_", "meta_", "degradation_", "phase_", "feat_", "label_")) and column not in columns:
+                columns.append(column)
+    return columns
+
+
+def write_extended_feature_classification(rows: list[dict[str, object]], path: Path, scenario: str) -> None:
+    columns = extended_columns(rows)
+    classification_counts: dict[str, int] = {}
+    group_counts: dict[str, int] = {}
+    lines = [
+        "Telemetry v2 Extended Feature Classification",
+        "============================================",
+        "",
+        f"scenario: {scenario}",
+        f"extended_columns: {len(columns)}",
+        "",
+        "Leakage-prevention rules:",
+        "- hardFailureTime-derived values are label/target context, not runtime inputs.",
+        "- time-to-hard-failure fields are labels/targets and must not be used as runtime features.",
+        "- post-failure and activation outcome fields are labels/diagnostics, not pre-activation inputs.",
+        "- trigger source, mechanism family, config, run, and window identifiers are metadata.",
+        "- configured impairment fields are simulator diagnostics unless a real deployment equivalent is defined.",
+        "- AI-MRCE and BFD-like decision-state fields are diagnostics unless a future model explicitly targets controller-state stacking.",
+        "",
+        "Columns:",
+    ]
+    for column in columns:
+        group, classification, provenance, note = classify_extended_column(column)
+        classification_counts[classification] = classification_counts.get(classification, 0) + 1
+        group_counts[group] = group_counts.get(group, 0) + 1
+        lines.append(
+            f"- {column}: group={group}; classification={classification}; "
+            f"provenance={provenance}; note={note}"
+        )
+
+    lines.extend(["", "Classification counts:"])
+    for classification, count in sorted(classification_counts.items()):
+        lines.append(f"- {classification}: {count}")
+    lines.extend(["", "Feature group counts:"])
+    for group, count in sorted(group_counts.items()):
+        lines.append(f"- {group}: {count}")
+    lines.append("")
+    atomic_write_text(path, "\n".join(lines))
+
+
 def collect_rows(
     results_dir: Path,
     scenario: str,
@@ -1816,6 +2632,7 @@ def collect_rows(
     config_aliases: dict[str, str],
     default_sim_time_limit: float,
     default_sim_time_limits_by_config: dict[str, float] | None,
+    feature_set: str,
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     vec_paths = sorted(results_dir.glob("*.vec"))
@@ -1838,6 +2655,7 @@ def collect_rows(
             config_aliases,
             default_sim_time_limit,
             default_sim_time_limits_by_config,
+            feature_set,
         )
         if run_data is None:
             print(f"[build_dataset] ({index}/{len(vec_paths)}) skipped unsupported config in {vec_path.name}")
@@ -1845,7 +2663,7 @@ def collect_rows(
         parse_elapsed = elapsed_text(run_start)
         diagnostics = run_data.get("diagnostics", {})
         row_start = time.perf_counter()
-        run_rows = build_rows_for_run(run_data, scenario)
+        run_rows = build_rows_for_run(run_data, scenario, feature_set)
         rows.extend(run_rows)
         print(
             f"[build_dataset] ({index}/{len(vec_paths)}) config={run_data['metadata']['configname']} "
@@ -1874,6 +2692,7 @@ def main() -> None:
 
     results_dir = resolve_project_path(args.input) if args.input is not None else preset["results_dir"]
     output_file = resolve_project_path(args.output) if args.output is not None else preset["output_file"]
+    output_file = feature_set_output_file(output_file, args.feature_set, explicit_output=args.output is not None)
     supported_configs = effective_supported_configs(preset, args.include_runtime_protection_configs)
     config_aliases = preset["config_aliases"]
     default_sim_time_limit = preset["default_sim_time_limit"]
@@ -1900,7 +2719,7 @@ def main() -> None:
     warn_if_existing_output_stale(
         output_file,
         [path for vec_path in vec_paths for path in (vec_path, vec_path.with_suffix(".sca"), vec_path.with_suffix(".vci"))],
-        f"py -3 analysis\\build_dataset.py --scenario {args.scenario}",
+        f"py -3 analysis\\build_dataset.py --scenario {args.scenario} --feature-set {args.feature_set}",
     )
 
     total_start = time.perf_counter()
@@ -1911,9 +2730,16 @@ def main() -> None:
         config_aliases,
         default_sim_time_limit,
         default_sim_time_limits_by_config,
+        args.feature_set,
     )
     if not rows:
         raise SystemExit(f"No supported {args.scenario} .vec files were found in {results_dir}.")
+
+    if args.feature_set == "extended":
+        add_extended_telemetry_features(rows, args.scenario)
+        classification_path = extended_feature_classification_path(args.scenario)
+        write_extended_feature_classification(rows, classification_path, args.scenario)
+        print(f"[build_dataset] Wrote extended feature classification to {classification_path}")
 
     write_dataset(rows, output_file)
     print(f"[build_dataset] Wrote {len(rows)} dataset rows to {output_file}")
