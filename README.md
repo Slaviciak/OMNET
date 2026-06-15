@@ -1,4 +1,4 @@
-# AI-MRCE Proactive Network Recovery Simulator
+# AI-MRCE Proactive Network Recovery prototype
 
 This repository is a dissertation research prototype for AI-MRCE: an
 AI-assisted, telemetry-driven proactive protection controller for IP routing
