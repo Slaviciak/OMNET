@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 DEBUG_OUTPUT_DIR = OUTPUT_ROOT / "debug"
 OUTCOME_OUTPUT_DIR = OUTPUT_ROOT / "outcomes"
@@ -35,6 +35,9 @@ SCENARIO_RESULTS = {
     "regionalbackbone_failure_detection_cost_aware_transport_impact": (
         PROJECT_ROOT / "results" / "regionalbackbone" / "failure_detection_cost_aware_transport_impact"
     ),
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": (
+        PROJECT_ROOT / "results" / "regionalbackbone" / "ti_inst"
+    ),
 }
 
 SCENARIO_OUTCOME_SUMMARIES = {
@@ -49,6 +52,9 @@ SCENARIO_OUTCOME_SUMMARIES = {
     ),
     "regionalbackbone_failure_detection_cost_aware_transport_impact": (
         OUTCOME_OUTPUT_DIR / "regionalbackbone_failure_detection_cost_aware_transport_impact_outcome_summary.csv"
+    ),
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": (
+        OUTCOME_OUTPUT_DIR / "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented_outcome_summary.csv"
     ),
 }
 
@@ -100,6 +106,23 @@ for _profile in ("Mild", "Moderate", "FastWarning"):
 del _profile
 
 for _profile in ("TransportMild", "TransportModerate", "TransportFastWarning"):
+    CONFIG_RUNTIME_MODEL_TYPES.update(
+        {
+            f"RegionalBackboneCostAware{_profile}AiMrceRuleBased": "rule_based",
+            f"RegionalBackboneCostAware{_profile}AiMrceRuleBasedCohort": "rule_based",
+            f"RegionalBackboneCostAware{_profile}AiMrceLogReg": "logistic_regression",
+            f"RegionalBackboneCostAware{_profile}AiMrceLogRegCohort": "logistic_regression",
+            f"RegionalBackboneCostAware{_profile}AiMrceLinearSvm": "linear_svm",
+            f"RegionalBackboneCostAware{_profile}AiMrceLinearSvmCohort": "linear_svm",
+            f"RegionalBackboneCostAware{_profile}AiMrceShallowTree": "shallow_tree",
+            f"RegionalBackboneCostAware{_profile}AiMrceShallowTreeCohort": "shallow_tree",
+            f"RegionalBackboneCostAware{_profile}Hybrid": "rule_based",
+            f"RegionalBackboneCostAware{_profile}HybridCohort": "rule_based",
+        }
+    )
+del _profile
+
+for _profile in ("TransportInstrumentedMild", "TransportInstrumentedModerate", "TransportInstrumentedFastWarning"):
     CONFIG_RUNTIME_MODEL_TYPES.update(
         {
             f"RegionalBackboneCostAware{_profile}AiMrceRuleBased": "rule_based",

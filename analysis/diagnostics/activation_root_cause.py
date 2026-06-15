@@ -18,7 +18,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 DATASET_DIR = OUTPUT_ROOT / "datasets"
 OUTCOME_DIR = OUTPUT_ROOT / "outcomes"
@@ -854,7 +854,7 @@ def build_audit_note(scenarios: list[str], inputs: list[Path], outputs: list[Pat
             *[f"- {scenario}" for scenario in scenarios],
             "",
             "Files changed:",
-            "- analysis/activation_root_cause.py",
+            "- analysis/diagnostics/activation_root_cause.py",
             "- analysis/run_analysis.ps1",
             "- analysis/output/debug/activation_root_cause_trace.csv",
             "- analysis/output/debug/activation_root_cause_summary.csv",

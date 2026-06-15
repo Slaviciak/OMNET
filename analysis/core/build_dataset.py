@@ -69,15 +69,17 @@ REGIONAL_CONGESTION_RISING_END_SECONDS = 80.0
 REGIONAL_CONGESTION_CRITICAL_END_SECONDS = 125.0
 REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS = 125.0
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 DATASETS_DIR = OUTPUT_ROOT / "datasets"
 REPORTS_DIR = OUTPUT_ROOT / "reports"
 DEFAULT_SCENARIO = "regionalbackbone"
+DEGRADED_LINK_MODEL_FAMILY_SCENARIO = "regionalbackbone_failure_detection_degraded_link_model_family"
 DEGRADATION_SENSITIVITY_SCENARIO = "regionalbackbone_failure_detection_degradation_sensitivity"
 COST_AWARE_BACKUP_SCENARIO = "regionalbackbone_failure_detection_cost_aware_backup"
 COST_AWARE_TRANSPORT_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact"
 COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
+RANDOMIZED_ONSET_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset"
 BOTTLE_NECK_QUEUE_MODULE_SUFFIX = ".r2.eth[1].queue"
 REGIONAL_BOTTLENECK_QUEUE_MODULE_SUFFIX = ".coreNW.eth[1].queue"
 HOSTA_APP_RE = re.compile(r".*\.hostA\.app\[(\d+)\]$")
@@ -133,11 +135,12 @@ TARGET_CONTROLLER_SCALAR_NAMES = {
 }
 REGIONALBACKBONE_FAMILY_SCENARIOS = {
     "regionalbackbone",
-    "regionalbackbone_failure_detection_degraded_link_model_family",
+    DEGRADED_LINK_MODEL_FAMILY_SCENARIO,
     DEGRADATION_SENSITIVITY_SCENARIO,
     COST_AWARE_BACKUP_SCENARIO,
     COST_AWARE_TRANSPORT_SCENARIO,
     COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO,
+    RANDOMIZED_ONSET_SCENARIO,
 }
 
 REGIONALBACKBONE_DATASET_CONFIGS = {
@@ -261,6 +264,8 @@ TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS = {
         "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
         "traffic_mix": "udp_monitoring_plus_repeated_tcp_request_reply",
         "instrumentation_mode": "targeted_inet_transport_network_telemetry",
+        "scenario_role": "congestion_queue_buildup_early_mitigation",
+        "protected_primary_bottleneck_enabled": True,
     },
     "transport_moderate": {
         "title": "TransportInstrumentedModerate",
@@ -273,6 +278,8 @@ TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS = {
         "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
         "traffic_mix": "udp_monitoring_plus_repeated_tcp_request_reply",
         "instrumentation_mode": "targeted_inet_transport_network_telemetry",
+        "scenario_role": "congestion_queue_buildup_early_mitigation",
+        "protected_primary_bottleneck_enabled": True,
     },
     "transport_fast_warning": {
         "title": "TransportInstrumentedFastWarning",
@@ -285,7 +292,30 @@ TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS = {
         "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
         "traffic_mix": "udp_monitoring_plus_repeated_tcp_request_reply",
         "instrumentation_mode": "targeted_inet_transport_network_telemetry",
+        "scenario_role": "congestion_queue_buildup_early_mitigation",
+        "protected_primary_bottleneck_enabled": True,
     },
+}
+RANDOMIZED_ONSET_VALUES_SECONDS = (45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0)
+RANDOMIZED_ONSET_PROFILE_PARAMETERS = {
+    f"onset_{int(onset)}": {
+        "title": f"RandomizedOnset{int(onset)}",
+        "label": f"randomized_onset_{int(onset)}s",
+        "start_time_s": onset + 30.0,
+        "end_time_s": 124.0,
+        "target_delay_s": 0.070,
+        "target_packet_error_rate": 0.70,
+        "hard_failure_time_s": REGIONAL_CONGESTION_HARD_FAILURE_TIME_SECONDS,
+        "backup_path_penalty": "southern_backup_100mbps_plus_5ms",
+        "traffic_mix": "udp_monitoring_plus_shifted_staged_udp_plus_repeated_tcp_request_reply",
+        "instrumentation_mode": "targeted_inet_transport_network_telemetry",
+        "scenario_role": "queue_buildup_randomized_onset_robustness",
+        "protected_primary_bottleneck_enabled": True,
+        "randomized_onset_time_s": onset,
+        "onset_seed": int(onset),
+        "qos_event_monitor_start_time_s": onset + 10.0,
+    }
+    for onset in RANDOMIZED_ONSET_VALUES_SECONDS
 }
 SENSITIVITY_MECHANISM_SPECS = {
     "OspfOnly": {
@@ -349,6 +379,10 @@ def transport_impact_instrumented_config_name(profile_key: str, mechanism_suffix
     return f"RegionalBackboneCostAware{TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS[profile_key]['title']}{mechanism_suffix}"
 
 
+def randomized_onset_config_name(profile_key: str, mechanism_suffix: str) -> str:
+    return f"RegionalBackboneCostAwareTransport{RANDOMIZED_ONSET_PROFILE_PARAMETERS[profile_key]['title']}{mechanism_suffix}"
+
+
 REGIONALBACKBONE_DEGRADATION_SENSITIVITY_CONFIGS = {
     sensitivity_config_name(profile_key, mechanism_suffix)
     for profile_key in SENSITIVITY_PROFILE_PARAMETERS
@@ -369,6 +403,12 @@ COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIGS = {
     for profile_key in TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS
     for mechanism_suffix in SENSITIVITY_MECHANISM_SPECS
 }
+RANDOMIZED_ONSET_CONFIGS = {
+    randomized_onset_config_name(profile_key, mechanism_suffix)
+    for profile_key in RANDOMIZED_ONSET_PROFILE_PARAMETERS
+    for mechanism_suffix in SENSITIVITY_MECHANISM_SPECS
+    if mechanism_suffix != "Hybrid"
+}
 COST_AWARE_BACKUP_ALIASES = {
     f"{config_name}Cohort": config_name
     for config_name in COST_AWARE_BACKUP_CONFIGS
@@ -380,6 +420,10 @@ COST_AWARE_TRANSPORT_ALIASES = {
 COST_AWARE_TRANSPORT_INSTRUMENTED_ALIASES = {
     f"{config_name}Cohort": config_name
     for config_name in COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIGS
+}
+RANDOMIZED_ONSET_ALIASES = {
+    f"{config_name}Cohort": config_name
+    for config_name in RANDOMIZED_ONSET_CONFIGS
 }
 REGIONALBACKBONE_DEGRADATION_SENSITIVITY_ALIASES = {
     f"{config_name}Cohort": config_name
@@ -425,6 +469,17 @@ COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIG_INFO = {
     for profile_key in TRANSPORT_IMPACT_INSTRUMENTED_PROFILE_PARAMETERS
     for mechanism_suffix, mechanism_spec in SENSITIVITY_MECHANISM_SPECS.items()
 }
+RANDOMIZED_ONSET_CONFIG_INFO = {
+    randomized_onset_config_name(profile_key, mechanism_suffix): {
+        **RANDOMIZED_ONSET_PROFILE_PARAMETERS[profile_key],
+        **mechanism_spec,
+        "profile_key": profile_key,
+        "mechanism_suffix": mechanism_suffix,
+    }
+    for profile_key in RANDOMIZED_ONSET_PROFILE_PARAMETERS
+    for mechanism_suffix, mechanism_spec in SENSITIVITY_MECHANISM_SPECS.items()
+    if mechanism_suffix != "Hybrid"
+}
 REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS = {
     "RegionalBackboneCongestionDegradation",
     *REGIONALBACKBONE_FAILURE_DETECTION_DEGRADED_LINK_MODEL_FAMILY_CONFIGS,
@@ -432,6 +487,7 @@ REGIONALBACKBONE_CONGESTION_STYLE_CONFIGS = {
     *COST_AWARE_BACKUP_CONFIGS,
     *COST_AWARE_TRANSPORT_CONFIGS,
     *COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIGS,
+    *RANDOMIZED_ONSET_CONFIGS,
 }
 
 SUPPORTED_FEATURE_SETS = ("baseline", "extended")
@@ -550,6 +606,16 @@ SCENARIO_PRESETS = {
         "default_sim_time_limit": 150.0,
         "default_sim_time_limits_by_config": {
             config_name: 150.0 for config_name in COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIGS
+        },
+    },
+    RANDOMIZED_ONSET_SCENARIO: {
+        "results_dir": PROJECT_ROOT / "results" / "regionalbackbone" / "ti_randomized_onset",
+        "output_file": DATASETS_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_dataset.csv",
+        "supported_configs": RANDOMIZED_ONSET_CONFIGS,
+        "config_aliases": RANDOMIZED_ONSET_ALIASES,
+        "default_sim_time_limit": 150.0,
+        "default_sim_time_limits_by_config": {
+            config_name: 150.0 for config_name in RANDOMIZED_ONSET_CONFIGS
         },
     },
 }
@@ -764,7 +830,10 @@ def cost_aware_outcome_profile(config_name: str) -> OutcomeProfile | None:
         send_interval_s=0.01,
         flow_start_time_s=20.0,
         protection_expected=bool(info["protection_expected"]),
-        traffic_profile=f"udp_probe_10ms_cost_aware_backup_{info['profile_key']}",
+        traffic_profile=f"mixed_udp_tcp_cost_aware_backup_{info['profile_key']}",
+        tcp_app_indices=(7,),
+        tcp_flow_start_time_s=25.0,
+        tcp_useful_goodput_floor_bps=500_000.0,
         packet_continuity_critical_start_time_s=float(info["start_time_s"]),
         runtime_model_type=str(info["runtime_model_type"]),
         runtime_model_path=str(info["runtime_model_path"]),
@@ -775,6 +844,8 @@ def transport_impact_outcome_profile(config_name: str) -> OutcomeProfile | None:
     info = COST_AWARE_TRANSPORT_CONFIG_INFO.get(config_name)
     if info is None:
         info = COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIG_INFO.get(config_name)
+    if info is None:
+        info = RANDOMIZED_ONSET_CONFIG_INFO.get(config_name)
     if info is None:
         return None
     return OutcomeProfile(
@@ -796,6 +867,16 @@ def transport_impact_outcome_profile(config_name: str) -> OutcomeProfile | None:
 
 
 def degradation_metadata_fields(scenario: str, config_name: str) -> dict[str, object]:
+    if scenario == DEGRADED_LINK_MODEL_FAMILY_SCENARIO:
+        return {
+            "scenario_role": "predictive_link_failure_recovery",
+            "traffic_mix_model": "udp_monitoring_plus_repeated_tcp_request_reply",
+            "tcp_app_indices": "7",
+            "tcp_flow_start_time_s": 25.0,
+            "tcp_metric_scope": "endpoint_received_bytes_goodput_progress_proxy",
+            "protected_primary_bottleneck_enabled": "1",
+            "primary_impairment_model": "controlled_brownout_plus_core_bottleneck",
+        }
     if scenario == DEGRADATION_SENSITIVITY_SCENARIO:
         info = SENSITIVITY_CONFIG_INFO.get(config_name)
     elif scenario == COST_AWARE_BACKUP_SCENARIO:
@@ -804,6 +885,8 @@ def degradation_metadata_fields(scenario: str, config_name: str) -> dict[str, ob
         info = COST_AWARE_TRANSPORT_CONFIG_INFO.get(config_name)
     elif scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
         info = COST_AWARE_TRANSPORT_INSTRUMENTED_CONFIG_INFO.get(config_name)
+    elif scenario == RANDOMIZED_ONSET_SCENARIO:
+        info = RANDOMIZED_ONSET_CONFIG_INFO.get(config_name)
     else:
         return {}
     if info is None:
@@ -817,7 +900,7 @@ def degradation_metadata_fields(scenario: str, config_name: str) -> dict[str, ob
         "degradation_target_packet_error_rate": info["target_packet_error_rate"],
         "degradation_hard_failure_time_s": info["hard_failure_time_s"],
     }
-    if scenario in {COST_AWARE_BACKUP_SCENARIO, COST_AWARE_TRANSPORT_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}:
+    if scenario in {COST_AWARE_BACKUP_SCENARIO, COST_AWARE_TRANSPORT_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO, RANDOMIZED_ONSET_SCENARIO}:
         fields.update({
             "backup_path_penalty_model": info.get("backup_path_penalty", ""),
             "backup_path_data_rate_bps": 100_000_000.0,
@@ -825,15 +908,45 @@ def degradation_metadata_fields(scenario: str, config_name: str) -> dict[str, ob
             "primary_path_normal_data_rate_bps": 100_000_000.0,
             "primary_path_normal_extra_delay_s": 0.0,
         })
-    if scenario in {COST_AWARE_TRANSPORT_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}:
+    if scenario in {COST_AWARE_TRANSPORT_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO, RANDOMIZED_ONSET_SCENARIO}:
         fields.update({
             "traffic_mix_model": info.get("traffic_mix", "udp_monitoring_plus_repeated_tcp_request_reply"),
             "tcp_app_indices": "7",
             "tcp_flow_start_time_s": 25.0,
             "tcp_metric_scope": "endpoint_received_bytes_goodput_progress_proxy",
         })
+    elif scenario in {DEFAULT_SCENARIO, COST_AWARE_BACKUP_SCENARIO}:
+        fields.update({
+            "traffic_mix_model": "udp_monitoring_plus_repeated_tcp_request_reply",
+            "tcp_app_indices": "7",
+            "tcp_flow_start_time_s": 25.0,
+            "tcp_metric_scope": "endpoint_received_bytes_goodput_progress_proxy",
+        })
     if scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
         fields["instrumentation_mode"] = info.get("instrumentation_mode", "targeted_inet_transport_network_telemetry")
+        fields["scenario_role"] = info.get("scenario_role", "congestion_queue_buildup_early_mitigation")
+        fields["protected_primary_bottleneck_enabled"] = bool_flag(
+            bool(info.get("protected_primary_bottleneck_enabled", False))
+        )
+        fields["primary_impairment_model"] = "protected_core_bottleneck_queue_buildup"
+    elif scenario == RANDOMIZED_ONSET_SCENARIO:
+        fields["instrumentation_mode"] = info.get("instrumentation_mode", "targeted_inet_transport_network_telemetry")
+        fields["scenario_role"] = info.get("scenario_role", "queue_buildup_randomized_onset_robustness")
+        fields["protected_primary_bottleneck_enabled"] = bool_flag(
+            bool(info.get("protected_primary_bottleneck_enabled", False))
+        )
+        fields["primary_impairment_model"] = "protected_core_bottleneck_shifted_queue_buildup"
+        fields["randomized_onset_time_s"] = info.get("randomized_onset_time_s", "")
+        fields["onset_seed"] = info.get("onset_seed", "")
+        fields["qos_event_monitor_start_time_s"] = info.get("qos_event_monitor_start_time_s", "")
+    elif scenario == COST_AWARE_BACKUP_SCENARIO:
+        fields["scenario_role"] = "cost_aware_degraded_backup_operation"
+        fields["protected_primary_bottleneck_enabled"] = "0"
+        fields["primary_impairment_model"] = "progressive_degradation_without_core_bottleneck"
+    elif scenario == DEFAULT_SCENARIO:
+        fields["scenario_role"] = "predictive_link_failure_recovery"
+        fields["protected_primary_bottleneck_enabled"] = "1"
+        fields["primary_impairment_model"] = "controlled_brownout_plus_core_bottleneck"
     return fields
 
 
@@ -856,6 +969,10 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 packet_size_bits=256.0 * 8.0,
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
+                traffic_profile="mixed_udp_tcp_staged_congestion_runtime_export",
+                tcp_app_indices=(7,),
+                tcp_flow_start_time_s=25.0,
+                tcp_useful_goodput_floor_bps=500_000.0,
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
             "RegionalBackboneFailureDegradedLinkOspfOnly": OutcomeProfile(
@@ -865,7 +982,10 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 packet_size_bits=256.0 * 8.0,
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
-                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                traffic_profile="mixed_udp_tcp_staged_congestion_progressive_link_loss",
+                tcp_app_indices=(7,),
+                tcp_flow_start_time_s=25.0,
+                tcp_useful_goodput_floor_bps=500_000.0,
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
             "RegionalBackboneFailureDegradedLinkBfdLikeFrr": OutcomeProfile(
@@ -875,7 +995,10 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 packet_size_bits=256.0 * 8.0,
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
-                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                traffic_profile="mixed_udp_tcp_staged_congestion_progressive_link_loss",
+                tcp_app_indices=(7,),
+                tcp_flow_start_time_s=25.0,
+                tcp_useful_goodput_floor_bps=500_000.0,
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
             ),
             "RegionalBackboneFailureDegradedLinkAiMrceRuleBased": OutcomeProfile(
@@ -886,7 +1009,10 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
                 protection_expected=True,
-                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                traffic_profile="mixed_udp_tcp_staged_congestion_progressive_link_loss",
+                tcp_app_indices=(7,),
+                tcp_flow_start_time_s=25.0,
+                tcp_useful_goodput_floor_bps=500_000.0,
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
                 runtime_model_type="rule_based",
             ),
@@ -898,7 +1024,10 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
                 protection_expected=True,
-                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                traffic_profile="mixed_udp_tcp_staged_congestion_progressive_link_loss",
+                tcp_app_indices=(7,),
+                tcp_flow_start_time_s=25.0,
+                tcp_useful_goodput_floor_bps=500_000.0,
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
                 runtime_model_type="logistic_regression",
                 runtime_model_path="aimrce_runtime_logreg.csv",
@@ -911,7 +1040,10 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
                 protection_expected=True,
-                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                traffic_profile="mixed_udp_tcp_staged_congestion_progressive_link_loss",
+                tcp_app_indices=(7,),
+                tcp_flow_start_time_s=25.0,
+                tcp_useful_goodput_floor_bps=500_000.0,
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
                 runtime_model_type="linear_svm",
                 runtime_model_path="aimrce_runtime_linsvm.csv",
@@ -924,7 +1056,10 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
                 protection_expected=True,
-                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                traffic_profile="mixed_udp_tcp_staged_congestion_progressive_link_loss",
+                tcp_app_indices=(7,),
+                tcp_flow_start_time_s=25.0,
+                tcp_useful_goodput_floor_bps=500_000.0,
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
                 runtime_model_type="shallow_tree",
                 runtime_model_path="aimrce_runtime_shallow_tree.csv",
@@ -937,7 +1072,10 @@ def get_outcome_profile(scenario: str, config_name: str) -> OutcomeProfile:
                 send_interval_s=0.01,
                 flow_start_time_s=20.0,
                 protection_expected=True,
-                traffic_profile="udp_probe_10ms_staged_congestion_progressive_link_loss",
+                traffic_profile="mixed_udp_tcp_staged_congestion_progressive_link_loss",
+                tcp_app_indices=(7,),
+                tcp_flow_start_time_s=25.0,
+                tcp_useful_goodput_floor_bps=500_000.0,
                 packet_continuity_critical_start_time_s=REGIONAL_CONGESTION_RISING_END_SECONDS,
                 runtime_model_type="rule_based",
             ),
@@ -1215,10 +1353,10 @@ def register_vector_target(
             return ("packetBytes", app_index)
 
     match = HOSTA_APP_RE.match(module)
-    if scenario in {COST_AWARE_TRANSPORT_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO} and match:
+    if scenario in REGIONALBACKBONE_FAMILY_SCENARIOS and match:
         app_index = int(match.group(1))
         if app_index == 7 and (name == "packetReceived" or name.startswith("packetReceived:")):
-            # The mixed-traffic scenario uses TcpBasicClientApp on hostA and
+            # The unified mixed-traffic workload uses TcpBasicClientApp on hostA and
             # TcpGenericServerApp on hostB; client-side reply bytes are the TCP
             # endpoint progress/goodput proxy.
             return ("packetBytes", app_index)

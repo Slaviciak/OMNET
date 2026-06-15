@@ -20,7 +20,7 @@ from pathlib import Path
 from statistics import fmean, pstdev
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 DATASETS_DIR = OUTPUT_ROOT / "datasets"
 REPORTS_DIR = OUTPUT_ROOT / "reports"
@@ -30,6 +30,12 @@ AUDIT_DIR = OUTPUT_ROOT / "audit"
 RUNTIME_DIR = PROJECT_ROOT / "simulations" / "regionalbackbone"
 
 DEFAULT_SCENARIO = "regionalbackbone_failure_detection_degraded_link_model_family"
+
+SCENARIO_DISPLAY_NAMES = {
+    "regionalbackbone_failure_detection_degraded_link_model_family": "Predictive Link-Failure Recovery",
+    "regionalbackbone_failure_detection_cost_aware_backup": "Cost-Aware Degraded-Backup Operation",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": "Congestion/Queue-Buildup Early Mitigation",
+}
 
 BASELINE_FEATURES = [
     "bottleneck_queue_length_last_pk",
@@ -102,6 +108,10 @@ def scenario_paths(args: argparse.Namespace) -> dict[str, Path]:
         "outcome_summary": args.outcome_summary
         or OUTCOMES_DIR / f"{scenario}_outcome_summary.csv",
     }
+
+
+def scenario_display_name(scenario: str) -> str:
+    return SCENARIO_DISPLAY_NAMES.get(scenario, scenario)
 
 
 def atomic_write_text(path: Path, text: str) -> None:
@@ -304,6 +314,19 @@ def feature_stats(
     return stats, selected, excluded
 
 
+def usable_model_features(rows: list[dict[str, str]], features: list[str]) -> list[str]:
+    usable: list[str] = []
+    for feature in features:
+        values = numeric_values(rows, feature)
+        if not values:
+            continue
+        unique_values = {round(value, 12) for value in values}
+        if len(unique_values) <= 1:
+            continue
+        usable.append(feature)
+    return usable
+
+
 def to_matrix(rows: list[dict[str, str]], features: list[str]):
     import numpy as np
 
@@ -383,8 +406,9 @@ def benchmark_feature_set(
     from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_score, recall_score, roc_auc_score
     from sklearn.model_selection import GroupKFold
 
+    features = usable_model_features(rows, features)
     if not features:
-        return [], {"error": "no selected features"}
+        return [], {"error": "no usable non-constant observed features"}
 
     x_matrix = to_matrix(rows, features)
     y = labels_array(rows)
@@ -694,12 +718,14 @@ def benchmark_report_text(
     timing_rows: list[dict[str, object]],
     importance_rows: list[dict[str, object]],
 ) -> str:
+    display_name = scenario_display_name(scenario)
     label_counts = Counter(row.get("label", "") for row in all_rows)
     profile_counts = Counter(row.get("degradation_profile", "") or "none" for row in all_rows)
     audit_label_counts = Counter(row[LABEL_COLUMN] for row in audit_rows)
     lines = [
-        f"Offline ML Feasibility Audit: {scenario}",
-        "=" * (len(scenario) + 31),
+        f"Offline ML Feasibility Audit: {display_name}",
+        "=" * (len(display_name) + 31),
+        f"Internal scenario id: {scenario}",
         "",
         "Scope:",
         "- Offline analysis only; no deployed AI-MRCE runtime artifacts were modified.",
@@ -718,7 +744,7 @@ def benchmark_report_text(
             "- positive class: current row label is critical_congestion",
             "- negative class: current row label is baseline or rising_congestion",
             "- excluded rows: convergence, failed/post-hard-failure, and rows after observed protection activation",
-            "- interpretation: pre-failure protect/no-protect feasibility label for this deterministic degraded-link cohort",
+            f"- interpretation: pre-failure protect/no-protect feasibility label for {display_name}",
             "- leakage note: time_to_hard_failure and hardFailureTime are not model inputs; the label remains simulator-derived and scenario-conditioned.",
             "",
             f"Dataset rows: {len(all_rows)}",
@@ -783,7 +809,7 @@ def benchmark_report_text(
             "",
             "Preliminary interpretation:",
             "- Extended telemetry is suitable for offline feasibility analysis, but it remains scenario-conditioned.",
-            "- Any apparent metric improvement may reflect the deterministic degraded-link cohort and should not be treated as production generalization.",
+            f"- Any apparent metric improvement may reflect the deterministic {display_name} cohort and should not be treated as production generalization.",
             "- Runtime export v2 is not recommended until the selected feature subset is reviewed, labels are finalized, and a separate deployment-artifact validation pass is run.",
             "",
         ]
@@ -823,8 +849,8 @@ def main() -> None:
     baseline_selected = [feature for feature in BASELINE_FEATURES if feature in columns]
 
     feature_sets = {
-        "baseline_four_feature": baseline_selected,
-        "extended_runtime_safe": selected_extended,
+        "baseline_four_feature": usable_model_features(audit_rows, baseline_selected),
+        "extended_runtime_safe": usable_model_features(audit_rows, selected_extended),
     }
 
     all_fold_rows: list[dict[str, object]] = []

@@ -132,21 +132,28 @@ Commands:
   python-info           Show the Python interpreter that will be used.
   setup-env             Create analysis\sklearn-env if it does not already exist.
   install-ml-deps       Install analysis\requirements.txt into analysis\sklearn-env.
-  build-dataset         Forward to analysis\build_dataset.py.
-  dataset-report        Forward to analysis\dataset_report.py.
-  compare-outcomes      Forward to analysis\compare_outcomes.py.
-  model-risk-trace      Forward to analysis\extract_aimrce_risk_trace.py.
+
+Core reproducibility pipeline:
+  build-dataset         Forward to analysis\core\build_dataset.py.
+  dataset-report        Forward to analysis\core\dataset_report.py.
+  compare-outcomes      Forward to analysis\core\compare_outcomes.py.
   network-impact        Generate UDP/QoS network-impact diagnostics from existing outputs.
-  offline-ml-audit      Run offline telemetry-v2 ML feature-quality and feasibility audit.
-  activation-root-cause Explain AI-MRCE activation timing from existing traces and artifacts.
   evaluate-results      Build the unified final evaluation report, compact tables, and figures.
-  pipeline-integrity    Forward to analysis\pipeline_integrity.py.
+  pipeline-integrity    Forward to analysis\core\pipeline_integrity.py.
   package-current-experiment
                         Create a compact sendable package for the active current experiment.
+
+ML support:
+  train-risk-model      Forward to analysis\ml\train_risk_model.py.
+  offline-ml-audit      Run offline telemetry-v2 ML feature-quality and feasibility audit.
+  export-runtime-models Forward to analysis\ml\export_runtime_models.py.
+
+Diagnostics and cleanup:
+  model-risk-trace      Forward to analysis\diagnostics\extract_aimrce_risk_trace.py.
+  activation-root-cause Explain AI-MRCE activation timing from existing traces and artifacts.
   clean-final-evaluation
                         Dry-run-first cleanup of generated final-evaluation figure files.
-  clean-generated       Forward to analysis\clean_generated.py.
-  export-runtime-models Forward to analysis\export_runtime_models.py.
+  clean-generated       Forward to analysis\diagnostics\clean_generated.py.
 
 Examples:
   run_analysis.bat python-info
@@ -162,10 +169,12 @@ Examples:
   run_analysis.bat network-impact --scenario regionalbackbone_failure_detection_cost_aware_backup
   run_analysis.bat network-impact --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
   run_analysis.bat network-impact --scenario regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented
+  run_analysis.bat train-risk-model --help
   run_analysis.bat offline-ml-audit --scenario regionalbackbone_failure_detection_degraded_link_model_family
   run_analysis.bat offline-ml-audit --scenario regionalbackbone_failure_detection_degradation_sensitivity
   run_analysis.bat offline-ml-audit --scenario regionalbackbone_failure_detection_cost_aware_backup
   run_analysis.bat offline-ml-audit --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
+  run_analysis.bat offline-ml-audit --scenario regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented
   run_analysis.bat activation-root-cause
   run_analysis.bat activation-root-cause --scenario regionalbackbone_failure_detection_cost_aware_backup
   run_analysis.bat evaluate-results
@@ -211,34 +220,37 @@ try {
             Install-AnalysisRequirements
         }
         "build-dataset" {
-            Invoke-AnalysisScript -ScriptName "build_dataset.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "core\build_dataset.py" -ScriptArgs $CommandArgs
         }
         "dataset-report" {
-            Invoke-AnalysisScript -ScriptName "dataset_report.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "core\dataset_report.py" -ScriptArgs $CommandArgs
         }
         "compare-outcomes" {
-            Invoke-AnalysisScript -ScriptName "compare_outcomes.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "core\compare_outcomes.py" -ScriptArgs $CommandArgs
+        }
+        "train-risk-model" {
+            Invoke-AnalysisScript -ScriptName "ml\train_risk_model.py" -ScriptArgs $CommandArgs
         }
         "model-risk-trace" {
-            Invoke-AnalysisScript -ScriptName "extract_aimrce_risk_trace.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "diagnostics\extract_aimrce_risk_trace.py" -ScriptArgs $CommandArgs
         }
         "network-impact" {
-            Invoke-AnalysisScript -ScriptName "network_impact_report.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "core\network_impact_report.py" -ScriptArgs $CommandArgs
         }
         "offline-ml-audit" {
-            Invoke-AnalysisScript -ScriptName "offline_ml_audit.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "ml\offline_ml_audit.py" -ScriptArgs $CommandArgs
         }
         "activation-root-cause" {
-            Invoke-AnalysisScript -ScriptName "activation_root_cause.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "diagnostics\activation_root_cause.py" -ScriptArgs $CommandArgs
         }
         "evaluate-results" {
-            Invoke-AnalysisScript -ScriptName "evaluate_results.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "core\evaluate_results.py" -ScriptArgs $CommandArgs
         }
         "pipeline-integrity" {
-            Invoke-AnalysisScript -ScriptName "pipeline_integrity.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "core\pipeline_integrity.py" -ScriptArgs $CommandArgs
         }
         "package-current-experiment" {
-            Invoke-AnalysisScript -ScriptName "package_current_experiment.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "core\package_current_experiment.py" -ScriptArgs $CommandArgs
         }
         "clean-final-evaluation" {
             $cleanupArgs = @("--scope", "final-evaluation")
@@ -246,13 +258,13 @@ try {
                 $cleanupArgs += "--clean"
             }
             $cleanupArgs += $CommandArgs
-            Invoke-AnalysisScript -ScriptName "clean_generated.py" -ScriptArgs $cleanupArgs
+            Invoke-AnalysisScript -ScriptName "diagnostics\clean_generated.py" -ScriptArgs $cleanupArgs
         }
         "clean-generated" {
-            Invoke-AnalysisScript -ScriptName "clean_generated.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "diagnostics\clean_generated.py" -ScriptArgs $CommandArgs
         }
         "export-runtime-models" {
-            Invoke-AnalysisScript -ScriptName "export_runtime_models.py" -ScriptArgs $CommandArgs
+            Invoke-AnalysisScript -ScriptName "ml\export_runtime_models.py" -ScriptArgs $CommandArgs
         }
         default {
             throw "Unsupported command '$Command'. Run 'run_analysis.bat help' to see the supported commands."

@@ -235,10 +235,10 @@ From the project root, run the full five-run publication cohort:
 
 ```bat
 cmd /c run_experiments.bat regional-failure-detection-degraded-link-model-family-batch --clean --yes --skip-runtime-export --skip-build
-py -3 analysis\build_dataset.py --scenario regionalbackbone_failure_detection_degraded_link_model_family
-py -3 analysis\dataset_report.py --scenario regionalbackbone_failure_detection_degraded_link_model_family
-py -3 analysis\compare_outcomes.py --inputs analysis\output\outcomes\regionalbackbone_failure_detection_degraded_link_model_family_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_degraded_link_model_family
-py -3 analysis\extract_aimrce_risk_trace.py --scenario regionalbackbone_failure_detection_degraded_link_model_family --runs 0 --start 78 --end 86
+cmd /c run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_degraded_link_model_family
+cmd /c run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_degraded_link_model_family
+cmd /c run_analysis.bat compare-outcomes --inputs analysis\output\outcomes\regionalbackbone_failure_detection_degraded_link_model_family_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_degraded_link_model_family
+cmd /c run_analysis.bat model-risk-trace --scenario regionalbackbone_failure_detection_degraded_link_model_family --runs 0 --start 78 --end 86
 cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_degraded_link_model_family
 cmd /c run_analysis.bat package-current-experiment --scenario regionalbackbone_failure_detection_degraded_link_model_family
 ```

@@ -1,9 +1,13 @@
-# Dissertation Simulation: AI-MRCE Regional Backbone
+# AI-MRCE Proactive Network Recovery Simulator
 
 This repository is a dissertation research prototype for AI-MRCE: an
 AI-assisted, telemetry-driven proactive protection controller for IP routing
 domains. The active simulator implementation uses OMNeT++ / INET with an OSPF
 regional backbone topology.
+
+The internal OMNeT++ project/package identifier remains `dissertationsim` for
+build and NED-package stability. The public scientific display name is
+**AI-MRCE Proactive Network Recovery Simulator**.
 
 The project is intentionally conservative. It does not modify INET internals or
 OSPF internals, and it does not claim standards-compliant BFD, LFA, TI-LFA, or
@@ -12,32 +16,37 @@ degradation/brownout telemetry can trigger project-local repair routes before a
 hard failure and improve operational outcome metrics relative to reactive OSPF
 behavior.
 
-## Validated Scenario Layers
+## Validated Scenario Roles
 
-The current public-ready project is organized as four progressive realism
-layers:
+The current public-ready project is organized around three paper-facing
+scenario roles, plus two supplementary traceability scenarios. The three
+paper-facing roles now share a unified mixed UDP/TCP workload so the final
+figures can compare a common packet-delivery, transport-progress, and
+activation-timing metric contract:
 
 1. `regionalbackbone_failure_detection_degraded_link_model_family`
-   - controlled concept validation for OSPF-only, project-local BFD-like +
-     FRR-like, AI-MRCE + FRR-like, and hybrid mechanisms.
-2. `regionalbackbone_failure_detection_degradation_sensitivity`
-   - robustness across `mild_slow`, `moderate`, and `severe_fast` degradation
-     profiles.
-3. `regionalbackbone_failure_detection_cost_aware_backup`
-   - predictive switching under a primary path that is normally better and a
-     QoS-capable backup path with mild nonzero cost.
-4. `regionalbackbone_failure_detection_cost_aware_transport_impact`
-   - mixed UDP/TCP transport-impact validation using UDP diagnostics and TCP
-     endpoint goodput/progress proxies.
+   - **Predictive Link-Failure Recovery**: basic validation that AI-MRCE can
+     activate FRR-like repair before a hard link failure under the unified
+     mixed UDP/TCP workload.
+2. `regionalbackbone_failure_detection_cost_aware_backup`
+   - **Cost-Aware Degraded-Backup Operation**: predictive switching under a
+     primary path that is normally better and a QoS-capable backup path with
+     mild nonzero cost, using the same mixed UDP/TCP workload.
+3. `regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented`
+   - **Congestion/Queue-Buildup Early Mitigation**: mixed UDP/TCP traffic on a
+     protected primary span with progressive queue buildup and QoS degradation,
+     plus targeted INET scalar/histogram telemetry for publication-facing
+     networking metrics.
 
-An additional instrumentation-only extension,
-`regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented`,
-derives from the fourth layer and keeps the same mechanisms/profiles while
-recording targeted INET scalar/histogram telemetry. It is intended to strengthen
-publication-facing network/transport metrics after run-0 size validation, not
-to replace the validated mixed UDP/TCP baseline.
+Supplementary scenarios are retained for robustness and traceability:
 
-All four layers use the same seven mechanism families:
+- `regionalbackbone_failure_detection_degradation_sensitivity`
+  - robustness across `mild_slow`, `moderate`, and `severe_fast` profiles.
+- `regionalbackbone_failure_detection_cost_aware_transport_impact`
+  - baseline mixed UDP/TCP transport-impact validation superseded by the
+    congestion/queue-buildup scenario for main networking figures.
+
+All five retained scenario families use the same seven mechanism families:
 
 - `ospf_only`
 - `bfd_like_frr`
@@ -51,7 +60,10 @@ The active implementation files are centered on:
 
 - `simulations/regionalbackbone/`
 - `src/dissertationsim/controller/`
-- `analysis/`
+- `analysis/core/` for dataset, outcome, network-impact, final-evaluation,
+  integrity, and packaging scripts;
+- `analysis/ml/` for offline ML support and explicit runtime-model export;
+- `analysis/diagnostics/` for root-cause, trace, and cleanup helpers;
 - `run_analysis.bat` / `analysis/run_analysis.ps1`
 - `run_experiments.bat` / `analysis/run_experiments.ps1`
 
@@ -64,33 +76,34 @@ outputs and is the preferred review entry point:
 cmd /c run_analysis.bat evaluate-results
 ```
 
-Validate the four current scenario families:
+Validate the three main scenario roles:
 
 ```bat
 cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_degraded_link_model_family
-cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_degradation_sensitivity
 cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_cost_aware_backup
-cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
+cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented
 ```
 
-Regenerate compact packages:
+Regenerate compact packages for the main scenarios:
 
 ```bat
 cmd /c run_analysis.bat package-current-experiment --scenario regionalbackbone_failure_detection_degraded_link_model_family
-cmd /c run_analysis.bat package-current-experiment --scenario regionalbackbone_failure_detection_degradation_sensitivity
 cmd /c run_analysis.bat package-current-experiment --scenario regionalbackbone_failure_detection_cost_aware_backup
-cmd /c run_analysis.bat package-current-experiment --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
+cmd /c run_analysis.bat package-current-experiment --scenario regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented
 ```
 
 To rerun a full cohort, use the matching experiment wrapper. Omitting `--runs`
 runs the full five-run set `0,1,2,3,4`; use `--runs 0` for a smoke pass.
-Independent OMNeT++ config/run jobs can be run concurrently with `--jobs N`:
+Independent OMNeT++ config/run jobs can be run concurrently with `--jobs N`.
+When a cohort is run with `--clean --yes`, the wrapper removes target-scenario
+raw result files, scenario-specific generated analysis outputs, old logs, old
+packages, and stale final-evaluation figures before writing replacement files:
 
 ```bat
 cmd /c run_experiments.bat regional-cost-aware-transport-impact-batch --clean --yes --skip-runtime-export --skip-build --jobs 2
 ```
 
-For the instrumented transport-impact smoke pass:
+For the congestion/queue-buildup Scenario C smoke pass:
 
 ```bat
 cmd /c run_experiments.bat regional-cost-aware-transport-impact-instrumented-batch --runs 0 --clean --yes --skip-runtime-export --skip-build --jobs 1
@@ -134,7 +147,9 @@ Generated outputs are organized under `analysis/output/`:
 - `training/`: offline ML training/evaluation artifacts.
 
 Raw OMNeT++ results are generated under `results/`. Build outputs are generated
-under `out/`.
+under `out/`. Both are ignored by Git. Keep raw results locally when you want
+to regenerate datasets/reports without rerunning simulations; delete them only
+after a confirmed replacement run or explicit archival decision.
 
 These generated folders are ignored by `.gitignore` and should not be committed.
 Runtime deployment CSV examples under `simulations/regionalbackbone/` are
@@ -142,10 +157,20 @@ intentionally source-controlled so the runtime configs remain auditable; refresh
 them with the documented export command when training data or export code
 changes.
 
+Local Python environments such as `analysis/sklearn-env/` are recreatable from
+`analysis/requirements.txt` and should not be committed.
+
 The learned AI-MRCE runtime policies are compact simulator-derived policy
 variants. They use four runtime features and simulator-derived labels; they are
 not claimed to be production-grade predictors or evidence of general
 deployment-time ML generalization.
+
+Because the unified workload adds TCP to the Link-Failure and Degraded-Backup
+scenario families, the runtime model CSV artifacts were refreshed from the same
+compact four-feature telemetry vector. Scenario C's queue-buildup redesign uses
+the same runtime feature order and does not change AI-MRCE thresholds; runtime
+CSV artifacts should be refreshed only after a legitimate training/export
+decision, not after presentation-only changes.
 
 Runtime deployability boundary: the deployed AI-MRCE feature vector contains
 only protected queue length plus receiver-side active-probe delay, throughput,
@@ -160,8 +185,8 @@ Optional telemetry-v2 dataset generation is integrated into the existing
 dataset pipeline:
 
 ```bat
-py -3 analysis\build_dataset.py --scenario regionalbackbone_failure_detection_degraded_link_model_family --feature-set extended
-py -3 analysis\dataset_report.py --scenario regionalbackbone_failure_detection_degraded_link_model_family --feature-set extended
+cmd /c run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_degraded_link_model_family --feature-set extended
+cmd /c run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_degraded_link_model_family --feature-set extended
 ```
 
 The baseline dataset remains the validated core. The extended dataset is
@@ -203,18 +228,14 @@ Receiver-observed unobserved packet gaps and reordered packets must remain
 separate. Reordered packets are transition side effects, not direct packet-loss
 proof.
 
-Exact packet loss is available only where the final evaluation can pair INET
-`packetSent:count` and `packetReceived:count` scalars for the monitored UDP
-`app[0]` flow. That exact monitored-flow loss must stay separate from
-receiver-observed continuity-gap diagnostics, delivery-ratio proxies, and
-reordering counts. Recovery-time fields are receiver-observed
-recovery/disruption proxies, not direct OSPF convergence timers.
-
-In the instrumented mixed UDP/TCP extension, targeted INET scalars provide
-exact aggregate sent/received/loss accounting across all configured UDP
-application flows, plus histogram-derived UDP delay percentiles. Those
-percentiles are still conditioned on received packets and should be interpreted
-together with loss/continuity metrics.
+Exact packet loss is available where the final evaluation can pair INET
+`packetSent:count` and `packetReceived:count` scalars. The unified Link-Failure
+and Degraded-Backup cohorts retain exact monitored UDP `app[0]` accounting and
+also export mixed UDP/TCP endpoint diagnostics. The Queue-Buildup cohort adds
+exact aggregate sent/received/loss accounting across configured UDP application
+flows plus histogram-derived UDP delay percentiles. All UDP delay values are
+conditioned on received packets and must be interpreted together with
+loss/continuity metrics.
 
 The optional network-impact report adds a separate UDP/QoS view from existing
 outputs only:
@@ -226,31 +247,29 @@ cmd /c run_analysis.bat network-impact --scenario regionalbackbone_failure_detec
 It does not change AI-MRCE decisions, simulation behavior, dataset/outcome
 schemas, or runtime model artifacts. Delivery/loss-like ratios and jitter-like
 fields in that report are explicitly labeled as proxies unless exact accounting
-is available. TCP impact is reported only for the mixed UDP/TCP
-transport-impact cohort and only as endpoint received-byte/goodput/progress
-proxies; TCP RTT, retransmissions, congestion window, duplicate ACKs, and exact
-flow-completion time are not claimed.
+is available. TCP impact is reported only as endpoint
+received-byte/goodput/progress proxies; TCP RTT, retransmissions, congestion
+window, duplicate ACKs, and exact flow-completion time are not claimed unless
+the corresponding INET export is explicitly present.
 
-The instrumented transport-impact extension can additionally report TCP stack
-RTT and congestion-window scalar summaries when INET exports them. TCP
-retransmissions remain unavailable unless the corresponding scalar is present;
-endpoint goodput/progress remains the safest transport claim.
+The Queue-Buildup cohort can additionally report TCP stack RTT and
+congestion-window scalar summaries when INET exports them. TCP retransmissions
+remain unavailable unless the corresponding scalar is present; endpoint
+goodput/progress remains the safest transport claim.
 
-For the main paper, prefer a compact figure subset and leave the complete
-scenario-consistent figure set as supplementary material:
+The final paper-facing figure set is intentionally compact and currently
+contains exactly five core figures under
+`analysis/output/final_evaluation/main_figures/`:
 
-- `final_protection_family_packet_loss.png`;
-- `final_protection_family_udp_delay.png`;
-- `final_protection_family_recovery_time.png`;
-- `final_protection_family_reordering.png`;
-- `final_protection_family_lead_time.png`;
-- `final_protection_family_tcp_goodput_proxy.png`;
-- `final_protection_family_summary.png`;
-- `ml_feature_importance_cost_aware.png`.
+- `paper_packet_loss.png`;
+- `paper_instrumented_udp_quality.png`;
+- `paper_lead_time.png`;
+- `paper_protection_family_summary.png`;
+- `paper_runtime_feature_importance.png`.
 
-All per-scenario lead-time, UDP loss, delay, reordering, recovery, TCP endpoint,
-ML timing, and diagnostic saturation figures should be treated as supplementary
-unless they are needed to support a specific subsection.
+Traceability tables and generated figure manifests remain available under
+`analysis/output/final_evaluation/tables/`, but the manuscript narrative should
+focus on this five-figure core set.
 
 The shallow-tree policy has been audited in the cost-aware traces. No runtime
 artifact loading or feature-mapping bug was found; the deployed tree stayed
@@ -293,11 +312,11 @@ Run a run-0 smoke cohort:
 
 ```bat
 cmd /c run_experiments.bat regional-degradation-sensitivity-batch --runs 0 --clean --yes --skip-runtime-export --skip-build
-py -3 analysis\build_dataset.py --scenario regionalbackbone_failure_detection_degradation_sensitivity
-py -3 analysis\build_dataset.py --scenario regionalbackbone_failure_detection_degradation_sensitivity --feature-set extended
-py -3 analysis\dataset_report.py --scenario regionalbackbone_failure_detection_degradation_sensitivity
-py -3 analysis\dataset_report.py --scenario regionalbackbone_failure_detection_degradation_sensitivity --feature-set extended
-py -3 analysis\compare_outcomes.py --inputs analysis\output\outcomes\regionalbackbone_failure_detection_degradation_sensitivity_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_degradation_sensitivity
+cmd /c run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_degradation_sensitivity
+cmd /c run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_degradation_sensitivity --feature-set extended
+cmd /c run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_degradation_sensitivity
+cmd /c run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_degradation_sensitivity --feature-set extended
+cmd /c run_analysis.bat compare-outcomes --inputs analysis\output\outcomes\regionalbackbone_failure_detection_degradation_sensitivity_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_degradation_sensitivity
 cmd /c run_analysis.bat network-impact --scenario regionalbackbone_failure_detection_degradation_sensitivity
 cmd /c run_analysis.bat offline-ml-audit --scenario regionalbackbone_failure_detection_degradation_sensitivity
 cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_degradation_sensitivity
@@ -337,11 +356,11 @@ Run a run-0 smoke cohort:
 
 ```bat
 cmd /c run_experiments.bat regional-cost-aware-backup-batch --runs 0 --clean --yes --skip-runtime-export --skip-build
-py -3 analysis\build_dataset.py --scenario regionalbackbone_failure_detection_cost_aware_backup
-py -3 analysis\build_dataset.py --scenario regionalbackbone_failure_detection_cost_aware_backup --feature-set extended
-py -3 analysis\dataset_report.py --scenario regionalbackbone_failure_detection_cost_aware_backup
-py -3 analysis\dataset_report.py --scenario regionalbackbone_failure_detection_cost_aware_backup --feature-set extended
-py -3 analysis\compare_outcomes.py --inputs analysis\output\outcomes\regionalbackbone_failure_detection_cost_aware_backup_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_cost_aware_backup
+cmd /c run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_cost_aware_backup
+cmd /c run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_cost_aware_backup --feature-set extended
+cmd /c run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_cost_aware_backup
+cmd /c run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_cost_aware_backup --feature-set extended
+cmd /c run_analysis.bat compare-outcomes --inputs analysis\output\outcomes\regionalbackbone_failure_detection_cost_aware_backup_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_cost_aware_backup
 cmd /c run_analysis.bat network-impact --scenario regionalbackbone_failure_detection_cost_aware_backup
 cmd /c run_analysis.bat offline-ml-audit --scenario regionalbackbone_failure_detection_cost_aware_backup
 cmd /c run_analysis.bat activation-root-cause --scenario regionalbackbone_failure_detection_cost_aware_backup
@@ -357,21 +376,25 @@ is supported, for example:
 cmd /c run_experiments.bat regional-cost-aware-backup-batch --clean --yes --skip-runtime-export --skip-build --jobs 2
 ```
 
-The cost-aware cohort is still UDP-only. It does not add TCP claims, Deep
-Learning, runtime model v2 export, or standards-compliant FRR/BFD behavior.
+The cost-aware cohort is now part of the unified mixed UDP/TCP final
+experiment. It does not add Deep Learning, runtime model v2 export, or
+standards-compliant FRR/BFD behavior, and its TCP results remain endpoint
+progress/goodput proxies.
 Do not treat the illustrative run-0 smoke output as a publication cohort until
 the full five-run matrix is regenerated and `pipeline-integrity` returns `OK`.
 
-## Mixed UDP/TCP Transport-Impact Cohort
+## Supplementary Mixed UDP/TCP Transport-Impact Cohort
 
-The deployment-oriented transport-impact extension is:
+The retained baseline transport-impact extension is:
 
 `regionalbackbone_failure_detection_cost_aware_transport_impact`
 
 It derives from the cost-aware backup-path design, preserves the UDP monitoring
 flow used by AI-MRCE telemetry, and adds a lightweight INET
 `TcpBasicClientApp`/`TcpGenericServerApp` request-reply flow over the same
-primary/backup routing environment. TCP results are endpoint-observed
+primary/backup routing environment. It is retained for traceability; the final
+main networking role is now Scenario C, Congestion/Queue-Buildup Early
+Mitigation. TCP results are endpoint-observed
 received-byte, goodput, and progress proxies only. The scenario does not claim
 TCP RTT, retransmission, congestion-window, or exact finite-flow completion
 metrics.
@@ -380,11 +403,11 @@ Run a run-0 smoke cohort:
 
 ```bat
 cmd /c run_experiments.bat regional-cost-aware-transport-impact-batch --runs 0 --clean --yes --skip-runtime-export --skip-build
-py -3 analysis\build_dataset.py --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
-py -3 analysis\build_dataset.py --scenario regionalbackbone_failure_detection_cost_aware_transport_impact --feature-set extended
-py -3 analysis\dataset_report.py --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
-py -3 analysis\dataset_report.py --scenario regionalbackbone_failure_detection_cost_aware_transport_impact --feature-set extended
-py -3 analysis\compare_outcomes.py --inputs analysis\output\outcomes\regionalbackbone_failure_detection_cost_aware_transport_impact_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_cost_aware_transport_impact
+cmd /c run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
+cmd /c run_analysis.bat build-dataset --scenario regionalbackbone_failure_detection_cost_aware_transport_impact --feature-set extended
+cmd /c run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
+cmd /c run_analysis.bat dataset-report --scenario regionalbackbone_failure_detection_cost_aware_transport_impact --feature-set extended
+cmd /c run_analysis.bat compare-outcomes --inputs analysis\output\outcomes\regionalbackbone_failure_detection_cost_aware_transport_impact_outcome_summary.csv --output-prefix analysis\output\outcomes\regionalbackbone_failure_detection_cost_aware_transport_impact
 cmd /c run_analysis.bat network-impact --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
 cmd /c run_analysis.bat offline-ml-audit --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
 cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
@@ -394,8 +417,8 @@ cmd /c run_analysis.bat evaluate-results
 
 For the full transport-impact cohort, omit `--runs 0`; the full matrix is
 3 transport profiles x 7 mechanisms x 5 runs = 105 outcome rows. Use `--jobs N`
-carefully because transport vectors are larger than the compact UDP-only
-analysis artifacts.
+carefully because transport vectors are larger than earlier compact analysis
+artifacts.
 
 ## Diagnostic Commands
 

@@ -3,18 +3,27 @@
 This repository is centered on the regionalbackbone simulation source,
 AI-MRCE/FRR-like/BFD-like controllers, runtime model artifacts, and the
 analysis pipeline needed to reproduce, validate, trace, package, and evaluate
-four current dissertation scenario families:
+the current dissertation scenario set. The paper-facing main roles are:
 
 - `regionalbackbone_failure_detection_degraded_link_model_family`
-- `regionalbackbone_failure_detection_degradation_sensitivity`
 - `regionalbackbone_failure_detection_cost_aware_backup`
+- `regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented`
+
+Supplementary/traceability scenarios remain available:
+
+- `regionalbackbone_failure_detection_degradation_sensitivity`
 - `regionalbackbone_failure_detection_cost_aware_transport_impact`
 
-The separate instrumentation extension
-`regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented`
-is an analysis-strengthening derivative of the fourth layer. It is not counted
-as a new behavioral claim layer; it preserves the mixed UDP/TCP experiment
-semantics while recording richer INET scalar/histogram telemetry.
+The three paper-facing main roles now share a unified mixed UDP/TCP workload
+and a common metric contract:
+
+- Predictive Link-Failure Recovery validates proactive repair before hard
+  failure.
+- Cost-Aware Degraded-Backup Operation isolates the opportunity cost of early
+  backup use.
+- Congestion/Queue-Buildup Early Mitigation stresses the protected primary span
+  with progressive queue buildup and QoS degradation while recording targeted
+  INET scalar/histogram telemetry.
 
 The old standalone small-topology scenario trees are not part of the current
 public workflow. Earlier wrapper compatibility branches are treated as support
@@ -57,20 +66,21 @@ logic, repair-route semantics, and runtime model artifacts unchanged. Its
 purpose is robustness and telemetry-feasibility analysis, not a replacement for
 the validated model-family result.
 
-A second optional extension is the cost-aware backup-path cohort:
+The cost-aware backup-path cohort is one of the three paper-facing main roles:
 
 `regionalbackbone_failure_detection_cost_aware_backup`
 
-It reuses the regional topology and the same seven mechanism families, but
-sets `enableCostAwareBackupPenalty=true` so the southern static repair corridor
-uses 100 Mbps links with a small added delay penalty on each repair-corridor
-hop. The resulting backup path remains usable and QoS-capable, while early
+It reuses the regional topology and the same seven mechanism families, adds
+the unified mixed UDP/TCP workload, and sets
+`enableCostAwareBackupPenalty=true` so the southern static repair corridor uses
+100 Mbps links with a small added delay penalty on each repair-corridor hop.
+The resulting backup path remains usable and QoS-capable, while early
 repair-route activation has measurable opportunity cost. This cohort is the
-place to discuss backup usage time, transition reordering, UDP delay/queueing
+place to discuss backup usage time, transition reordering, UDP/TCP endpoint
 impact, and avoided receiver-observed post-failure gaps as separate
 benefit/cost components.
 
-A fourth realism layer is the mixed UDP/TCP transport-impact cohort:
+The retained supplementary mixed UDP/TCP transport-impact cohort is:
 
 `regionalbackbone_failure_detection_cost_aware_transport_impact`
 
@@ -81,16 +91,19 @@ validation layer, but its TCP fields are endpoint-observed received-byte,
 goodput, and progress proxies only. It does not claim TCP RTT, retransmission,
 congestion-window, or exact finite-flow completion measurements.
 
-The instrumented transport-impact derivative keeps the same profiles,
-mechanisms, traffic, thresholds, and repair-route behavior, but writes to the
-short isolated raw result folder `results/regionalbackbone/ti_inst/`. Its
-recording policy favors compact scalars and histograms over broad packet-level
-vectors: exact aggregate UDP sent/received/loss counts across configured UDP
-apps, received-packet UDP delay percentiles, TCP endpoint goodput/progress,
-TCP RTT/cwnd scalar summaries when INET exports them, and queue drop/queueing
-summaries where present. IPDV-like jitter, link-utilization vectors, TCP
-duplicate ACKs, and TCP retransmission counts remain future instrumentation
-items unless explicitly exported.
+The redesigned Scenario C keeps the same profiles, mechanisms, mixed traffic,
+thresholds, and repair-route behavior, but enables the core bottleneck on the
+protected primary span and writes to the short isolated raw result folder
+`results/regionalbackbone/ti_inst/`. This makes Scenario C scientifically
+different from the degraded-backup scenario: B studies backup-path opportunity
+cost, while C studies proactive mitigation of queue buildup and QoS degradation
+before hard failure. Its recording policy favors compact scalars and histograms
+over broad packet-level vectors: exact aggregate UDP sent/received/loss counts
+across configured UDP apps, received-packet UDP delay percentiles, TCP endpoint
+goodput/progress, TCP RTT/cwnd scalar summaries when INET exports them, and
+queue drop/queueing summaries where present. IPDV-like jitter, link-utilization
+vectors, TCP duplicate ACKs, and TCP retransmission counts remain future
+instrumentation items unless explicitly exported.
 
 Historical regionalbackbone experimental configs were removed from the active
 `omnetpp.ini` hierarchy. The only retained non-model-family config is
@@ -128,18 +141,19 @@ not the active AI-MRCE dissertation mechanism.
 
 Active pipeline scripts:
 
-- `analysis/build_dataset.py`
-- `analysis/dataset_report.py`
-- `analysis/compare_outcomes.py`
-- `analysis/extract_aimrce_risk_trace.py`
-- `analysis/network_impact_report.py`
-- `analysis/export_runtime_models.py`
-- `analysis/pipeline_integrity.py`
-- `analysis/package_current_experiment.py`
-- `analysis/clean_generated.py`
-- `analysis/activation_root_cause.py`
-- `analysis/offline_ml_audit.py`
-- `analysis/evaluate_results.py`
+- `analysis/core/build_dataset.py`
+- `analysis/core/dataset_report.py`
+- `analysis/core/compare_outcomes.py`
+- `analysis/core/network_impact_report.py`
+- `analysis/core/evaluate_results.py`
+- `analysis/core/pipeline_integrity.py`
+- `analysis/core/package_current_experiment.py`
+- `analysis/ml/train_risk_model.py`
+- `analysis/ml/export_runtime_models.py`
+- `analysis/ml/offline_ml_audit.py`
+- `analysis/diagnostics/extract_aimrce_risk_trace.py`
+- `analysis/diagnostics/clean_generated.py`
+- `analysis/diagnostics/activation_root_cause.py`
 - `analysis/run_analysis.ps1`
 - `analysis/run_experiments.ps1`
 
@@ -159,22 +173,26 @@ because concurrent `.vec` writes can saturate disk I/O and memory.
 The network-impact report reads existing dataset/outcome artifacts. It does
 not change simulator behavior, AI-MRCE decisions, BFD-like behavior,
 repair-route semantics, existing output schemas, or runtime model artifacts.
-Exact UDP packet loss is available only for the monitored UDP `app[0]` flow when
-INET `packetSent:count` and `packetReceived:count` scalars are present. Its
-delivery/loss-like, delay-variation, and recovery-time fields are otherwise
-explicitly conservative proxies where exact accounting, full IPDV calculation,
-or direct routing convergence timing is unavailable. The first three cohorts
-remain UDP-only; the transport-impact cohort adds TCP endpoint progress/goodput
-proxies, not protocol-internal TCP measurements.
+Exact UDP packet loss is available where INET `packetSent:count` and
+`packetReceived:count` scalars are present. The unified Link-Failure and
+Degraded-Backup cohorts retain exact monitored UDP `app[0]` accounting and
+export endpoint TCP progress/goodput proxies; the Queue-Buildup cohort
+additionally reports aggregate configured-UDP accounting and UDP delay
+percentiles where exported. Delivery/loss-like, delay-variation, and
+recovery-time fields remain
+conservative proxies where exact accounting, full IPDV calculation, or direct
+routing convergence timing is unavailable. TCP endpoint progress/goodput
+proxies are not protocol-internal TCP measurements.
 
 Telemetry-v2 candidate features are also generated through
-`analysis/build_dataset.py --feature-set extended`, not through a parallel
+`run_analysis.bat build-dataset --feature-set extended`, not through a parallel
 builder. Extended datasets are separate optional artifacts under
 `analysis/output/datasets/*_extended_dataset.csv`. They append candidate
 `feat_*`, `phase_*`, `label_*`, `meta_*`, and `id_*` columns derived from real
 recorded simulation telemetry and controller diagnostics. They are intended for
-future feature validation and ML retraining, while the current runtime export
-remains on the compact validated feature set.
+feature validation and controlled retraining. The final unified workload
+refresh re-exported the runtime CSV artifacts from the compact four-feature
+vector; extended/offline features are still not deployed runtime inputs.
 
 ## Runtime Telemetry Deployability
 
@@ -200,7 +218,7 @@ are used for evaluation or offline analysis only. They are not fed into the
 deployed runtime policy. The telemetry-v2 offline ML audit is therefore a
 candidate-feature feasibility study, not a runtime export path.
 
-`analysis/offline_ml_audit.py` is the optional offline feasibility layer for
+`analysis/ml/offline_ml_audit.py` is the optional offline feasibility layer for
 telemetry v2. It reads the extended dataset and feature-classification report,
 selects only runtime-safe candidate inputs, evaluates grouped offline
 classifiers, and writes reports under `analysis/output/ml_audit/`. It is not a
@@ -209,7 +227,7 @@ artifacts.
 
 Support-only Python tooling:
 
-- `analysis/train_risk_model.py` remains as offline ML methodology support. It
+- `analysis/ml/train_risk_model.py` remains as offline ML methodology support. It
   is not part of the default active publication regeneration path and is not
   exposed by the cleaned `run_analysis.bat help` surface.
 
@@ -239,13 +257,16 @@ The optional mixed UDP/TCP transport-impact raw result folder is:
 
 `results/regionalbackbone/failure_detection_cost_aware_transport_impact/`
 
-The instrumented mixed UDP/TCP raw result folder is:
+The queue-buildup mixed UDP/TCP raw result folder is:
 
 `results/regionalbackbone/ti_inst/`
 
-The compact review package is:
+The compact review packages use clean scenario-role slugs under
+`analysis/output/current_experiment/`, for example:
 
-`analysis/output/current_experiment/regionalbackbone_failure_detection_degraded_link_model_family/`
+- `predictive_link_failure_recovery/`
+- `cost_aware_degraded_backup_operation/`
+- `congestion_queue_buildup_early_mitigation/`
 
 ## Claims And Non-Claims
 
@@ -261,20 +282,17 @@ Allowed claims are scenario-conditioned:
 - Shallow-tree non-activation in cost-aware/transport traces is an audited
   conservative policy outcome, not a runtime loading or feature-mapping bug.
 
-Recommended main-paper figure subset:
+Final core paper figures:
 
-- `final_protection_family_packet_loss.png`;
-- `final_protection_family_udp_delay.png`;
-- `final_protection_family_recovery_time.png`;
-- `final_protection_family_reordering.png`;
-- `final_protection_family_lead_time.png`;
-- `final_protection_family_tcp_goodput_proxy.png`;
-- `final_protection_family_summary.png`;
-- `ml_feature_importance_cost_aware.png`.
+- `paper_packet_loss.png`;
+- `paper_instrumented_udp_quality.png`;
+- `paper_lead_time.png`;
+- `paper_protection_family_summary.png`;
+- `paper_runtime_feature_importance.png`.
 
-Treat per-scenario consistency figures, offline ML saturation plots, and
-diagnostic policy tradeoff figures as supplementary unless the manuscript needs
-one of them for a specific subsection.
+The older broad protection-family and per-scenario diagnostic plots remain
+traceability outputs only if regenerated. They are not the recommended core
+manuscript figure set.
 
 Non-claims:
 

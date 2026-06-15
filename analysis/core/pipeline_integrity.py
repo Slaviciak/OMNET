@@ -16,11 +16,12 @@ from datetime import datetime
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RESULTS_ROOT = PROJECT_ROOT / "results"
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
 DEBUG_DIR = OUTPUT_ROOT / "debug"
+NETWORK_IMPACT_DIR = OUTPUT_ROOT / "network_impact"
 RUNTIME_ARTIFACT_DIR = PROJECT_ROOT / "simulations" / "regionalbackbone"
 
 CORE_SCENARIO = "regionalbackbone_failure_detection_degraded_link_model_family"
@@ -28,8 +29,18 @@ SENSITIVITY_SCENARIO = "regionalbackbone_failure_detection_degradation_sensitivi
 COST_AWARE_BACKUP_SCENARIO = "regionalbackbone_failure_detection_cost_aware_backup"
 COST_AWARE_TRANSPORT_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact"
 COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
+RANDOMIZED_ONSET_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset"
 SCENARIO = CORE_SCENARIO
 RESULTS_DIR = RESULTS_ROOT / "regionalbackbone" / "failure_detection_degraded_link_model_family"
+
+FINAL_SCENARIO_DISPLAY = {
+    CORE_SCENARIO: "Predictive Link-Failure Recovery",
+    COST_AWARE_BACKUP_SCENARIO: "Cost-Aware Degraded-Backup Operation",
+    COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO: "Congestion/Queue-Buildup Early Mitigation",
+    RANDOMIZED_ONSET_SCENARIO: "Queue Buildup Randomized-Onset Robustness",
+}
+
+FINAL_MAIN_SCENARIOS = set(FINAL_SCENARIO_DISPLAY)
 
 EXPECTED_CONFIGS = {
     "RegionalBackboneFailureDegradedLinkOspfOnly": {
@@ -79,6 +90,7 @@ TRANSPORT_INSTRUMENTED_PROFILE_TITLES = (
     "TransportInstrumentedModerate",
     "TransportInstrumentedFastWarning",
 )
+RANDOMIZED_ONSET_VALUES = (45, 50, 55, 60, 65, 70, 75)
 SENSITIVITY_MECHANISMS = {
     "OspfOnly": ("ospf_only", ""),
     "BfdLikeFrr": ("bfd_like_frr", ""),
@@ -87,6 +99,11 @@ SENSITIVITY_MECHANISMS = {
     "AiMrceLinearSvm": ("aimrce_linear_svm_frr", "linear_svm"),
     "AiMrceShallowTree": ("aimrce_shallow_tree_frr", "shallow_tree"),
     "Hybrid": ("hybrid_bfd_like_aimrce_frr", "rule_based"),
+}
+FINAL_SCENARIO_C_MECHANISMS = {
+    mechanism_suffix: mechanism_spec
+    for mechanism_suffix, mechanism_spec in SENSITIVITY_MECHANISMS.items()
+    if mechanism_suffix != "Hybrid"
 }
 
 
@@ -132,12 +149,25 @@ def build_transport_expected_configs() -> dict[str, dict[str, str]]:
 def build_transport_instrumented_expected_configs() -> dict[str, dict[str, str]]:
     configs: dict[str, dict[str, str]] = {}
     for profile_title in TRANSPORT_INSTRUMENTED_PROFILE_TITLES:
-        for mechanism_suffix, (mechanism, runtime_model_type) in SENSITIVITY_MECHANISMS.items():
+        for mechanism_suffix, (mechanism, runtime_model_type) in FINAL_SCENARIO_C_MECHANISMS.items():
             config_name = f"RegionalBackboneCostAware{profile_title}{mechanism_suffix}"
             configs[config_name] = {
                 "mechanism": mechanism,
                 "runtime_model_type": runtime_model_type,
                 "cohort_config": f"{config_name}Cohort",
+            }
+    return configs
+
+
+def build_randomized_onset_expected_configs() -> dict[str, dict[str, str]]:
+    configs: dict[str, dict[str, str]] = {}
+    for onset in RANDOMIZED_ONSET_VALUES:
+        for mechanism_suffix, (mechanism, runtime_model_type) in FINAL_SCENARIO_C_MECHANISMS.items():
+            config_name = f"RegionalBackboneCostAwareTransportRandomizedOnset{onset}{mechanism_suffix}"
+            configs[config_name] = {
+                "mechanism": mechanism,
+                "runtime_model_type": runtime_model_type,
+                "cohort_config": config_name,
             }
     return configs
 
@@ -153,6 +183,8 @@ def expected_configs_for_scenario(scenario: str) -> dict[str, dict[str, str]]:
         return build_transport_expected_configs()
     if scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
         return build_transport_instrumented_expected_configs()
+    if scenario == RANDOMIZED_ONSET_SCENARIO:
+        return build_randomized_onset_expected_configs()
     raise SystemExit(f"Unsupported scenario '{scenario}'.")
 
 
@@ -165,13 +197,15 @@ def results_dir_for_scenario(scenario: str) -> Path:
         result_leaf = "failure_detection_cost_aware_transport_impact"
     elif scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
         result_leaf = "ti_inst"
+    elif scenario == RANDOMIZED_ONSET_SCENARIO:
+        result_leaf = "ti_randomized_onset"
     else:
         result_leaf = "failure_detection_degraded_link_model_family"
     return RESULTS_ROOT / "regionalbackbone" / result_leaf
 
 
 def artifacts_for_scenario(scenario: str) -> dict[str, Path]:
-    return {
+    artifacts = {
         "dataset": OUTPUT_ROOT / "datasets" / f"{scenario}_dataset.csv",
         "dataset_report": OUTPUT_ROOT / "reports" / f"{scenario}_report.txt",
         "outcome_summary": OUTCOMES_DIR / f"{scenario}_outcome_summary.csv",
@@ -183,6 +217,25 @@ def artifacts_for_scenario(scenario: str) -> dict[str, Path]:
         "risk_trace": DEBUG_DIR / f"aimrce_model_family_risk_trace_{scenario}.csv",
         "event_summary": DEBUG_DIR / f"aimrce_model_action_events_{scenario}.csv",
     }
+    if scenario in FINAL_MAIN_SCENARIOS or scenario == RANDOMIZED_ONSET_SCENARIO:
+        artifacts.update(
+            {
+                "network_impact_summary": NETWORK_IMPACT_DIR / f"{scenario}_network_impact_summary.csv",
+                "network_impact_by_run": NETWORK_IMPACT_DIR / f"{scenario}_network_impact_by_run.csv",
+                "network_impact_report": NETWORK_IMPACT_DIR / f"{scenario}_network_impact_report.txt",
+                "transport_summary": NETWORK_IMPACT_DIR / f"{scenario}_transport_summary.csv",
+                "transport_by_run": NETWORK_IMPACT_DIR / f"{scenario}_transport_by_run.csv",
+                "inet_metrics_summary": NETWORK_IMPACT_DIR / f"{scenario}_inet_metrics_summary.csv",
+            }
+        )
+    if scenario in {COST_AWARE_BACKUP_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO, RANDOMIZED_ONSET_SCENARIO}:
+        artifacts.update(
+            {
+                "backup_path_cost_summary": NETWORK_IMPACT_DIR / f"{scenario}_backup_path_cost_summary.csv",
+                "backup_path_cost_by_run": NETWORK_IMPACT_DIR / f"{scenario}_backup_path_cost_by_run.csv",
+            }
+        )
+    return artifacts
 
 ARTIFACTS = {
     "dataset": OUTPUT_ROOT / "datasets" / f"{SCENARIO}_dataset.csv",
@@ -216,6 +269,7 @@ def parse_args() -> argparse.Namespace:
             COST_AWARE_BACKUP_SCENARIO,
             COST_AWARE_TRANSPORT_SCENARIO,
             COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO,
+            RANDOMIZED_ONSET_SCENARIO,
         ],
         help="Scenario preset to inspect.",
     )
@@ -308,13 +362,16 @@ def main() -> None:
     EXPECTED_CONFIGS = expected_configs_for_scenario(SCENARIO)
     EXPECTED_MECHANISMS = {value["mechanism"] for value in EXPECTED_CONFIGS.values()}
     ARTIFACTS = artifacts_for_scenario(SCENARIO)
+    expected_run_numbers = {0} if SCENARIO == RANDOMIZED_ONSET_SCENARIO else {0, 1, 2, 3, 4}
+    expected_run_text = ",".join(str(value) for value in sorted(expected_run_numbers))
     output_path = args.output or (DEBUG_DIR / f"pipeline_integrity_{SCENARIO}.txt")
     lines: list[str] = [
         f"Pipeline integrity report: {args.scenario}",
+        f"Display name: {FINAL_SCENARIO_DISPLAY.get(args.scenario, args.scenario)}",
         f"Generated: {datetime.now().isoformat(timespec='seconds')}",
         "",
         "Scope:",
-        "- This report checks generated artifacts for the requested AI-MRCE degraded-link cohort.",
+        "- This report checks generated artifacts for the requested AI-MRCE final/supplementary cohort.",
         "- It is diagnostic only and does not modify simulation or analysis semantics.",
         "",
         "Artifacts:",
@@ -330,6 +387,21 @@ def main() -> None:
     warnings: list[str] = []
     if not ARTIFACTS["outcome_summary"].exists():
         errors.append(f"Outcome summary is missing: {ARTIFACTS['outcome_summary']}")
+    if SCENARIO in FINAL_MAIN_SCENARIOS:
+        critical_artifacts = [
+            "network_impact_summary",
+            "network_impact_by_run",
+            "network_impact_report",
+            "transport_summary",
+            "transport_by_run",
+            "inet_metrics_summary",
+        ]
+        if SCENARIO in {COST_AWARE_BACKUP_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}:
+            critical_artifacts.extend(["backup_path_cost_summary", "backup_path_cost_by_run"])
+        for artifact_name in critical_artifacts:
+            path = ARTIFACTS.get(artifact_name)
+            if path is None or not path.exists():
+                errors.append(f"Critical final-scenario artifact is missing: {artifact_name} at {path}")
 
     outcome_rows = read_csv_rows(ARTIFACTS["outcome_summary"])
     comparison_rows = read_csv_rows(ARTIFACTS["comparison_summary"])
@@ -373,8 +445,11 @@ def main() -> None:
             errors.append(f"Runtime model mismatch for {config_name}; expected {expected_runtime}.")
         if any(row.get("runtime_model_fallback_used", "") not in {"", "0"} for row in rows):
             errors.append(f"Runtime model fallback was used in {config_name}; learned-model loading should be fail-fast.")
-        if len(run_numbers) < 5:
-            warnings.append(f"{config_name} has {len(run_numbers)} observed run(s); full dissertation cohort expects 5.")
+        observed_run_ints = {int(value) for value in run_numbers if str(value).isdigit()}
+        if observed_run_ints != expected_run_numbers:
+            warnings.append(
+                f"{config_name} observed runs {','.join(run_numbers) or 'none'}; expected {expected_run_text} for this cohort."
+            )
 
     observed_mechanisms = {
         row.get("mechanism_family", "") or row.get("mechanism_family_normalized", "")
@@ -401,8 +476,10 @@ def main() -> None:
             missing = required_suffixes - suffixes
             if missing:
                 warnings.append(f"{cohort_name} run {run_number} is missing result files: {', '.join(sorted(missing))}")
-        if len(observed_runs) < 5:
-            warnings.append(f"{cohort_name} has {len(observed_runs)} raw result run(s); full cohort expects 5.")
+        if set(observed_runs) != expected_run_numbers:
+            warnings.append(
+                f"{cohort_name} raw result runs {','.join(map(str, observed_runs)) or 'none'}; expected {expected_run_text} for this cohort."
+            )
 
     outcome_run_sets = {
         config_name: {row.get("run_number", "") for row in rows}
@@ -411,7 +488,7 @@ def main() -> None:
     }
     full_outcome = (
         len(outcome_run_sets) == len(EXPECTED_CONFIGS)
-        and all(run_set == {"0", "1", "2", "3", "4"} for run_set in outcome_run_sets.values())
+        and all({int(value) for value in run_set if str(value).isdigit()} == expected_run_numbers for run_set in outcome_run_sets.values())
     )
     run0_only = (
         len(outcome_run_sets) == len(EXPECTED_CONFIGS)
@@ -419,7 +496,7 @@ def main() -> None:
     )
     raw_full = (
         len(raw_run_sets) == len(EXPECTED_CONFIGS)
-        and all(run_set == {0, 1, 2, 3, 4} for run_set in raw_run_sets.values())
+        and all(run_set == expected_run_numbers for run_set in raw_run_sets.values())
     )
     raw_run0_only = (
         len(raw_run_sets) == len(EXPECTED_CONFIGS)
@@ -427,7 +504,10 @@ def main() -> None:
     )
     lines.extend(["", "Workspace mode:"])
     if full_outcome and raw_full:
-        lines.append("- FULL_PUBLICATION_COHORT: all expected mechanisms have runs 0,1,2,3,4.")
+        if SCENARIO == RANDOMIZED_ONSET_SCENARIO:
+            lines.append("- COMPLETE_RANDOMIZED_ONSET_SWEEP: all expected onset/mechanism configs have run 0.")
+        else:
+            lines.append("- FULL_PUBLICATION_COHORT: all expected mechanisms have runs 0,1,2,3,4.")
     elif run0_only and raw_run0_only:
         lines.append("- RUN0_DEVELOPMENT_MODE: all expected mechanisms have run 0 only.")
         warnings.append("Workspace is in run-0 development mode; full dissertation publication cohort expects runs 0,1,2,3,4.")
@@ -445,25 +525,25 @@ def main() -> None:
             "dataset_vs_raw_results",
             ARTIFACTS["dataset"],
             raw_sources,
-            f"py -3 analysis\\build_dataset.py --scenario {SCENARIO}",
+            f"cmd /c run_analysis.bat build-dataset --scenario {SCENARIO}",
         ),
         (
             "dataset_report_vs_dataset",
             ARTIFACTS["dataset_report"],
             [ARTIFACTS["dataset"]],
-            f"py -3 analysis\\dataset_report.py --scenario {SCENARIO}",
+            f"cmd /c run_analysis.bat dataset-report --scenario {SCENARIO}",
         ),
         (
             "outcome_summary_vs_dataset",
             ARTIFACTS["outcome_summary"],
             [ARTIFACTS["dataset"]],
-            f"py -3 analysis\\dataset_report.py --scenario {SCENARIO}",
+            f"cmd /c run_analysis.bat dataset-report --scenario {SCENARIO}",
         ),
         (
             "comparison_vs_outcome_summary",
             ARTIFACTS["comparison_report"],
             [ARTIFACTS["outcome_summary"]],
-            "py -3 analysis\\compare_outcomes.py --inputs "
+            "cmd /c run_analysis.bat compare-outcomes --inputs "
             f"analysis\\output\\outcomes\\{SCENARIO}_outcome_summary.csv "
             f"--output-prefix analysis\\output\\outcomes\\{SCENARIO}",
         ),
@@ -471,7 +551,7 @@ def main() -> None:
             "headline_vs_outcome_summary",
             ARTIFACTS["headline_summary_csv"],
             [ARTIFACTS["outcome_summary"]],
-            "py -3 analysis\\compare_outcomes.py --inputs "
+            "cmd /c run_analysis.bat compare-outcomes --inputs "
             f"analysis\\output\\outcomes\\{SCENARIO}_outcome_summary.csv "
             f"--output-prefix analysis\\output\\outcomes\\{SCENARIO}",
         ),
@@ -479,15 +559,38 @@ def main() -> None:
             "risk_trace_vs_raw_and_outcome",
             ARTIFACTS["risk_trace"],
             raw_sources + [ARTIFACTS["outcome_summary"]],
-            f"py -3 analysis\\extract_aimrce_risk_trace.py --scenario {SCENARIO} --runs 0 --start 78 --end 86",
+            f"cmd /c run_analysis.bat model-risk-trace --scenario {SCENARIO} --runs 0 --start 78 --end 86",
         ),
         (
             "event_summary_vs_raw_and_outcome",
             ARTIFACTS["event_summary"],
             raw_sources + [ARTIFACTS["outcome_summary"]],
-            f"py -3 analysis\\extract_aimrce_risk_trace.py --scenario {SCENARIO} --runs 0 --start 78 --end 86",
+            f"cmd /c run_analysis.bat model-risk-trace --scenario {SCENARIO} --runs 0 --start 78 --end 86",
         ),
     ]
+    if SCENARIO in FINAL_MAIN_SCENARIOS:
+        freshness_checks.extend(
+            [
+                (
+                    "network_impact_vs_dataset_and_outcomes",
+                    ARTIFACTS["network_impact_report"],
+                    [ARTIFACTS["dataset"], ARTIFACTS["outcome_summary"]],
+                    f"cmd /c run_analysis.bat network-impact --scenario {SCENARIO}",
+                ),
+                (
+                    "transport_summary_vs_dataset_and_outcomes",
+                    ARTIFACTS["transport_summary"],
+                    [ARTIFACTS["dataset"], ARTIFACTS["outcome_summary"]],
+                    f"cmd /c run_analysis.bat network-impact --scenario {SCENARIO}",
+                ),
+                (
+                    "inet_metrics_summary_vs_dataset_and_outcomes",
+                    ARTIFACTS["inet_metrics_summary"],
+                    [ARTIFACTS["dataset"], ARTIFACTS["outcome_summary"]],
+                    f"cmd /c run_analysis.bat network-impact --scenario {SCENARIO}",
+                ),
+            ]
+        )
     lines.extend(["", "Freshness checks:"])
     for name, generated, sources, command in freshness_checks:
         warning = stale_warning(generated, sources, command)

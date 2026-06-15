@@ -28,6 +28,9 @@ $reportsDir = Join-Path $outputRoot "reports"
 $trainingDir = Join-Path $outputRoot "training"
 $outcomesDir = Join-Path $outputRoot "outcomes"
 $debugOutputDir = Join-Path $outputRoot "debug"
+$networkImpactDir = Join-Path $outputRoot "network_impact"
+$mlAuditDir = Join-Path $outputRoot "ml_audit"
+$finalEvaluationDir = Join-Path $outputRoot "final_evaluation"
 $logsRoot = Join-Path $outputRoot "experiment_logs"
 $powerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 $script:ExplorerExe = Join-Path $env:SystemRoot "explorer.exe"
@@ -172,7 +175,7 @@ $script:RegionalBackboneFailureDetectionDegradedLinkPreset = [pscustomobject]@{
 
 $script:RegionalBackboneFailureDetectionDegradedLinkModelFamilyPreset = [pscustomobject]@{
     Name = "regionalbackbone_failure_detection_degraded_link_model_family"
-    Description = "Regional backbone degraded-link comparison with explicit AI-MRCE runtime model-family variants"
+    Description = "Regional backbone degraded-link comparison with OSPF, BFD-like+FRR-like, and final AI-MRCE runtime policy variants"
     ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
     EvalDir = Join-Path $projectRoot "results\regionalbackbone\failure_detection_degraded_link_model_family"
     DatasetPath = Join-Path $datasetsDir "regionalbackbone_failure_detection_degraded_link_model_family_dataset.csv"
@@ -192,8 +195,7 @@ $script:RegionalBackboneFailureDetectionDegradedLinkModelFamilyPreset = [pscusto
         "RegionalBackboneFailureDegradedLinkAiMrceRuleBasedCohort",
         "RegionalBackboneFailureDegradedLinkAiMrceLogRegCohort",
         "RegionalBackboneFailureDegradedLinkAiMrceLinearSvmCohort",
-        "RegionalBackboneFailureDegradedLinkAiMrceShallowTreeCohort",
-        "RegionalBackboneFailureDegradedLinkHybridCohort"
+        "RegionalBackboneFailureDegradedLinkAiMrceShallowTreeCohort"
     )
     DefaultRunNumbers = @(0, 1, 2, 3, 4)
 }
@@ -240,7 +242,7 @@ $script:RegionalBackboneDegradationSensitivityPreset = [pscustomobject]@{
 
 $script:RegionalBackboneCostAwareBackupPreset = [pscustomobject]@{
     Name = "regionalbackbone_failure_detection_cost_aware_backup"
-    Description = "Regional backbone cost-aware backup-path cohort with primary-normal/backup-mild-penalty profiles across the same seven mechanism families"
+    Description = "Regional backbone cost-aware backup-path cohort with primary-normal/backup-mild-penalty profiles across the final six mechanism families"
     ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
     EvalDir = Join-Path $projectRoot "results\regionalbackbone\failure_detection_cost_aware_backup"
     DatasetPath = Join-Path $datasetsDir "regionalbackbone_failure_detection_cost_aware_backup_dataset.csv"
@@ -261,21 +263,18 @@ $script:RegionalBackboneCostAwareBackupPreset = [pscustomobject]@{
         "RegionalBackboneCostAwareMildAiMrceLogRegCohort",
         "RegionalBackboneCostAwareMildAiMrceLinearSvmCohort",
         "RegionalBackboneCostAwareMildAiMrceShallowTreeCohort",
-        "RegionalBackboneCostAwareMildHybridCohort",
         "RegionalBackboneCostAwareModerateOspfOnlyCohort",
         "RegionalBackboneCostAwareModerateBfdLikeFrrCohort",
         "RegionalBackboneCostAwareModerateAiMrceRuleBasedCohort",
         "RegionalBackboneCostAwareModerateAiMrceLogRegCohort",
         "RegionalBackboneCostAwareModerateAiMrceLinearSvmCohort",
         "RegionalBackboneCostAwareModerateAiMrceShallowTreeCohort",
-        "RegionalBackboneCostAwareModerateHybridCohort",
         "RegionalBackboneCostAwareFastWarningOspfOnlyCohort",
         "RegionalBackboneCostAwareFastWarningBfdLikeFrrCohort",
         "RegionalBackboneCostAwareFastWarningAiMrceRuleBasedCohort",
         "RegionalBackboneCostAwareFastWarningAiMrceLogRegCohort",
         "RegionalBackboneCostAwareFastWarningAiMrceLinearSvmCohort",
-        "RegionalBackboneCostAwareFastWarningAiMrceShallowTreeCohort",
-        "RegionalBackboneCostAwareFastWarningHybridCohort"
+        "RegionalBackboneCostAwareFastWarningAiMrceShallowTreeCohort"
     )
     DefaultRunNumbers = @(0, 1, 2, 3, 4)
 }
@@ -324,7 +323,7 @@ $script:RegionalBackboneCostAwareTransportImpactPreset = [pscustomobject]@{
 
 $script:RegionalBackboneCostAwareTransportImpactInstrumentedPreset = [pscustomobject]@{
     Name = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
-    Description = "Regional backbone instrumented mixed UDP/TCP transport-impact cohort with targeted INET telemetry"
+    Description = "Regional backbone congestion/queue-buildup mitigation cohort with mixed UDP/TCP traffic and targeted INET telemetry"
     ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
     EvalDir = Join-Path $projectRoot "results\regionalbackbone\ti_inst"
     DatasetPath = Join-Path $datasetsDir "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented_dataset.csv"
@@ -345,23 +344,57 @@ $script:RegionalBackboneCostAwareTransportImpactInstrumentedPreset = [pscustomob
         "RegionalBackboneCostAwareTransportInstrumentedMildAiMrceLogRegCohort",
         "RegionalBackboneCostAwareTransportInstrumentedMildAiMrceLinearSvmCohort",
         "RegionalBackboneCostAwareTransportInstrumentedMildAiMrceShallowTreeCohort",
-        "RegionalBackboneCostAwareTransportInstrumentedMildHybridCohort",
         "RegionalBackboneCostAwareTransportInstrumentedModerateOspfOnlyCohort",
         "RegionalBackboneCostAwareTransportInstrumentedModerateBfdLikeFrrCohort",
         "RegionalBackboneCostAwareTransportInstrumentedModerateAiMrceRuleBasedCohort",
         "RegionalBackboneCostAwareTransportInstrumentedModerateAiMrceLogRegCohort",
         "RegionalBackboneCostAwareTransportInstrumentedModerateAiMrceLinearSvmCohort",
         "RegionalBackboneCostAwareTransportInstrumentedModerateAiMrceShallowTreeCohort",
-        "RegionalBackboneCostAwareTransportInstrumentedModerateHybridCohort",
         "RegionalBackboneCostAwareTransportInstrumentedFastWarningOspfOnlyCohort",
         "RegionalBackboneCostAwareTransportInstrumentedFastWarningBfdLikeFrrCohort",
         "RegionalBackboneCostAwareTransportInstrumentedFastWarningAiMrceRuleBasedCohort",
         "RegionalBackboneCostAwareTransportInstrumentedFastWarningAiMrceLogRegCohort",
         "RegionalBackboneCostAwareTransportInstrumentedFastWarningAiMrceLinearSvmCohort",
-        "RegionalBackboneCostAwareTransportInstrumentedFastWarningAiMrceShallowTreeCohort",
-        "RegionalBackboneCostAwareTransportInstrumentedFastWarningHybridCohort"
+        "RegionalBackboneCostAwareTransportInstrumentedFastWarningAiMrceShallowTreeCohort"
     )
     DefaultRunNumbers = @(0, 1, 2, 3, 4)
+}
+
+$script:RandomizedOnsetValues = @(45, 50, 55, 60, 65, 70, 75)
+$script:RandomizedOnsetMechanismSuffixes = @(
+    "OspfOnly",
+    "BfdLikeFrr",
+    "AiMrceRuleBased",
+    "AiMrceLogReg",
+    "AiMrceLinearSvm",
+    "AiMrceShallowTree"
+)
+$script:RegionalBackboneCostAwareTransportRandomizedOnsetConfigs = @(
+    foreach ($onset in $script:RandomizedOnsetValues) {
+        foreach ($mechanismSuffix in $script:RandomizedOnsetMechanismSuffixes) {
+            "RegionalBackboneCostAwareTransportRandomizedOnset$onset$mechanismSuffix"
+        }
+    }
+)
+
+$script:RegionalBackboneCostAwareTransportRandomizedOnsetPreset = [pscustomobject]@{
+    Name = "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset"
+    Description = "Supplementary Scenario C-R randomized queue-buildup onset robustness sweep with mixed UDP/TCP traffic and unchanged deployed AI-MRCE runtime artifacts"
+    ScenarioDir = Join-Path $simulationsDir "regionalbackbone"
+    EvalDir = Join-Path $projectRoot "results\regionalbackbone\ti_randomized_onset"
+    DatasetPath = Join-Path $datasetsDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_dataset.csv"
+    ReportPath = Join-Path $reportsDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_report.txt"
+    MissingCsvPath = Join-Path $debugOutputDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_missing_values.csv"
+    PerConfigCsvPath = Join-Path $debugOutputDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_per_config_summary.csv"
+    OutcomeSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_outcome_summary.csv"
+    ComparisonOutputPrefix = Join-Path $outcomesDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset"
+    ComparisonRunsPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_runs.csv"
+    ComparisonSummaryPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_summary.csv"
+    ComparisonReportPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_report.txt"
+    HeadlineSummaryCsvPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_headline_summary.csv"
+    HeadlineSummaryTxtPath = Join-Path $outcomesDir "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_headline_summary.txt"
+    EvalConfigs = $script:RegionalBackboneCostAwareTransportRandomizedOnsetConfigs
+    DefaultRunNumbers = @(0)
 }
 
 $script:ActiveDatasetScenarios = @("regionalbackbone")
@@ -402,6 +435,7 @@ Usage:
 
 Commands:
   help             Show this help text.
+  dataset-batch    Rebuild the regionalbackbone support dataset used to train/export AI-MRCE runtime models.
   regional-failure-detection-degraded-link-model-family-batch
                    Run the degraded-link comparison with explicit AI-MRCE rule-based, logistic-regression, linear-SVM, and shallow-tree runtime policies.
   regional-degradation-sensitivity-batch
@@ -411,11 +445,13 @@ Commands:
   regional-cost-aware-transport-impact-batch
                    Run the cost-aware mixed UDP/TCP transport-impact cohort with mild, moderate, and fast-warning profiles.
   regional-cost-aware-transport-impact-instrumented-batch
-                   Run the isolated instrumented mixed UDP/TCP transport-impact cohort with targeted INET telemetry.
+                   Run Scenario C: congestion/queue-buildup early mitigation with mixed UDP/TCP traffic and targeted INET telemetry.
+  regional-cost-aware-transport-impact-randomized-onset-batch
+                   Run supplementary Scenario C-R: randomized queue-buildup onset robustness with unchanged runtime models.
 
 Common options:
   --runs <runNumber...>             Explicit OMNeT++ run numbers. Dedicated publication cohorts default to runs 0,1,2,3,4 when omitted; use --runs 0 for smoke/regression work.
-  --configs <configName...>          Internal bounded smoke selection. For the instrumented transport-impact batch, use only with --skip-analysis.
+  --configs <configName...>          Internal bounded smoke selection. For the Scenario C queue-buildup batch, use only with --skip-analysis.
   --clean                           Clean generated eval artifacts before running.
   --yes                             Required together with --clean for actual deletion.
   --skip-build                      Skip the local project rebuild before simulation-running commands.
@@ -428,6 +464,7 @@ Common options:
 
 Examples:
   run_experiments.bat help
+  run_experiments.bat dataset-batch --scenario regionalbackbone --runs 0 --clean --yes --skip-build
   run_experiments.bat regional-failure-detection-degraded-link-model-family-batch --runs 0 --skip-build --skip-runtime-export
   run_experiments.bat regional-failure-detection-degraded-link-model-family-batch --clean --yes --skip-runtime-export --skip-build
   run_experiments.bat regional-degradation-sensitivity-batch --runs 0 --clean --yes --skip-runtime-export --skip-build
@@ -441,6 +478,8 @@ Examples:
   run_experiments.bat regional-cost-aware-transport-impact-instrumented-batch --dry-run
   run_experiments.bat regional-cost-aware-transport-impact-instrumented-batch --runs 0 --clean --yes --skip-runtime-export --skip-build --jobs 1
   run_experiments.bat regional-cost-aware-transport-impact-instrumented-batch --configs RegionalBackboneCostAwareTransportInstrumentedMildOspfOnlyCohort --runs 0 1 --clean --yes --skip-runtime-export --skip-build --skip-analysis --jobs 2
+  run_experiments.bat regional-cost-aware-transport-impact-randomized-onset-batch --dry-run
+  run_experiments.bat regional-cost-aware-transport-impact-randomized-onset-batch --configs RegionalBackboneCostAwareTransportRandomizedOnset55OspfOnly RegionalBackboneCostAwareTransportRandomizedOnset55BfdLikeFrr RegionalBackboneCostAwareTransportRandomizedOnset55AiMrceLogReg RegionalBackboneCostAwareTransportRandomizedOnset70OspfOnly RegionalBackboneCostAwareTransportRandomizedOnset70BfdLikeFrr RegionalBackboneCostAwareTransportRandomizedOnset70AiMrceLogReg --runs 0 --clean --yes --skip-runtime-export --skip-build --skip-analysis --jobs 1
 
 Generated logs:
   analysis\output\experiment_logs\<timestamp>-<command>\...
@@ -458,12 +497,14 @@ Notes:
   - It prepares generated artifacts and methodological outputs; it is not runtime decision logic itself.
   - The optional folder opening is Windows-only workflow usability help; it is not part of the experiment methodology.
   - Use --runs 0 for development smoke/regression passes; pipeline-integrity will report this as OK_WITH_WARNINGS, not publication-ready.
+  - dataset-batch is a support command for refreshing the runtime-model training/export dataset after workload changes.
   - regional-failure-detection-degraded-link-model-family-batch defaults to runs 0,1,2,3,4 when --runs is omitted.
   - regional-degradation-sensitivity-batch defaults to runs 0,1,2,3,4 when --runs is omitted; use --runs 0 for the first smoke pass.
   - regional-cost-aware-backup-batch defaults to runs 0,1,2,3,4 when --runs is omitted; use --runs 0 for the first smoke pass.
   - regional-cost-aware-transport-impact-batch defaults to runs 0,1,2,3,4 when --runs is omitted; use --runs 0 for the first smoke pass.
-  - regional-cost-aware-transport-impact-instrumented-batch defaults to runs 0,1,2,3,4 when --runs is omitted; use --runs 0 until the richer telemetry size/performance audit is acceptable.
-  - The instrumented batch supports --configs only for bounded smoke/debug tests with --skip-analysis; full analysis still requires the full config set.
+  - regional-cost-aware-transport-impact-instrumented-batch defaults to runs 0,1,2,3,4 when --runs is omitted; use --runs 0 until the queue-buildup size/performance audit is acceptable.
+  - The Scenario C queue-buildup batch supports --configs only for bounded smoke/debug tests with --skip-analysis; full analysis still requires the full config set.
+  - regional-cost-aware-transport-impact-randomized-onset-batch is supplementary; it defaults to run 0 across seven deterministic onset seeds and six final mechanisms.
   - --jobs parallelizes independent OMNeT++ processes only; it does not parallelize one simulation. Use conservative values such as 2-4 because large .vec writes can be RAM and disk-I/O intensive.
   - Run run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_degraded_link_model_family before using outputs in writing.
 "@ | Write-Host
@@ -1360,6 +1401,130 @@ function Get-CleanTargets {
     return @($targets | Sort-Object Name -Unique)
 }
 
+function Get-EvalDebugDir {
+    param(
+        $Preset
+    )
+
+    $parent = Split-Path -Parent $Preset.EvalDir
+    $leaf = Split-Path -Leaf $Preset.EvalDir
+    if ($leaf -eq "eval") {
+        return Join-Path $parent "debug"
+    }
+    return Join-Path $parent ("{0}_debug" -f $leaf)
+}
+
+function Add-ExistingPathTarget {
+    param(
+        [System.Collections.Generic.List[object]]$Targets,
+        [string]$Path
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($Path) -and (Test-Path $Path)) {
+        [void]$Targets.Add((Get-Item -LiteralPath $Path))
+    }
+}
+
+function Get-ScenarioPackageSlug {
+    param([string]$ScenarioName)
+    switch ($ScenarioName) {
+        "regionalbackbone_failure_detection_degraded_link_model_family" { return "predictive_link_failure_recovery" }
+        "regionalbackbone_failure_detection_cost_aware_backup" { return "cost_aware_degraded_backup_operation" }
+        "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented" { return "congestion_queue_buildup_early_mitigation" }
+        "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset" { return "queue_buildup_randomized_onset_robustness" }
+        default { return $ScenarioName }
+    }
+}
+
+function Get-GeneratedAnalysisCleanTargets {
+    param(
+        $Preset,
+        $Context
+    )
+
+    $targets = New-Object 'System.Collections.Generic.List[object]'
+    $scenario = $Preset.Name
+
+    foreach ($path in @(
+            $Preset.DatasetPath,
+            (Join-Path $datasetsDir ("{0}_extended_dataset.csv" -f $scenario)),
+            $Preset.ReportPath,
+            (Join-Path $reportsDir ("{0}_extended_dataset_report.txt" -f $scenario)),
+            (Join-Path $reportsDir ("{0}_extended_feature_classification.txt" -f $scenario)),
+            $Preset.MissingCsvPath,
+            (Join-Path $debugOutputDir ("{0}_extended_missing_values.csv" -f $scenario)),
+            $Preset.PerConfigCsvPath,
+            (Join-Path $debugOutputDir ("{0}_extended_per_config_summary.csv" -f $scenario)),
+            $Preset.OutcomeSummaryPath,
+            (Join-Path $outcomesDir ("{0}_extended_outcome_summary.csv" -f $scenario)),
+            $Preset.ComparisonRunsPath,
+            $Preset.ComparisonSummaryPath,
+            $Preset.ComparisonReportPath,
+            $Preset.HeadlineSummaryCsvPath,
+            $Preset.HeadlineSummaryTxtPath
+        )) {
+        Add-ExistingPathTarget -Targets $targets -Path $path
+    }
+
+    foreach ($dir in @($networkImpactDir, $mlAuditDir)) {
+        if (Test-Path $dir) {
+            Get-ChildItem -Path $dir -File -Filter ("{0}_*" -f $scenario) -ErrorAction SilentlyContinue |
+                ForEach-Object { [void]$targets.Add($_) }
+        }
+    }
+
+    foreach ($figureDirName in @("main_figures", "scenario_figures", "diagnostic_figures", "figures")) {
+        $figureDir = Join-Path $finalEvaluationDir $figureDirName
+        if (Test-Path $figureDir) {
+            Get-ChildItem -Path $figureDir -File -Filter "*.png" -ErrorAction SilentlyContinue |
+                ForEach-Object { [void]$targets.Add($_) }
+        }
+    }
+
+    $packageDir = Join-Path (Join-Path $outputRoot "current_experiment") $scenario
+    Add-ExistingPathTarget -Targets $targets -Path $packageDir
+    $slugPackageDir = Join-Path (Join-Path $outputRoot "current_experiment") (Get-ScenarioPackageSlug -ScenarioName $scenario)
+    Add-ExistingPathTarget -Targets $targets -Path $slugPackageDir
+
+    if (Test-Path $logsRoot) {
+        Get-ChildItem -Path $logsRoot -Directory -Filter ("*{0}*" -f $scenario) -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -ne $Context.LogDir } |
+            ForEach-Object { [void]$targets.Add($_) }
+    }
+
+    return @($targets | Sort-Object FullName -Unique)
+}
+
+function Get-EvalDebugCleanTargets {
+    param(
+        $Preset,
+        [string[]]$ConfigNames,
+        [int[]]$RunNumbers,
+        [switch]$SubsetOnly
+    )
+
+    $debugDir = Get-EvalDebugDir -Preset $Preset
+    if (-not (Test-Path $debugDir)) {
+        return @()
+    }
+
+    if (-not $SubsetOnly) {
+        return @(Get-ChildItem -Path $debugDir -File -ErrorAction SilentlyContinue | Sort-Object Name)
+    }
+
+    $targets = New-Object 'System.Collections.Generic.List[object]'
+    foreach ($configName in $ConfigNames) {
+        foreach ($runNumber in $RunNumbers) {
+            $artifactPath = Join-Path $debugDir ("{0}-{1}.elog" -f $configName, $runNumber)
+            if (Test-Path $artifactPath) {
+                [void]$targets.Add((Get-Item -LiteralPath $artifactPath))
+            }
+        }
+    }
+
+    return @($targets | Sort-Object Name -Unique)
+}
+
 function Remove-EvalOutputs {
     param(
         $Context,
@@ -1371,10 +1536,13 @@ function Remove-EvalOutputs {
     )
 
     $scopeDescription = if ($SubsetOnly) { "targeted config outputs" } else { "entire eval directory contents" }
-    $targets = Get-CleanTargets -Preset $Preset -ConfigNames $ConfigNames -RunNumbers $RunNumbers -SubsetOnly:$SubsetOnly
+    $rawTargets = @(Get-CleanTargets -Preset $Preset -ConfigNames $ConfigNames -RunNumbers $RunNumbers -SubsetOnly:$SubsetOnly)
+    $debugTargets = @(Get-EvalDebugCleanTargets -Preset $Preset -ConfigNames $ConfigNames -RunNumbers $RunNumbers -SubsetOnly:$SubsetOnly)
+    $analysisTargets = if ($SubsetOnly) { @() } else { @(Get-GeneratedAnalysisCleanTargets -Preset $Preset -Context $Context) }
+    $targets = @($rawTargets + $debugTargets + $analysisTargets) | Sort-Object FullName -Unique
     $logPath = Get-StepLogPath -Context $Context -BaseName ("clean-{0}.log" -f $Preset.Name)
 
-    if (-not (Test-Path $Preset.EvalDir)) {
+    if (-not (Test-Path $Preset.EvalDir) -and $targets.Count -eq 0) {
         Write-Host ""
         Write-Host "No eval directory exists for scenario '$($Preset.Name)': $($Preset.EvalDir)"
         Set-Content -Path $logPath -Value @(
@@ -1389,9 +1557,12 @@ function Remove-EvalOutputs {
     Write-Host "Cleaning eval outputs for scenario '$($Preset.Name)'"
     Write-Host "  Scope: $scopeDescription"
     Write-Host "  Eval directory: $($Preset.EvalDir)"
-    Write-Host "  Files targeted: $($targets.Count)"
+    Write-Host "  Raw result files targeted: $($rawTargets.Count)"
+    Write-Host "  Eventlog/debug files targeted: $($debugTargets.Count)"
+    Write-Host "  Generated analysis/log/package targets: $($analysisTargets.Count)"
+    Write-Host "  Total targets: $($targets.Count)"
     foreach ($target in $targets) {
-        Write-Host "    $($target.Name)"
+        Write-Host "    $($target.FullName)"
     }
 
     if ($DryRun) {
@@ -1399,7 +1570,10 @@ function Remove-EvalOutputs {
             "DRY RUN",
             "Scope: $scopeDescription",
             "Eval directory: $($Preset.EvalDir)",
-            "Files targeted: $($targets.Count)"
+            "Raw result files targeted: $($rawTargets.Count)",
+            "Eventlog/debug files targeted: $($debugTargets.Count)",
+            "Generated analysis/log/package targets: $($analysisTargets.Count)",
+            "Total targets: $($targets.Count)"
         )
         $dryRunLines += ($targets | ForEach-Object { $_.FullName })
         Set-Content -Path $logPath -Value $dryRunLines -Encoding UTF8
@@ -1408,15 +1582,23 @@ function Remove-EvalOutputs {
     }
 
     foreach ($target in $targets) {
-        Remove-Item -LiteralPath $target.FullName -Force
+        if ($target.PSIsContainer) {
+            Remove-Item -LiteralPath $target.FullName -Recurse -Force
+        }
+        else {
+            Remove-Item -LiteralPath $target.FullName -Force
+        }
     }
 
     Set-Content -Path $logPath -Value @(
-        "Removed $($targets.Count) file(s).",
+        "Removed $($targets.Count) target(s).",
         "Scope: $scopeDescription",
-        "Eval directory: $($Preset.EvalDir)"
+        "Eval directory: $($Preset.EvalDir)",
+        "Raw result files: $($rawTargets.Count)",
+        "Eventlog/debug files: $($debugTargets.Count)",
+        "Generated analysis/log/package targets: $($analysisTargets.Count)"
     ) -Encoding UTF8
-    Add-StepResult -Context $Context -Step ("clean-{0}" -f $Preset.Name) -Status "OK" -Details "Deleted $($targets.Count) file(s) from eval."
+    Add-StepResult -Context $Context -Step ("clean-{0}" -f $Preset.Name) -Status "OK" -Details "Deleted $($targets.Count) target(s) for scenario."
 }
 
 function Get-ArtifactSnapshot {
@@ -2695,7 +2877,7 @@ function Validate-CommandOptions {
                 throw "--scenario is not supported by regional-failure-detection-degraded-link-model-family-batch because it is pinned to the dedicated regional backbone degraded-link model-family cohort."
             }
             if ($Options.Configs.Count -gt 0) {
-                throw "--configs is not supported by regional-failure-detection-degraded-link-model-family-batch because it always runs the full OSPF/BFD-like/AI-MRCE model-family/hybrid cohort."
+                throw "--configs is not supported by regional-failure-detection-degraded-link-model-family-batch because it always runs the final OSPF/BFD-like/AI-MRCE model-family cohort."
             }
             if ($Options.SkipAnalysis) {
                 throw "--skip-analysis is not supported by regional-failure-detection-degraded-link-model-family-batch because dataset, outcome, comparison, and headline artifacts are the purpose of the command."
@@ -2784,13 +2966,36 @@ function Validate-CommandOptions {
         }
         "regional-cost-aware-transport-impact-instrumented-batch" {
             if ($Options.Scenarios.Count -gt 0) {
-                throw "--scenario is not supported by regional-cost-aware-transport-impact-instrumented-batch because it is pinned to the dedicated instrumented mixed UDP/TCP transport-impact cohort."
+                throw "--scenario is not supported by regional-cost-aware-transport-impact-instrumented-batch because it is pinned to Scenario C, the dedicated congestion/queue-buildup mixed UDP/TCP cohort."
             }
             if ($Options.Configs.Count -gt 0 -and -not $Options.SkipAnalysis) {
                 throw "--configs for regional-cost-aware-transport-impact-instrumented-batch is intended only for bounded smoke tests. Add --skip-analysis, or omit --configs for the full cohort."
             }
             if ($Options.SkipAnalysis -and $Options.Configs.Count -eq 0) {
                 throw "--skip-analysis for regional-cost-aware-transport-impact-instrumented-batch is only supported together with --configs for bounded smoke tests."
+            }
+            if ($Options.SkipTraining) {
+                throw "--skip-training is only supported by full-pipeline."
+            }
+            if ($Options.RebuildMissingDatasets) {
+                throw "--rebuild-missing-datasets is only supported by training-batch."
+            }
+            if ($Options.StrongerEvaluationsOnly) {
+                throw "--stronger-evaluations-only is only supported by training-batch or full-pipeline."
+            }
+            if ($Options.IncludeAimrce) {
+                throw "--include-aimrce is only supported by full-pipeline."
+            }
+        }
+        "regional-cost-aware-transport-impact-randomized-onset-batch" {
+            if ($Options.Scenarios.Count -gt 0) {
+                throw "--scenario is not supported by regional-cost-aware-transport-impact-randomized-onset-batch because it is pinned to supplementary Scenario C-R."
+            }
+            if ($Options.Configs.Count -gt 0 -and -not $Options.SkipAnalysis) {
+                throw "--configs for regional-cost-aware-transport-impact-randomized-onset-batch is intended only for bounded pilot tests. Add --skip-analysis, or omit --configs for the full randomized-onset sweep."
+            }
+            if ($Options.SkipAnalysis -and $Options.Configs.Count -eq 0) {
+                throw "--skip-analysis for regional-cost-aware-transport-impact-randomized-onset-batch is only supported together with --configs for bounded pilot tests."
             }
             if ($Options.SkipTraining) {
                 throw "--skip-training is only supported by full-pipeline."
@@ -2826,11 +3031,13 @@ try {
     }
     else {
         $supportedCommands = @(
+            "dataset-batch",
             "regional-failure-detection-degraded-link-model-family-batch",
             "regional-degradation-sensitivity-batch",
             "regional-cost-aware-backup-batch",
             "regional-cost-aware-transport-impact-batch",
-            "regional-cost-aware-transport-impact-instrumented-batch"
+            "regional-cost-aware-transport-impact-instrumented-batch",
+            "regional-cost-aware-transport-impact-randomized-onset-batch"
         )
         if ($supportedCommands -notcontains $Command) {
             throw "Unsupported command '$Command'. This cleaned publication branch supports: $($supportedCommands -join ', '). Run 'run_experiments.bat help' for the current workflow."
@@ -3240,8 +3447,44 @@ try {
                         -Preset $script:RegionalBackboneCostAwareTransportImpactInstrumentedPreset `
                         -CommandName "regional-cost-aware-transport-impact-instrumented-batch" `
                         -ComparisonStepName "compare-outcomes-regional-cost-aware-transport-impact-instrumented" `
-                        -ArtifactHeading "Created or updated instrumented cost-aware mixed UDP/TCP transport-impact comparison artifacts" `
-                        -OutputFolderReason "regional instrumented cost-aware mixed UDP/TCP transport-impact artifacts"
+                        -ArtifactHeading "Created or updated congestion/queue-buildup mixed UDP/TCP comparison artifacts" `
+                        -OutputFolderReason "regional congestion/queue-buildup mixed UDP/TCP artifacts"
+                    if (-not $batchSucceeded) {
+                        $overallStatus = "FAILED"
+                        $scriptExitCode = 1
+                    }
+                }
+                catch {
+                    $overallStatus = "FAILED"
+                    $scriptExitCode = 1
+                    Add-StepResult -Context $context -Step $Command -Status "FAILED" -Details $_.Exception.Message
+                    Write-Error $_.Exception.Message
+                }
+                finally {
+                    Write-BatchSummary -Context $context -OverallStatus $overallStatus
+                }
+            }
+
+            "regional-cost-aware-transport-impact-randomized-onset-batch" {
+                $context = New-BatchContext -BatchCommand $Command -ScenarioNames @("regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset")
+                $overallStatus = "OK"
+
+                try {
+                    if (-not $options.SkipBuild) {
+                        Build-Project -Context $context -DryRun:$options.DryRun
+                    }
+                    else {
+                        Add-StepResult -Context $context -Step "build" -Status "OK" -Details "Skipped build by request."
+                    }
+
+                    $batchSucceeded = Invoke-RegionalFailureDetectionComparisonBatchCore `
+                        -Context $context `
+                        -Options $options `
+                        -Preset $script:RegionalBackboneCostAwareTransportRandomizedOnsetPreset `
+                        -CommandName "regional-cost-aware-transport-impact-randomized-onset-batch" `
+                        -ComparisonStepName "compare-outcomes-regional-cost-aware-transport-impact-randomized-onset" `
+                        -ArtifactHeading "Created or updated supplementary randomized-onset queue-buildup robustness artifacts" `
+                        -OutputFolderReason "regional randomized-onset queue-buildup robustness artifacts"
                     if (-not $batchSucceeded) {
                         $overallStatus = "FAILED"
                         $scriptExitCode = 1

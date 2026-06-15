@@ -13,7 +13,7 @@ Run commands from the project root through `run_analysis.bat`:
 ```bat
 cmd /c run_analysis.bat help
 cmd /c run_analysis.bat evaluate-results
-cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
+cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented
 cmd /c run_analysis.bat network-impact --scenario regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented
 ```
 
@@ -21,37 +21,46 @@ Use `run_experiments.bat` for OMNeT++ cohort execution. Use `--runs 0` for a
 smoke pass and omit `--runs` only when intentionally running the full five-run
 cohort.
 
-## Active Scripts
+## Script Groups
 
-- `build_dataset.py`: builds baseline and optional extended telemetry datasets
+### Core Reproducibility Pipeline
+
+- `core/build_dataset.py`: builds baseline and optional extended telemetry datasets
   from existing OMNeT++ outputs.
-- `dataset_report.py`: summarizes generated datasets, feature groups,
+- `core/dataset_report.py`: summarizes generated datasets, feature groups,
   missingness, and extended telemetry classification.
-- `compare_outcomes.py`: builds outcome comparison, headline, and summary
+- `core/compare_outcomes.py`: builds outcome comparison, headline, and summary
   tables for scenario outputs.
-- `network_impact_report.py`: creates UDP/QoS, backup-cost, and mixed
-  transport endpoint proxy summaries from existing outputs. For the
-  instrumented transport-impact scenario, it also extracts targeted INET
-  scalar/histogram metrics such as aggregate UDP sent/received/loss counts,
-  UDP delay percentiles, TCP endpoint goodput, TCP RTT/cwnd summaries where
-  exported, and queue drop/queueing summaries where present.
-- `offline_ml_audit.py`: performs offline feature-quality and ML feasibility
-  audits without exporting runtime models.
-- `activation_root_cause.py`: explains AI-MRCE activation timing from traces
-  and deployed runtime artifacts.
-- `evaluate_results.py`: builds the final publication-oriented evaluation
+- `core/network_impact_report.py`: creates UDP/QoS, backup-cost, mixed transport
+  endpoint proxy, and targeted INET telemetry summaries from existing outputs.
+- `core/evaluate_results.py`: builds the final publication-oriented evaluation
   report, final tables, clean current figures, and figure manifest.
-- `pipeline_integrity.py`: validates expected scenario row counts, mechanism
+- `core/pipeline_integrity.py`: validates expected scenario row counts, mechanism
   coverage, runtime artifact status, and package readiness.
-- `package_current_experiment.py`: copies compact scenario artifacts into
+- `core/package_current_experiment.py`: copies compact scenario artifacts into
   `analysis/output/current_experiment/<scenario>/`.
-- `clean_generated.py`: dry-run-first generated-output cleanup helper.
-- `train_risk_model.py`: support script for training research models; not used
-  to silently change deployed runtime artifacts.
-- `export_runtime_models.py`: support script for exporting explicit runtime
-  CSV model artifacts.
-- `extract_aimrce_risk_trace.py`: focused trace extractor for AI-MRCE
+
+### ML Support
+
+- `ml/train_risk_model.py`: offline research-model training support; it does not
+  silently change deployed runtime artifacts.
+- `ml/export_runtime_models.py`: exports explicit runtime CSV model artifacts
+  when the training/export workflow is intentionally refreshed.
+- `ml/offline_ml_audit.py`: performs telemetry-v2 feature-quality and ML
+  feasibility audits without exporting runtime models.
+
+### Diagnostics And Cleanup
+
+- `diagnostics/activation_root_cause.py`: explains AI-MRCE activation timing from traces
+  and deployed runtime artifacts.
+- `diagnostics/extract_aimrce_risk_trace.py`: focused trace extractor for AI-MRCE
   risk/action timelines.
+- `diagnostics/clean_generated.py`: dry-run-first generated-output cleanup helper.
+
+The cleanup audit in `analysis/output/audit/` records why every remaining
+script is kept. User-facing commands should go through `run_analysis.bat`
+rather than direct script paths, so this internal grouping stays reviewer
+readable without changing normal reproduction commands.
 
 ## Output Policy
 
@@ -65,10 +74,11 @@ requires a compact package or final report snapshot.
 - `bfd_like_frr` is a project-local BFD-like comparator, not RFC-compliant BFD.
 - FRR-like repair routes are static project-local abstractions, not
   standards-compliant LFA/TI-LFA/RSVP-TE/OSPF FRR.
-- Exact UDP packet loss is reported only for monitored UDP app[0] when
-  sent/received scalar accounting is available.
-- The instrumented transport-impact scenario reports exact aggregate UDP
-  sent/received/loss across all configured UDP app flows when those scalars are
-  present; delay percentiles are histogram approximations over received packets.
-- TCP metrics are endpoint received-byte/goodput/progress proxies only.
+- Exact UDP packet loss is reported where sent/received scalar accounting is
+  available: monitored UDP app[0] for Scenario A/B cohorts, and aggregate
+  configured UDP app flows for Scenario C, Congestion/Queue-Buildup Early
+  Mitigation.
+- UDP delay percentiles are histogram approximations over received packets.
+- TCP metrics in unified mixed UDP/TCP cohorts are endpoint
+  received-byte/goodput/progress proxies only.
 - Recovery time is a receiver-observed recovery/disruption proxy.

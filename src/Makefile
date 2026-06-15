@@ -33,7 +33,8 @@ O = $(PROJECT_OUTPUT_DIR)/$(CONFIGNAME)/$(PROJECTRELATIVE_PATH)
 # Object files for local .cc, .msg and .sm files
 OBJS = $O/dissertationsim/controller/AiMrceController.o \
        $O/dissertationsim/controller/InterfaceWithdrawController.o \
-       $O/dissertationsim/controller/LinkDegradationController.o
+       $O/dissertationsim/controller/LinkDegradationController.o \
+       $O/dissertationsim/controller/QosEventMonitor.o
 
 # Message files
 MSGFILES =

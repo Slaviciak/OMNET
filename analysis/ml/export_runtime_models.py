@@ -9,7 +9,7 @@ Assumptions:
   and excludes "failed" rows so the exported scores target pre-failure
   protective action rather than post-failure behavior.
 - The exported files are deployment artifacts, not substitutes for the richer
-  methodological evaluation performed by analysis/train_risk_model.py.
+  methodological evaluation performed by analysis/ml/train_risk_model.py.
 - Runtime features remain intentionally compact and observable at runtime:
   queue occupancy plus probe-flow delay, throughput, and packet continuity.
 - Telemetry-v2 extended dataset columns are not exported by default. They are
@@ -36,7 +36,7 @@ from train_risk_model import (
 )
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "simulations" / "regionalbackbone"
 DEFAULT_MANIFEST_OUTPUT = DEFAULT_OUTPUT_DIR / "aimrce_runtime_manifest.csv"
 DEFAULT_SCENARIOS = ["regionalbackbone"]

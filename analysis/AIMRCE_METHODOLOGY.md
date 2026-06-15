@@ -258,7 +258,7 @@ time-to-hard-failure fields, post-event outcome fields, and controller-state
 diagnostics are not deployment-ready runtime features.
 
 The telemetry-v2 dataset mode starts that evaluation without changing runtime
-behavior. `analysis/build_dataset.py --feature-set extended` appends optional
+behavior. `run_analysis.bat build-dataset --feature-set extended` appends optional
 candidate columns derived from existing recorded simulation telemetry:
 delay/throughput deltas, queue growth, continuity proxies, configured
 impairment context, BFD-like diagnostic state, and AI-MRCE controller-state
@@ -402,29 +402,32 @@ Those additional fields are intentionally conservative:
 
 - post-failure and activation-to-failure unobserved gaps remain
   receiver-observed continuity diagnostics;
-- exact UDP packet loss is reported only for the monitored UDP `app[0]` flow
-  when INET `packetSent:count` and `packetReceived:count` scalar accounting is
-  available;
+- exact UDP packet loss is reported where INET `packetSent:count` and
+  `packetReceived:count` scalar accounting is available: monitored UDP
+  `app[0]` for the unified Link-Failure and Degraded-Backup cohorts, and
+  aggregate configured UDP-flow accounting for the Queue-Buildup cohort;
 - delivery/loss-like ratios remain proxies unless exact sent/received
   accounting exists for the selected flow and phase;
 - delay-variation fields are window-mean delta proxies, not full RFC 5481 IPDV;
-- TCP received-byte/goodput/progress fields in the mixed transport-impact
-  cohort are endpoint-observed proxies only; TCP retransmissions, RTT,
-  congestion window, duplicate ACKs, and exact flow-completion time are not
-  claimed;
+- TCP received-byte/goodput/progress fields in unified mixed UDP/TCP cohorts
+  are endpoint-observed proxies only; TCP retransmissions, RTT, congestion
+  window, duplicate ACKs, and exact flow-completion time are not claimed unless
+  explicitly exported;
 - recovery-time fields are receiver-observed recovery/disruption proxies, not
   routing-protocol convergence timers;
 - queue drop counts are not claimed unless a future scenario explicitly records
   queue-drop signals.
 
-The instrumented transport-impact derivative is the first intentionally richer
-INET telemetry pass. It can report exact aggregate UDP sent/received/loss
-counts across all configured UDP application flows, histogram-derived UDP delay
-percentiles over received packets, TCP endpoint goodput/progress, TCP RTT and
-congestion-window scalar summaries where INET exports them, and compact queue
-drop/queueing summaries. These additions improve network-result figures but do
-not change the deployed AI-MRCE decision logic, runtime model artifacts,
-thresholds, BFD-like logic, or FRR-like repair-route behavior.
+The Queue-Buildup scenario is the intentionally richer INET telemetry pass. It
+can report exact aggregate UDP sent/received/loss counts across all configured
+UDP application flows, histogram-derived UDP delay percentiles over received
+packets, TCP endpoint goodput/progress, TCP RTT and congestion-window scalar
+summaries where INET exports them, and compact queue drop/queueing summaries.
+It also enables the protected-span bottleneck so staged mixed traffic creates a
+realistic congestion/QoS-degradation period before hard failure. These
+additions improve network-result figures but do not change the deployed
+AI-MRCE decision logic, runtime model artifacts, thresholds, BFD-like logic, or
+FRR-like repair-route behavior.
 
 ## Diagnostic Artifacts
 

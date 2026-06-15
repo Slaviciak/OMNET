@@ -3,7 +3,7 @@
 Compare run-level protection and recovery outcome summaries.
 
 Assumptions:
-- Inputs are one-row-per-run CSV files produced by analysis/dataset_report.py.
+- Inputs are one-row-per-run CSV files produced by analysis/core/dataset_report.py.
 - This is a project-local practical comparison layer for internal mechanism
   evaluation. It does not change simulator behavior, routing logic, or the
   offline classifier training workflow.
@@ -43,7 +43,7 @@ from pathlib import Path
 from statistics import fmean
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
 
@@ -54,6 +54,7 @@ SUPPORTED_SCENARIOS = (
     "regionalbackbone_failure_detection_cost_aware_backup",
     "regionalbackbone_failure_detection_cost_aware_transport_impact",
     "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset",
 )
 DEFAULT_SCENARIOS = (
     "regionalbackbone_failure_detection_degraded_link_model_family",
@@ -284,6 +285,7 @@ SCENARIO_PRESETS = {
     "regionalbackbone_failure_detection_cost_aware_backup": OUTCOMES_DIR / "regionalbackbone_failure_detection_cost_aware_backup_outcome_summary.csv",
     "regionalbackbone_failure_detection_cost_aware_transport_impact": OUTCOMES_DIR / "regionalbackbone_failure_detection_cost_aware_transport_impact_outcome_summary.csv",
     "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": OUTCOMES_DIR / "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented_outcome_summary.csv",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset": OUTCOMES_DIR / "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset_outcome_summary.csv",
 }
 
 MECHANISM_LABELS = {
@@ -334,11 +336,12 @@ COHORT_LABELS = {
     "regionalbackbone_failure_detection_comparison": "Regional backbone failure-detection comparison cohort",
     "regionalbackbone_failure_detection_comparison_ms_traffic": "Regional backbone failure-detection 2 ms monitored-traffic cohort",
     "regionalbackbone_failure_detection_degraded_link": "Regional backbone failure-detection degraded-link cohort",
-    "regionalbackbone_failure_detection_degraded_link_model_family": "Regional backbone degraded-link AI-MRCE model-family cohort",
+    "regionalbackbone_failure_detection_degraded_link_model_family": "Predictive Link-Failure Recovery cohort",
     "regionalbackbone_failure_detection_degradation_sensitivity": "Regional backbone degradation-sensitivity cohort",
-    "regionalbackbone_failure_detection_cost_aware_backup": "Regional backbone cost-aware backup-path cohort",
+    "regionalbackbone_failure_detection_cost_aware_backup": "Cost-Aware Degraded-Backup Operation cohort",
     "regionalbackbone_failure_detection_cost_aware_transport_impact": "Regional backbone cost-aware mixed UDP/TCP transport-impact cohort",
-    "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": "Regional backbone instrumented cost-aware mixed UDP/TCP transport-impact cohort",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": "Congestion/Queue-Buildup Early Mitigation cohort",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset": "Queue buildup randomized-onset robustness cohort",
     "regionalbackbone_other": "Regional backbone other cohort",
 }
 
@@ -359,7 +362,8 @@ COHORT_ORDER = {
     "regionalbackbone_failure_detection_cost_aware_backup": 13,
     "regionalbackbone_failure_detection_cost_aware_transport_impact": 14,
     "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": 15,
-    "regionalbackbone_other": 16,
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset": 16,
+    "regionalbackbone_other": 17,
 }
 
 
@@ -687,6 +691,9 @@ def resolve_comparison_cohort(scenario_name: str, config_name: str, mechanism_fa
     if scenario_name == "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented":
         return "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
 
+    if scenario_name == "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset":
+        return "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset"
+
     if scenario_name == "regionalbackbone":
         if config_name == "RegionalBackboneBaseline" or mechanism_family == "no_protection_baseline":
             return "regionalbackbone_no_protection_baseline"
@@ -931,6 +938,7 @@ DEGRADATION_SENSITIVITY_COHORT = "regionalbackbone_failure_detection_degradation
 COST_AWARE_BACKUP_COHORT = "regionalbackbone_failure_detection_cost_aware_backup"
 COST_AWARE_TRANSPORT_COHORT = "regionalbackbone_failure_detection_cost_aware_transport_impact"
 COST_AWARE_TRANSPORT_INSTRUMENTED_COHORT = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
+RANDOMIZED_ONSET_COHORT = "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset"
 DEGRADED_LINK_HEADLINE_COHORTS = {
     DEGRADED_LINK_COHORT,
     DEGRADED_LINK_MODEL_FAMILY_COHORT,
@@ -938,6 +946,7 @@ DEGRADED_LINK_HEADLINE_COHORTS = {
     COST_AWARE_BACKUP_COHORT,
     COST_AWARE_TRANSPORT_COHORT,
     COST_AWARE_TRANSPORT_INSTRUMENTED_COHORT,
+    RANDOMIZED_ONSET_COHORT,
 }
 
 
@@ -1600,7 +1609,7 @@ def main() -> None:
     }
 
     regenerate_command = (
-        "py -3 analysis\\compare_outcomes.py --inputs "
+        "cmd /c run_analysis.bat compare-outcomes --inputs "
         f"{' '.join(str(path) for path in input_paths)} --output-prefix {output_prefix}"
     )
     for output_path in output_paths.values():

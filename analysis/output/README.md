@@ -5,6 +5,11 @@ default. It is safe to regenerate from the active OMNeT++ result folders and
 analysis scripts, but do not delete current outputs while preparing a package
 or final report unless you intend to regenerate them immediately.
 
+The analysis scripts that generate these outputs are grouped under
+`analysis/core/`, `analysis/ml/`, and `analysis/diagnostics/`. Prefer the
+stable root wrapper commands (`run_analysis.bat ...`) over direct script paths
+when regenerating artifacts.
+
 ## Important Subfolders
 
 - `datasets/`: baseline and extended telemetry datasets.
@@ -47,7 +52,7 @@ compact snapshot, use:
 
 ```bat
 cmd /c run_analysis.bat evaluate-results
-cmd /c run_analysis.bat package-current-experiment --scenario regionalbackbone_failure_detection_cost_aware_transport_impact
+cmd /c run_analysis.bat package-current-experiment --scenario regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented
 ```
 
 The final report must keep conservative wording: UDP app[0] packet loss is

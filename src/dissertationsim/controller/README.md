@@ -1,4 +1,4 @@
-# Dissertation Simulation Controllers
+# AI-MRCE Controller Modules
 
 This folder contains project-local OMNeT++ simple modules used by the
 regionalbackbone AI-MRCE experiments.
@@ -19,7 +19,8 @@ regionalbackbone AI-MRCE experiments.
 The deployed runtime model CSVs live under
 `simulations/regionalbackbone/aimrce_runtime_*.csv`. They are intentionally
 source-controlled examples and are not changed by reporting scripts. Offline ML
-audits do not automatically export runtime v2 models.
+audits may evaluate extended telemetry for research traceability, but they do
+not automatically export deployed runtime models.
 
 ## Wording Guardrails
 

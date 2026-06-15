@@ -5,7 +5,7 @@ Train offline risk-state classifiers from dissertation dataset CSV files.
 Assumptions:
 - This is an offline analysis script only; it does not modify simulations,
   controllers, INET, or OMNeT++ configuration.
-- Input datasets are produced by analysis/build_dataset.py and live under
+- Input datasets are produced by analysis/core/build_dataset.py and live under
   analysis/output/datasets/<scenario>_dataset.csv by default.
 - Original scenario labels are mapped into a unified risk taxonomy:
   safe, warning, protect, failed.
@@ -41,7 +41,7 @@ from statistics import fmean
 from typing import Any
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 DATASETS_DIR = OUTPUT_ROOT / "datasets"
 TRAINING_DIR = OUTPUT_ROOT / "training"

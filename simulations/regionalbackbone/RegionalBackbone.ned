@@ -9,6 +9,7 @@ package dissertationsim.simulations.regionalbackbone;
 
 import dissertationsim.controller.AiMrceController;
 import dissertationsim.controller.LinkDegradationController;
+import dissertationsim.controller.QosEventMonitor;
 import inet.common.misc.ThruputMeteringChannel;
 import inet.common.scenario.ScenarioManager;
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
@@ -30,6 +31,9 @@ network RegionalBackbone
         // OSPF behavior still comes from the underlying INET routers; optional
         // AI-MRCE and BFD-like trigger paths are configured per INI config.
         bool enableAiMrceController = default(false);
+        // Passive evaluation-only monitor used by Scenario C to record the
+        // first sustained QoS brownout time from measured telemetry.
+        bool enableQosEventMonitor = default(false);
         @display("b=1120,520");
     types:
         channel Eth100M extends ThruputMeteringChannel
@@ -177,6 +181,11 @@ network RegionalBackbone
             // telemetry and can activate explicit repair routes for the backup
             // corridor via AI-MRCE, BFD-like, or hybrid trigger configs.
             @display("p=300,460;is=s");
+        }
+        qosEventMonitor: QosEventMonitor if enableQosEventMonitor {
+            // Evaluation-only monitor. It records measured Scenario C QoS
+            // brownout timing and does not affect routing or AI-MRCE inputs.
+            @display("p=430,460;is=s");
         }
     connections:
         hostA.ethg[0] <--> Eth100M <--> accessA.ethg[0];

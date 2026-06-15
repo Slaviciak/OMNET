@@ -13,6 +13,7 @@ import argparse
 import csv
 import math
 import os
+import re
 import shutil
 import textwrap
 import time
@@ -22,7 +23,7 @@ from pathlib import Path
 from statistics import fmean, stdev
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 RESULTS_ROOT = PROJECT_ROOT / "results" / "regionalbackbone"
 OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
@@ -38,12 +39,14 @@ FIGURES_DIR = FINAL_DIR / "figures"
 MAIN_FIGURES_DIR = FINAL_DIR / "main_figures"
 SCENARIO_FIGURES_DIR = FINAL_DIR / "scenario_figures"
 DIAGNOSTIC_FIGURES_DIR = FINAL_DIR / "diagnostic_figures"
+SUPPLEMENTARY_FIGURES_DIR = FINAL_DIR / "supplementary_figures"
 
 CORE_SCENARIO = "regionalbackbone_failure_detection_degraded_link_model_family"
 SENSITIVITY_SCENARIO = "regionalbackbone_failure_detection_degradation_sensitivity"
 COST_AWARE_SCENARIO = "regionalbackbone_failure_detection_cost_aware_backup"
 TRANSPORT_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact"
 INSTRUMENTED_TRANSPORT_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
+RANDOMIZED_ONSET_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset"
 ALL_SCENARIOS = (
     CORE_SCENARIO,
     SENSITIVITY_SCENARIO,
@@ -52,6 +55,11 @@ ALL_SCENARIOS = (
     INSTRUMENTED_TRANSPORT_SCENARIO,
 )
 TRANSPORT_SCENARIOS = (TRANSPORT_SCENARIO, INSTRUMENTED_TRANSPORT_SCENARIO)
+UNIFIED_MIXED_TRANSPORT_SCENARIOS = (
+    CORE_SCENARIO,
+    COST_AWARE_SCENARIO,
+    INSTRUMENTED_TRANSPORT_SCENARIO,
+)
 PRIMARY_TRANSPORT_RESULTS_SCENARIO = INSTRUMENTED_TRANSPORT_SCENARIO
 PAPER_MAIN_SCENARIOS = (
     CORE_SCENARIO,
@@ -61,12 +69,14 @@ PAPER_MAIN_SCENARIOS = (
 SUPPLEMENTARY_SCENARIOS = (
     SENSITIVITY_SCENARIO,
     TRANSPORT_SCENARIO,
+    RANDOMIZED_ONSET_SCENARIO,
 )
 
 PAPER_SCENARIO_ROLES = {
-    CORE_SCENARIO: "Core concept validation",
-    COST_AWARE_SCENARIO: "Cost-aware policy differentiation",
-    INSTRUMENTED_TRANSPORT_SCENARIO: "Instrumented mixed UDP/TCP transport impact",
+    CORE_SCENARIO: "Predictive Link-Failure Recovery",
+    COST_AWARE_SCENARIO: "Cost-Aware Degraded-Backup Operation",
+    INSTRUMENTED_TRANSPORT_SCENARIO: "Congestion/Queue-Buildup Early Mitigation",
+    RANDOMIZED_ONSET_SCENARIO: "Queue Buildup Randomized-Onset Robustness",
 }
 
 MECHANISM_ORDER = {
@@ -98,6 +108,51 @@ PLOT_LABELS = {
     "aimrce_shallow_tree_frr": "Tree",
     "hybrid_bfd_like_aimrce_frr": "Hybrid",
 }
+
+FINAL_AIMRCE_POLICY_MECHANISMS = (
+    "aimrce_rule_based_frr",
+    "aimrce_logistic_regression_frr",
+    "aimrce_linear_svm_frr",
+    "aimrce_shallow_tree_frr",
+)
+
+FINAL_MAIN_MECHANISMS = (
+    "ospf_only",
+    "bfd_like_frr",
+    *FINAL_AIMRCE_POLICY_MECHANISMS,
+)
+
+DEPLOYED_RUNTIME_MODEL_NAMES = {
+    "logistic_regression",
+    "linear_svm",
+    "shallow_tree",
+}
+
+FEATURE_DISPLAY_LABELS = {
+    "receiver_app0_e2e_delay_mean_s": "Probe delay mean",
+    "receiver_app0_throughput_mean_bps": "Probe throughput",
+    "receiver_app0_packet_count": "Probe packet count",
+    "bottleneck_queue_length_last_pk": "Queue length",
+    "feat_delay_max_s": "Delay maximum",
+    "feat_delay_mean_s": "Delay mean",
+    "feat_delay_abs_delta_from_previous_window_s": "Delay change",
+    "feat_queue_bit_length_mean_b": "Queue occupancy mean",
+    "feat_queue_bit_length_max_b": "Queue occupancy max",
+    "feat_queueing_time_mean_s": "Queueing time mean",
+    "feat_queueing_time_max_s": "Queueing time max",
+    "feat_throughput_delta_from_previous_window_bps": "Throughput change",
+}
+
+RUNTIME_SAFE_FEATURES = (
+    "receiver_app0_e2e_delay_mean_s",
+    "receiver_app0_throughput_mean_bps",
+    "receiver_app0_packet_count",
+    "bottleneck_queue_length_last_pk",
+)
+
+
+def is_final_aimrce_policy(mechanism: str) -> bool:
+    return mechanism in FINAL_AIMRCE_POLICY_MECHANISMS
 
 PROFILE_LABELS = {
     "core_reference": "Core",
@@ -139,14 +194,16 @@ SCENARIO_SHORT_NAMES = {
     COST_AWARE_SCENARIO: "cost_aware_backup",
     TRANSPORT_SCENARIO: "transport_impact",
     INSTRUMENTED_TRANSPORT_SCENARIO: "transport_impact_instrumented",
+    RANDOMIZED_ONSET_SCENARIO: "randomized_onset",
 }
 
 SCENARIO_LABELS = {
-    CORE_SCENARIO: "Core",
+    CORE_SCENARIO: "Link failure",
     SENSITIVITY_SCENARIO: "Sensitivity",
-    COST_AWARE_SCENARIO: "Cost-aware",
+    COST_AWARE_SCENARIO: "Degraded backup",
     TRANSPORT_SCENARIO: "Transport baseline",
-    INSTRUMENTED_TRANSPORT_SCENARIO: "Instrumented transport",
+    INSTRUMENTED_TRANSPORT_SCENARIO: "Queue buildup",
+    RANDOMIZED_ONSET_SCENARIO: "Randomized onset",
 }
 
 GENERATED_IMAGE_EXTENSIONS = {".png", ".svg", ".pdf"}
@@ -292,6 +349,21 @@ ML_METRICS_BY_SCENARIO_FIELDS = [
     "interpretation",
 ]
 
+ML_POLICY_TIMING_BY_SCENARIO_FIELDS = [
+    "scenario_role",
+    "scenario_short",
+    "profile",
+    "policy_or_model",
+    "activation_time_s",
+    "lead_time_s",
+    "activated_yes_no",
+    "protection_before_failure_rate",
+    "udp_loss_percent",
+    "udp_delay_metric",
+    "tcp_goodput_or_endpoint_metric",
+    "notes",
+]
+
 SCENARIO_SUMMARY_FIELDS = [
     "scenario",
     "profile",
@@ -368,6 +440,25 @@ MODEL_FEATURE_IMPORTANCE_FIELDS = [
     "feature_category",
     "interpretation",
     "runtime_safe_candidate",
+]
+
+PAPER_RUNTIME_FEATURE_IMPORTANCE_FIELDS = [
+    "scenario",
+    "feature",
+    "feature_display_name",
+    "max_abs_importance_or_coefficient",
+    "source_models",
+    "interpretation",
+]
+
+FINAL_POLICY_SET_FIELDS = [
+    "mechanism_or_policy",
+    "final_status",
+    "category",
+    "included_in_main_figures",
+    "included_in_ai_mrce_family_mean",
+    "included_in_pure_ml_model_set",
+    "reason",
 ]
 
 NETWORK_APPLICATION_IMPACT_FIELDS = [
@@ -501,13 +592,201 @@ MAIN_RESULTS_PAPER_SUBSET_FIELDS = [
 
 PAPER_FIGURE_SELECTION_FIELDS = [
     "figure",
-    "use",
-    "scenario_scope",
+    "selected_for_final_core_yes_no",
+    "selected_for_main_paper_yes_no",
+    "result_block",
     "reason",
-    "visual_readability",
-    "main_or_supplementary",
-    "note",
+    "scenario_scope",
+    "metric_scope",
+    "aggregation_note",
+    "caveat",
 ]
+
+SCENARIO_C_QOS_EVENT_TIMING_FIELDS = [
+    "scenario_role",
+    "profile",
+    "mechanism_or_policy",
+    "run",
+    "activation_time_s",
+    "hard_failure_time_s",
+    "qos_event_time_s",
+    "lead_time_before_hard_failure_s",
+    "lead_time_before_qos_event_s",
+    "qos_event_definition",
+    "threshold_used",
+    "event_detected_yes_no",
+    "notes",
+]
+
+RANDOMIZED_ONSET_SCENARIO_SUMMARY_FIELDS = [
+    "scenario_id",
+    "display_name",
+    "onset_seed",
+    "randomized_onset_time_s",
+    "mechanism",
+    "policy_or_model",
+    "qos_event_time_s",
+    "ai_activation_time_s",
+    "bfd_activation_time_s",
+    "ai_lead_before_qos_event_s",
+    "bfd_lead_before_qos_event_s",
+    "udp_loss_percent",
+    "udp_p95_delay_ms",
+    "tcp_goodput_proxy",
+    "activated_yes_no",
+    "notes",
+]
+
+RANDOMIZED_ONSET_LEAD_TIME_SUMMARY_FIELDS = [
+    "mechanism",
+    "policy_or_model",
+    "mean_lead_time_s",
+    "std_lead_time_s",
+    "min_lead_time_s",
+    "max_lead_time_s",
+    "count",
+    "positive_lead_fraction",
+    "late_activation_fraction",
+    "no_activation_fraction",
+]
+
+RANDOMIZED_ONSET_EVENT_SHIFT_VALIDATION_FIELDS = [
+    "onset_seed",
+    "randomized_onset_time_s",
+    "measured_qos_event_time_s",
+    "qos_event_minus_onset_s",
+    "valid_shift_yes_no",
+    "notes",
+]
+
+RANDOMIZED_ONSET_CLAIM_BOUNDARY_FIELDS = [
+    "claim_or_boundary",
+    "supported_yes_no",
+    "basis",
+    "caveat",
+]
+
+EVENT_TIMELINE_FIELDS = [
+    "scenario_short",
+    "scenario_role",
+    "adverse_event_type",
+    "degradation_or_congestion_onset_s",
+    "ai_mrce_activation_time_s",
+    "bfd_frr_activation_time_s",
+    "adverse_event_time_s",
+    "hard_failure_reference_s",
+    "ai_mrce_lead_time_s",
+    "bfd_frr_lead_time_s",
+    "timing_interpretation",
+]
+
+SCENARIO_B_TRADEOFF_FIELDS = [
+    "profile",
+    "policy",
+    "activated_yes_no",
+    "activation_time_s",
+    "lead_time_s",
+    "early_backup_usage_time_s",
+    "udp_loss_reduction_vs_ospf_pp",
+    "tcp_goodput_gain_vs_ospf_kbps",
+    "tradeoff_interpretation",
+]
+
+SCENARIO_B_TRADEOFF_METRIC_DEFINITION_FIELDS = [
+    "metric",
+    "formula",
+    "exact_or_proxy",
+    "notes",
+]
+
+POLICY_ACTIVATION_MATRIX_FIELDS = [
+    "policy",
+    "link_failure",
+    "degraded_backup",
+    "queue_buildup",
+    "interpretation",
+]
+
+RESULT_VARIABILITY_FIELDS = [
+    "scenario_role",
+    "profile",
+    "protection_family",
+    "metric",
+    "mean",
+    "std",
+    "min",
+    "max",
+    "count",
+    "exact_or_proxy",
+]
+
+RUNTIME_CSV_LINEAGE_FIELDS = [
+    "policy_or_mechanism",
+    "uses_runtime_csv",
+    "runtime_csv_file",
+    "learned_model_yes_no",
+    "runtime_feature_order",
+    "threshold",
+    "training_export_config",
+    "training_rows",
+    "positive_class_rate",
+    "retrained_after_final_scenario_c_redesign",
+    "role_in_paper",
+    "caveat",
+]
+
+MECHANISM_TAXONOMY_MANUSCRIPT_FIELDS = [
+    "mechanism",
+    "category",
+    "runtime_policy_type",
+    "learned_model_yes_no",
+    "proactive_yes_no",
+    "reactive_yes_no",
+    "included_in_main_analysis",
+    "role_in_paper",
+    "standards_claim_allowed",
+    "caveat",
+]
+
+METRIC_CLAIM_BOUNDARY_FIELDS = [
+    "metric",
+    "exact_or_proxy",
+    "source",
+    "used_for_claim",
+    "not_claimed",
+    "caption_caveat",
+]
+
+MECHANISM_POLICY_CLASSIFICATION_FIELDS = [
+    "mechanism_or_policy",
+    "category",
+    "uses_ai_mrce",
+    "uses_runtime_csv",
+    "uses_ml_model",
+    "reactive_or_predictive",
+    "paper_role",
+]
+
+SCENARIO_C_QOS_EVENT_WARMUP_END_S = 35.0
+SCENARIO_C_QOS_EVENT_CONSECUTIVE_WINDOWS = 3
+SCENARIO_C_QOS_PACKET_RATIO_FLOOR = 0.85
+SCENARIO_C_QOS_DELAY_MIN_EXCESS_S = 0.005
+SCENARIO_C_QOS_QUEUEING_MIN_EXCESS_S = 0.001
+SCENARIO_C_QOS_QUEUE_LENGTH_MIN_EXCESS_PK = 1.0
+SCENARIO_C_QOS_MONITOR_SCALARS = {
+    "qosEventDetected",
+    "qosEventTime",
+    "qosEventConsecutiveWindowsRequired",
+    "qosEventDelayThreshold",
+    "qosEventPacketCountFloor",
+    "qosEventThroughputFloorBps",
+    "qosEventQueueLengthThresholdPk",
+    "qosEventDetectionBasisCode",
+    "qosEventBaselineStartTime",
+    "qosEventBaselineEndTime",
+    "qosEventStartTime",
+    "qosEventEvaluationInterval",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -554,7 +833,7 @@ def atomic_write_csv(path: Path, rows: list[dict[str, object]], fieldnames: list
 
 
 def final_figure_folders() -> tuple[Path, ...]:
-    return (MAIN_FIGURES_DIR, SCENARIO_FIGURES_DIR, DIAGNOSTIC_FIGURES_DIR, FIGURES_DIR)
+    return (MAIN_FIGURES_DIR, SCENARIO_FIGURES_DIR, DIAGNOSTIC_FIGURES_DIR, SUPPLEMENTARY_FIGURES_DIR, FIGURES_DIR)
 
 
 def clear_generated_final_evaluation_images() -> list[Path]:
@@ -907,6 +1186,7 @@ def scenario_result_dir(scenario: str) -> Path:
         COST_AWARE_SCENARIO: RESULTS_ROOT / "failure_detection_cost_aware_backup",
         TRANSPORT_SCENARIO: RESULTS_ROOT / "failure_detection_cost_aware_transport_impact",
         INSTRUMENTED_TRANSPORT_SCENARIO: RESULTS_ROOT / "ti_inst",
+        RANDOMIZED_ONSET_SCENARIO: RESULTS_ROOT / "ti_randomized_onset",
     }
     return mapping.get(scenario, RESULTS_ROOT)
 
@@ -1003,7 +1283,7 @@ def protection_family(mechanism: str) -> str:
         return "OSPF-only"
     if mechanism == "bfd_like_frr":
         return "BFD-like + FRR-like"
-    if mechanism.startswith("aimrce") or mechanism == "hybrid_bfd_like_aimrce_frr":
+    if is_final_aimrce_policy(mechanism):
         return "AI-MRCE + FRR-like"
     return "other"
 
@@ -1083,7 +1363,8 @@ def delay_validity_notes(
 
     if family == "AI-MRCE + FRR-like":
         comparison_note = (
-            "Family-level AI-MRCE values are means across rule, LogReg, SVM, tree, and hybrid policies; "
+            "Family-level AI-MRCE values are means across rule, LogReg, SVM, and tree policies; "
+            "Hybrid is retained only as a legacy/future traceability mechanism and is excluded from paper-facing family means; "
             "inspect ml_metrics_by_scenario.csv for policy-level spread."
         )
     elif mechanism == "bfd_like_frr":
@@ -1095,11 +1376,7 @@ def delay_validity_notes(
             "OSPF-only is the no-protection baseline; delay is not comparable as service quality without loss/gap context."
         )
 
-    tcp_note = (
-        "TCP endpoint received-byte/goodput/progress proxy only; no TCP RTT/retransmission/cwnd claim."
-        if family and "transport" in delay_window.lower()
-        else "Not a TCP-stack metric; first three cohorts are UDP-only and transport cohort TCP values are endpoint proxies."
-    )
+    tcp_note = "TCP endpoint received-byte/goodput/progress proxy only; no TCP RTT/retransmission/cwnd claim unless explicitly exported."
     recovery_note = f"Recovery field uses {recovery_method}; not a direct routing-protocol convergence timer."
     return udp_delay_note, delay_conditioning, packet_context, tcp_note, recovery_note, comparison_note
 
@@ -1160,11 +1437,13 @@ def final_networking_metrics_rows(
             inet_received = parse_float(inet.get("udp_packets_received_total"))
             inet_loss_count = parse_float(inet.get("udp_packet_loss_count"))
             inet_loss_percent = parse_float(inet.get("udp_packet_loss_percent"))
+            loss_scope = "monitored UDP app[0]"
             if inet_loss_percent is not None:
                 sent = inet_sent
                 received = inet_received
                 loss_count = inet_loss_count
                 loss_percent = inet_loss_percent
+                loss_scope = "configured UDP-app aggregate"
             recovery_base = mean_numeric(outcome_group, "recovery_time_after_failure_s")
             max_post_failure_gap = mean_numeric(outcome_group, "max_packet_interarrival_gap_after_hard_failure_s")
             used_interarrival_gap_proxy = False
@@ -1184,7 +1463,7 @@ def final_networking_metrics_rows(
             inet_delay_ms = parse_float(inet.get("udp_delay_mean_ms"))
             if inet_delay_ms is not None:
                 delay_s = inet_delay_ms / 1000.0
-                delay_window = "instrumented all-configured-UDP-app received-packet summary"
+                delay_window = "configured-UDP-app aggregate received-packet summary"
             udp_delay_p95_ms = parse_float(inet.get("udp_delay_p95_ms"))
             udp_delay_p99_ms = parse_float(inet.get("udp_delay_p99_ms"))
             jitter_s = (
@@ -1225,7 +1504,7 @@ def final_networking_metrics_rows(
                 comparison_validity_note,
             ) = delay_validity_notes(mechanism, loss_percent, post_unobserved, method, delay_window)
             if loss_percent is not None:
-                impact_text = f"Exact monitored UDP app[0] packet loss={fmt(loss_percent)}%; "
+                impact_text = f"Exact {loss_scope} packet loss={fmt(loss_percent)}%; "
             else:
                 impact_text = "Exact monitored UDP packet loss unavailable; "
             if protection_family(mechanism) == "AI-MRCE + FRR-like":
@@ -1322,14 +1601,14 @@ def metric_availability_by_scenario_rows(final_rows: list[dict[str, object]]) ->
             "udp_delay_p95_ms",
             "histogram_approx_received_packets",
             "instrumented INET metrics summary",
-            "Available for the instrumented transport cohort; received-packet conditioned.",
+            "Available for the queue-buildup mitigation cohort; received-packet conditioned.",
         ),
         (
             "UDP delay p99",
             "udp_delay_p99_ms",
             "histogram_approx_received_packets",
             "instrumented INET metrics summary",
-            "Available for the instrumented transport cohort; received-packet conditioned.",
+            "Available for the queue-buildup mitigation cohort; received-packet conditioned.",
         ),
         (
             "receiver-observed recovery time",
@@ -1364,7 +1643,7 @@ def metric_availability_by_scenario_rows(final_rows: list[dict[str, object]]) ->
             "tcp_goodput_proxy_kbps",
             "endpoint_proxy",
             "transport-impact endpoint summaries",
-            "Only available for mixed UDP/TCP transport-impact scenarios; instrumented is the preferred richer-telemetry layer.",
+            "Available for unified mixed UDP/TCP scenarios; Scenario C is the preferred queue-buildup network-impact layer.",
         ),
         (
             "TCP RTT",
@@ -1430,7 +1709,7 @@ def ml_metrics_by_scenario_rows(
     output_rows: list[dict[str, object]] = []
     for row in final_rows:
         mechanism = str(row.get("mechanism_family", ""))
-        if not (mechanism.startswith("aimrce") or mechanism == "hybrid_bfd_like_aimrce_frr"):
+        if not is_final_aimrce_policy(mechanism):
             continue
         scenario = str(row.get("scenario", ""))
         profile = str(row.get("profile", "") or "core_reference")
@@ -1440,7 +1719,7 @@ def ml_metrics_by_scenario_rows(
         tcp = parse_float(row.get("tcp_goodput_proxy_kbps"))
         if mechanism == "aimrce_shallow_tree_frr" and lead is None:
             interpretation = "Conservative/non-activating policy in this row; not treated as missing data."
-        elif scenario in TRANSPORT_SCENARIOS and tcp is not None:
+        elif scenario in UNIFIED_MIXED_TRANSPORT_SCENARIOS and tcp is not None:
             interpretation = "Mixed-traffic AI-MRCE policy row; compare lead time with UDP loss/reordering and TCP endpoint proxy."
         elif loss is not None:
             interpretation = "AI-MRCE policy row; compare lead time with exact monitored UDP app[0] loss and transition cost."
@@ -1473,14 +1752,92 @@ def ml_metrics_by_scenario_rows(
     )
 
 
+def ml_policy_timing_by_scenario_rows(
+    ml_metric_rows: list[dict[str, object]],
+    scenario_c_qos_event_rows: list[dict[str, object]] | None = None,
+) -> list[dict[str, object]]:
+    """Build a compact, paper-facing policy timing table for the final scenarios.
+
+    Raw policy identifiers and full precision stay in ml_metrics_by_scenario.csv.
+    This table is intentionally readable and keeps non-activation as an explicit
+    outcome rather than treating it as missing data.
+    """
+    output_rows: list[dict[str, object]] = []
+    scenario_c_qos_lead = scenario_c_qos_policy_lead_lookup(scenario_c_qos_event_rows or [])
+    for row in ml_metric_rows:
+        scenario = str(row.get("scenario", ""))
+        if scenario not in PAPER_MAIN_SCENARIOS:
+            continue
+        policy = str(row.get("model_policy", ""))
+        if not is_final_aimrce_policy(policy):
+            continue
+        activation = parse_float(row.get("activation_time_mean_s"))
+        lead = parse_float(row.get("lead_time_mean_s"))
+        policy_label = PLOT_LABELS.get(policy, policy)
+        profile = profile_label(row.get("profile", ""))
+        lead_reference = "hard-failure"
+        if scenario == INSTRUMENTED_TRANSPORT_SCENARIO:
+            qos_lead = scenario_c_qos_lead.get((profile, policy_label))
+            if qos_lead is not None:
+                lead = qos_lead
+                lead_reference = "QoS-event"
+        protection_rate = parse_float(row.get("protection_before_failure_rate"))
+        activated = activation is not None or lead is not None or (protection_rate is not None and protection_rate > 0)
+        if activated:
+            if lead_reference == "QoS-event":
+                notes = "Activating runtime policy; Scenario C lead time is referenced to the measured QoS brownout event."
+            else:
+                notes = "Activating runtime policy; compare lead time with UDP loss, reordering, and TCP endpoint proxy."
+        else:
+            notes = "Conservative/non-activating policy in this scenario/profile; not missing data."
+        udp_delay = parse_float(row.get("udp_delay_ms"))
+        tcp_goodput = parse_float(row.get("tcp_goodput_proxy_kbps"))
+        output_rows.append(
+            {
+                "scenario_role": PAPER_SCENARIO_ROLES.get(scenario, paper_scenario_label(scenario)),
+                "scenario_short": SCENARIO_LABELS.get(scenario, scenario),
+                "profile": profile,
+                "policy_or_model": policy_label,
+                "activation_time_s": paper_float(activation, 2),
+                "lead_time_s": paper_float(lead, 2),
+                "activated_yes_no": "yes" if activated else "no",
+                "protection_before_failure_rate": paper_float(protection_rate, 3),
+                "udp_loss_percent": paper_float(row.get("udp_packet_loss_percent"), 3),
+                "udp_delay_metric": f"{paper_float(udp_delay, 3)} ms" if udp_delay is not None else "NA",
+                "tcp_goodput_or_endpoint_metric": f"{paper_float(tcp_goodput, 2)} kb/s" if tcp_goodput is not None else "NA",
+                "notes": notes,
+            }
+        )
+    profile_label_order = {
+        "Core": 0,
+        "Mild": 1,
+        "Moderate": 2,
+        "Fast warning": 3,
+        "Mild slow": 1,
+        "Severe fast": 3,
+    }
+    policy_label_order = {label: MECHANISM_ORDER.get(mechanism, 99) for mechanism, label in PLOT_LABELS.items()}
+    return sorted(
+        output_rows,
+        key=lambda row: (
+            next(
+                (index for index, scenario in enumerate(PAPER_MAIN_SCENARIOS) if PAPER_SCENARIO_ROLES.get(scenario) == row.get("scenario_role")),
+                99,
+            ),
+            profile_label_order.get(str(row.get("profile", "")), 99),
+            policy_label_order.get(str(row.get("policy_or_model", "")), 99),
+        ),
+    )
+
+
 def metric_window_definition_rows() -> list[dict[str, object]]:
     return [
         {
             "metric": "udp_packet_loss_percent",
-            "source": "INET app-level packetSent/packetReceived scalars from .sca files; instrumented cohort uses all configured UDP-app aggregate when available",
+            "source": "INET app-level packetSent/packetReceived scalars from .sca files; unified main scenarios use all configured UDP-app aggregate when available",
             "time_window": "whole run",
             "conditioned_on_received_packets": "no",
-            "exact_or_proxy": "exact for monitored UDP app[0] in baseline scenarios; exact aggregate over configured UDP apps in the instrumented transport cohort",
+            "exact_or_proxy": "exact for monitored UDP app[0] when only the monitored-flow scalar is available; exact aggregate over configured UDP apps where INET metric summaries are generated",
             "comparable_across_mechanisms": "yes within each scenario metric scope",
             "interpretation_note": "Continuity gaps remain separate diagnostics; TCP loss is not inferred from this field.",
         },
@@ -1495,8 +1852,8 @@ def metric_window_definition_rows() -> list[dict[str, object]]:
         },
         {
             "metric": "average_udp_delay_ms",
-            "source": "network-impact summaries; instrumented INET metrics summary when available",
-            "time_window": "post-hard-failure received-packet window where available; activation-to-failure fallback only if post window is unavailable; instrumented all-configured-UDP-app summary where available",
+            "source": "network-impact summaries; INET metrics summary when available",
+            "time_window": "post-hard-failure received-packet window where available; activation-to-failure fallback only if post window is unavailable; configured-UDP-app aggregate summary where available",
             "conditioned_on_received_packets": "yes",
             "exact_or_proxy": "measured/summary diagnostic over delivered packets",
             "comparable_across_mechanisms": "conditionally; valid only with packet-loss and gap context",
@@ -1504,12 +1861,21 @@ def metric_window_definition_rows() -> list[dict[str, object]]:
         },
         {
             "metric": "udp_delay_p95_ms / udp_delay_p99_ms",
-            "source": "instrumented INET metrics summary",
+            "source": "INET metrics summary",
             "time_window": "whole-run received-packet UDP delay histogram approximation for configured UDP apps",
             "conditioned_on_received_packets": "yes",
             "exact_or_proxy": "histogram/summary approximation over received packets",
-            "comparable_across_mechanisms": "yes within the instrumented scenario; interpret with UDP loss",
-            "interpretation_note": "Available only where instrumented telemetry was generated.",
+            "comparable_across_mechanisms": "yes within scenarios where histogram or vector telemetry is generated; interpret with UDP loss",
+            "interpretation_note": "Available where configured UDP delay telemetry is generated.",
+        },
+        {
+            "metric": "scenario_c_qos_event_time_s / lead_time_before_qos_event_s",
+            "source": "analysis-only Scenario C QoS-event extractor from existing generated dataset/outcome artifacts",
+            "time_window": "first sustained measured congestion/QoS-brownout crossing where time-resolved telemetry is available",
+            "conditioned_on_received_packets": "offline event label; not a runtime input",
+            "exact_or_proxy": "evaluation-only QoS-event proxy; blank if current outputs are not timestamped enough",
+            "comparable_across_mechanisms": "yes only when detected from a common OSPF/control profile/run event reference",
+            "interpretation_note": "Current hard-failure lead time remains available for traceability; do not fabricate QoS-event timing from aggregate run summaries.",
         },
         {
             "metric": "udp_jitter_or_delay_variation_ms",
@@ -1540,11 +1906,11 @@ def metric_window_definition_rows() -> list[dict[str, object]]:
         },
         {
             "metric": "tcp_goodput_proxy_kbps",
-            "source": "transport-impact endpoint summaries; instrumented INET metrics summary when available",
-            "time_window": "mixed transport-impact endpoint observation window",
+            "source": "mixed UDP/TCP endpoint summaries; INET metrics summary when available",
+            "time_window": "mixed UDP/TCP endpoint observation window",
             "conditioned_on_received_packets": "endpoint receive/progress events",
             "exact_or_proxy": "endpoint goodput/progress proxy",
-            "comparable_across_mechanisms": "yes within the transport-impact scenario only",
+            "comparable_across_mechanisms": "yes within each unified mixed UDP/TCP scenario",
             "interpretation_note": "Not TCP-stack goodput, RTT, retransmission, cwnd, or flow-completion evidence.",
         },
         {
@@ -1565,18 +1931,16 @@ def mechanisms_for_family(family: str) -> list[str]:
     if family == "BFD-like + FRR-like":
         return ["bfd_like_frr"]
     if family == "AI-MRCE + FRR-like":
-        return [
-            "aimrce_rule_based_frr",
-            "aimrce_logistic_regression_frr",
-            "aimrce_linear_svm_frr",
-            "aimrce_shallow_tree_frr",
-            "hybrid_bfd_like_aimrce_frr",
-        ]
+        return list(FINAL_AIMRCE_POLICY_MECHANISMS)
     return []
 
 
 def protection_family_aggregation_rows() -> list[dict[str, object]]:
     main_figures = [
+        "paper_packet_loss.png",
+        "paper_queue_buildup_udp_quality.png",
+        "paper_lead_time.png",
+        "paper_protection_family_summary.png",
         "final_protection_family_packet_loss.png",
         "final_protection_family_udp_delay.png",
         "final_protection_family_delivery_delay_tradeoff.png",
@@ -1592,8 +1956,8 @@ def protection_family_aggregation_rows() -> list[dict[str, object]]:
         for family in ("OSPF-only", "BFD-like + FRR-like", "AI-MRCE + FRR-like"):
             mechanisms = mechanisms_for_family(family)
             if family == "AI-MRCE + FRR-like":
-                method = "mean across AI-MRCE rule, LogReg, SVM, tree, and hybrid rows for each scenario/profile family aggregate"
-                risk = "Can hide policy spread; use ml_metrics_by_scenario.csv and policy-level figures for model-specific conclusions."
+                method = "mean across AI-MRCE rule, LogReg, SVM, and tree rows for each scenario/profile family aggregate; Hybrid excluded from final main analysis"
+                risk = "Can hide policy spread; use ml_metrics_by_scenario.csv and policy-level figures for policy-specific conclusions. Hybrid remains traceability/future-only."
             else:
                 method = "single mechanism row"
                 risk = "Comparator is not an aggregate; interpret as the project-local baseline for that family."
@@ -2035,14 +2399,8 @@ def plot_cross_scenario_ai_mrce_vs_baselines(
     groups = {
         "OSPF": {"mechanisms": {"ospf_only"}, "post": [], "lead": []},
         "BFD-like": {"mechanisms": {"bfd_like_frr"}, "post": [], "lead": []},
-        "AI-MRCE/Hybrid": {
-            "mechanisms": {
-                "aimrce_rule_based_frr",
-                "aimrce_logistic_regression_frr",
-                "aimrce_linear_svm_frr",
-                "aimrce_shallow_tree_frr",
-                "hybrid_bfd_like_aimrce_frr",
-            },
+        "AI-MRCE": {
+            "mechanisms": set(FINAL_AIMRCE_POLICY_MECHANISMS),
             "post": [],
             "lead": [],
         },
@@ -2118,12 +2476,139 @@ def plot_cost_aware_feature_importance(
     ranked = sorted(best_by_feature.items(), key=lambda item: item[1], reverse=True)[:12]
     if not ranked:
         return False
-    labels = [feature for feature, _ in reversed(ranked)]
+    labels = [feature_display_name(feature) for feature, _ in reversed(ranked)]
     values = [value for _, value in reversed(ranked)]
     plt.figure(figsize=(10.8, 6.2))
     plt.barh(labels, values, color="#b07aa1")
     plt.title("Cost-aware runtime-safe feature drivers")
     plt.xlabel("Max absolute coefficient/importance")
+    plt.grid(axis="x", alpha=0.3)
+    plt.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=180)
+    plt.close()
+    return True
+
+
+def feature_display_name(feature: str) -> str:
+    if feature in FEATURE_DISPLAY_LABELS:
+        return FEATURE_DISPLAY_LABELS[feature]
+    if feature.startswith("feat_"):
+        cleaned = feature[5:]
+    else:
+        cleaned = feature
+    cleaned = cleaned.replace("_s", "").replace("_bps", "").replace("_b", "")
+    return cleaned.replace("_", " ").capitalize()
+
+
+def paper_runtime_feature_importance_rows(
+    feature_summary_rows: list[dict[str, object]],
+    scenario: str = COST_AWARE_SCENARIO,
+) -> list[dict[str, object]]:
+    grouped: dict[str, dict[str, object]] = {
+        feature: {"values": [], "models": set()}
+        for feature in RUNTIME_SAFE_FEATURES
+    }
+    for row in feature_summary_rows:
+        if row.get("scenario") != scenario:
+            continue
+        if row.get("feature_set") != "baseline_four_feature":
+            continue
+        model_name = str(row.get("model", ""))
+        if model_name not in DEPLOYED_RUNTIME_MODEL_NAMES:
+            continue
+        feature = str(row.get("feature", ""))
+        if feature not in grouped:
+            continue
+        value = parse_float(row.get("importance_or_coefficient"))
+        if value is None:
+            continue
+        grouped[feature]["values"].append(abs(value))  # type: ignore[index]
+        grouped[feature]["models"].add(model_name)  # type: ignore[index]
+    rows: list[dict[str, object]] = []
+    for feature in RUNTIME_SAFE_FEATURES:
+        values = grouped[feature]["values"]  # type: ignore[index]
+        if not values:
+            continue
+        models = sorted(model for model in grouped[feature]["models"] if model)  # type: ignore[index]
+        rows.append(
+            {
+                "scenario": scenario,
+                "feature": feature,
+                "feature_display_name": feature_display_name(feature),
+                "max_abs_importance_or_coefficient": f"{max(values):.3f}",
+                "source_models": ";".join(models),
+                "interpretation": "Runtime-safe deployed AI-MRCE telemetry input; raw feature name preserved for traceability.",
+            }
+        )
+    return sorted(rows, key=lambda row: parse_float(row.get("max_abs_importance_or_coefficient")) or 0.0, reverse=True)
+
+
+def plot_runtime_feature_importance(
+    plt,
+    feature_summary_rows: list[dict[str, object]],
+    output_path: Path,
+) -> bool:
+    rows = paper_runtime_feature_importance_rows(feature_summary_rows)
+    if not rows:
+        return False
+    rows = list(reversed(rows))
+    labels = [str(row["feature_display_name"]) for row in rows]
+    values = [parse_float(row.get("max_abs_importance_or_coefficient")) or 0.0 for row in rows]
+    plt.figure(figsize=(8.2, 4.8))
+    bars = plt.barh(labels, values, color="#b07aa1")
+    plt.title("Deployed runtime telemetry feature weights")
+    plt.xlabel("Maximum absolute model coefficient / importance")
+    if values:
+        plt.xlim(0, max(values) * 1.18 if max(values) > 0 else 1)
+    plt.grid(axis="x", alpha=0.3)
+    for bar in bars:
+        width = bar.get_width()
+        plt.gca().annotate(
+            f"{width:.3f}",
+            xy=(width, bar.get_y() + bar.get_height() / 2),
+            xytext=(4, 0),
+            textcoords="offset points",
+            ha="left",
+            va="center",
+            fontsize=8,
+        )
+    plt.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=200)
+    plt.close()
+    return True
+
+
+def plot_extended_feature_importance(
+    plt,
+    feature_summary_rows: list[dict[str, object]],
+    output_path: Path,
+) -> bool:
+    rows = [
+        row
+        for row in feature_summary_rows
+        if row.get("scenario") == COST_AWARE_SCENARIO
+        and row.get("feature_set") != "baseline_four_feature"
+    ]
+    if not rows:
+        return False
+    best_by_feature: dict[str, float] = {}
+    for row in rows:
+        feature = str(row.get("feature", ""))
+        value = parse_float(row.get("importance_or_coefficient"))
+        if not feature or value is None:
+            continue
+        best_by_feature[feature] = max(best_by_feature.get(feature, 0.0), abs(value))
+    ranked = sorted(best_by_feature.items(), key=lambda item: item[1], reverse=True)[:12]
+    if not ranked:
+        return False
+    labels = [feature_display_name(feature) for feature, _ in reversed(ranked)]
+    values = [value for _, value in reversed(ranked)]
+    plt.figure(figsize=(10.8, 6.2))
+    plt.barh(labels, values, color="#9c755f")
+    plt.title("Supplementary extended/offline telemetry drivers")
+    plt.xlabel("Max absolute coefficient / importance")
     plt.grid(axis="x", alpha=0.3)
     plt.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2530,25 +3015,29 @@ def scenario_row_interpretation(
         return "Reactive project-local BFD-like comparator; read activation time against profile severity and hard failure."
     if scenario == COST_AWARE_SCENARIO and mechanism == "aimrce_shallow_tree_frr":
         return "Conservative shallow-tree policy; audit found no load/mapping bug, but no activation in cost-aware traces."
-    if mechanism.startswith("aimrce") or mechanism == "hybrid_bfd_like_aimrce_frr":
+    if is_final_aimrce_policy(mechanism):
         early_backup = network_row.get("early_backup_usage_time_mean", "")
         if scenario == COST_AWARE_SCENARIO and early_backup:
-            return "Proactive AI-MRCE/Hybrid policy; compare lead time with early backup usage and reordering cost."
-        return "Proactive AI-MRCE/Hybrid policy; compare lead time with continuity and transition diagnostics."
+            return "Proactive AI-MRCE policy; compare lead time with early backup usage and reordering cost."
+        return "Proactive AI-MRCE policy; compare lead time with continuity and transition diagnostics."
+    if mechanism == "hybrid_bfd_like_aimrce_frr":
+        return "Legacy hybrid reactive-predictive policy retained for traceability; excluded from final paper-facing family means."
     return str(outcome_row.get("interpretation_note", "Scenario summary row."))
 
 
 def scenario_purpose(scenario: str) -> str:
     if scenario == CORE_SCENARIO:
-        return "basic OSPF vs BFD-like vs AI-MRCE comparison"
+        return "predictive link-failure recovery concept validation"
     if scenario == SENSITIVITY_SCENARIO:
         return "profile sensitivity and robustness"
     if scenario == COST_AWARE_SCENARIO:
-        return "predictive switching benefit against mild backup-path penalty"
+        return "cost-aware degraded-backup operation and policy differentiation"
     if scenario == TRANSPORT_SCENARIO:
         return "baseline mixed UDP/TCP transport-impact validation under cost-aware backup routing"
     if scenario == INSTRUMENTED_TRANSPORT_SCENARIO:
-        return "instrumented mixed UDP/TCP transport-impact validation with richer INET telemetry"
+        return "congestion/queue-buildup early mitigation with targeted INET telemetry"
+    if scenario == RANDOMIZED_ONSET_SCENARIO:
+        return "supplementary randomized QoS-brownout onset robustness"
     return "scenario evaluation"
 
 
@@ -2588,8 +3077,7 @@ def cross_scenario_summary_rows(
         aimrce_rows = [
             row
             for row in rows
-            if str(row.get("mechanism_family", "")).startswith("aimrce")
-            or row.get("mechanism_family") == "hybrid_bfd_like_aimrce_frr"
+            if is_final_aimrce_policy(str(row.get("mechanism_family", "")))
         ]
         aimrce_leads = [
             value
@@ -2602,15 +3090,15 @@ def cross_scenario_summary_rows(
             if (value := parse_float(row.get("post_failure_unobserved_mean"))) is not None
         ]
         if scenario == CORE_SCENARIO:
-            main_interpretation = "Core cohort establishes the basic proactive-vs-reactive comparison; ML timing overlap is expected."
+            main_interpretation = "Predictive link-failure recovery establishes the basic proactive-vs-reactive comparison; runtime-policy timing overlap is expected."
         elif scenario == SENSITIVITY_SCENARIO:
-            main_interpretation = "Sensitivity cohort shows profile robustness and BFD-like profile sensitivity, but limited ML timing separation."
+            main_interpretation = "Sensitivity cohort shows profile robustness and BFD-like profile sensitivity, but limited runtime-policy timing separation."
         elif scenario == COST_AWARE_SCENARIO:
-            main_interpretation = "Cost-aware cohort is the clearest policy-differentiation scenario because backup use has nonzero cost."
+            main_interpretation = "Cost-aware degraded-backup operation is the clearest policy-differentiation scenario because backup use has nonzero cost."
         elif scenario == TRANSPORT_SCENARIO:
             main_interpretation = "Baseline mixed transport-impact cohort adds endpoint TCP progress proxies while retaining UDP/QoS continuity diagnostics."
         elif scenario == INSTRUMENTED_TRANSPORT_SCENARIO:
-            main_interpretation = "Instrumented mixed transport-impact cohort is the preferred publication networking layer because it adds targeted INET telemetry while preserving the same scenario semantics."
+            main_interpretation = "Congestion/queue-buildup early mitigation is the preferred network-impact scenario because it stresses the protected primary path while retaining targeted INET telemetry."
         else:
             main_interpretation = "Scenario summary from existing artifacts."
         output_rows.append(
@@ -2635,7 +3123,7 @@ def ml_policy_leadtime_summary(rows: list[dict[str, object]]) -> list[dict[str, 
     output_rows = []
     for row in rows:
         mechanism = str(row.get("mechanism_family", ""))
-        if not (mechanism.startswith("aimrce") or mechanism == "hybrid_bfd_like_aimrce_frr"):
+        if not is_final_aimrce_policy(mechanism):
             continue
         if mechanism == "aimrce_shallow_tree_frr" and not row.get("activation_time_mean"):
             interpretation = "Conservative/no activation in this profile; no runtime artifact bug found for cost-aware traces."
@@ -2698,7 +3186,7 @@ def transport_impact_feasibility_rows() -> list[dict[str, object]]:
         },
         {
             "metric": "TCP goodput",
-            "current_status": "endpoint received-byte/goodput proxy reported in the mixed transport-impact cohort",
+            "current_status": "endpoint received-byte/goodput proxy reported in unified mixed UDP/TCP cohorts",
             "available_now": "yes_proxy",
             "requires_new_scenario": "no",
             "notes": "Uses INET TCP application endpoint packet-byte vectors; it is not a protocol-internal TCP goodput/retransmission analysis.",
@@ -2909,6 +3397,75 @@ PROTECTION_FAMILY_LABELS = {
     "AI-MRCE + FRR-like": "AI-MRCE+FRR",
 }
 
+PROTECTION_FAMILY_COLORS = {
+    "OSPF-only": "#8c8c8c",
+    "BFD-like + FRR-like": "#4c78a8",
+    "AI-MRCE + FRR-like": "#59a14f",
+}
+
+
+def protection_family_color(family: str) -> str:
+    return PROTECTION_FAMILY_COLORS.get(family, "#666666")
+
+
+def add_value_labels(ax, bars, digits: int = 2) -> None:
+    for bar in bars:
+        height = bar.get_height()
+        if height is None or not math.isfinite(height):
+            continue
+        ax.annotate(
+            f"{height:.{digits}f}",
+            xy=(bar.get_x() + bar.get_width() / 2, height),
+            xytext=(0, 3),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
+
+
+def add_axis_headroom(ax, values: list[float], factor: float = 1.18) -> None:
+    finite_values = [value for value in values if math.isfinite(value)]
+    if not finite_values:
+        return
+    top = max(finite_values)
+    if top <= 0:
+        ax.set_ylim(0, 1)
+    else:
+        ax.set_ylim(0, top * factor)
+
+
+def add_axis_headroom_signed(ax, values: list[float], factor: float = 1.18) -> None:
+    finite_values = [value for value in values if math.isfinite(value)]
+    if not finite_values:
+        return
+    low = min(finite_values)
+    high = max(finite_values)
+    if low < 0 < high:
+        span = high - low
+        ax.set_ylim(low - span * 0.14, high + span * 0.14)
+    elif low < 0:
+        ax.set_ylim(low * factor, 0)
+    else:
+        add_axis_headroom(ax, finite_values, factor=factor)
+
+
+def add_signed_value_labels(ax, bars, digits: int = 1) -> None:
+    for bar in bars:
+        height = bar.get_height()
+        if not math.isfinite(height):
+            continue
+        offset = 4 if height >= 0 else -4
+        ax.annotate(
+            f"{height:.{digits}f}",
+            xy=(bar.get_x() + bar.get_width() / 2, height),
+            xytext=(0, offset),
+            textcoords="offset points",
+            ha="center",
+            va="bottom" if height >= 0 else "top",
+            fontsize=8,
+        )
+
 
 def family_metric_summary(
     final_rows: list[dict[str, object]],
@@ -2930,6 +3487,22 @@ def family_metric_summary(
     ]
 
 
+def family_metric_values(
+    final_rows: list[dict[str, object]],
+    field: str,
+    scenario: str = PRIMARY_TRANSPORT_RESULTS_SCENARIO,
+) -> dict[str, list[float]]:
+    groups: dict[str, list[float]] = defaultdict(list)
+    for row in final_rows:
+        if row.get("scenario") != scenario:
+            continue
+        value = parse_float(row.get(field))
+        family = str(row.get("protection_family", ""))
+        if value is not None and family:
+            groups[family].append(value)
+    return groups
+
+
 def plot_protection_family_metric(
     plt,
     final_rows: list[dict[str, object]],
@@ -2945,7 +3518,9 @@ def plot_protection_family_metric(
     labels = [PROTECTION_FAMILY_LABELS.get(family, family) for family, _ in summary]
     values = [value for _, value in summary]
     plt.figure(figsize=(7.8, 4.8))
-    plt.bar(labels, values, color=["#8c8c8c", "#4c78a8", "#59a14f"][: len(labels)])
+    bars = plt.bar(labels, values, color=[protection_family_color(family) for family, _ in summary])
+    add_value_labels(plt.gca(), bars, digits=2)
+    add_axis_headroom(plt.gca(), values)
     plt.title(title, pad=10)
     plt.ylabel(ylabel)
     plt.grid(axis="y", alpha=0.3)
@@ -2953,6 +3528,118 @@ def plot_protection_family_metric(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, dpi=180)
     plt.close()
+    return True
+
+
+def plot_paper_lead_time(
+    plt,
+    final_rows: list[dict[str, object]],
+    output_path: Path,
+    scenarios: tuple[str, ...] = PAPER_MAIN_SCENARIOS,
+) -> bool:
+    families = ["BFD-like + FRR-like", "AI-MRCE + FRR-like"]
+    summaries = {
+        scenario: dict(scenario_metric_summary(final_rows, "lead_time_mean_s", scenario))
+        for scenario in scenarios
+    }
+    summaries = {scenario: values for scenario, values in summaries.items() if values}
+    if not summaries:
+        return False
+    labels = [SCENARIO_LABELS.get(scenario, scenario) for scenario in summaries]
+    x_positions = list(range(len(labels)))
+    width = 0.3
+    plt.figure(figsize=(8.8, 4.9))
+    ax = plt.gca()
+    for index, family in enumerate(families):
+        offsets = [x + (index - 0.5) * width for x in x_positions]
+        values = [summaries[scenario].get(family, 0.0) for scenario in summaries]
+        bars = ax.bar(
+            offsets,
+            values,
+            width=width,
+            label=PROTECTION_FAMILY_LABELS.get(family, family),
+            color=protection_family_color(family),
+        )
+        for bar, value in zip(bars, values):
+            if value < 0:
+                bar.set_hatch("///")
+                bar.set_edgecolor("#1f2937")
+                bar.set_linewidth(0.7)
+        add_signed_value_labels(ax, bars, digits=1)
+    plotted_values = [
+        summaries[scenario].get(family, 0.0)
+        for family in families
+        for scenario in summaries
+    ]
+    add_axis_headroom_signed(ax, plotted_values, factor=1.16)
+    if any(value < 0 for value in plotted_values):
+        ax.axhline(0, color="#9ca3af", linewidth=1)
+        plt.figtext(
+            0.43,
+            0.02,
+            "Negative Queue buildup BFD+FRR lead means reaction after the QoS brownout event.",
+            ha="center",
+            fontsize=8,
+            color="#4b5563",
+        )
+    ax.set_title("Protection lead time")
+    ax.set_ylabel("Lead time before adverse network event (s)")
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(labels, rotation=8, ha="right")
+    ax.grid(axis="y", alpha=0.3)
+    ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False)
+    plt.tight_layout(rect=(0, 0.07, 0.80, 0.96))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=200)
+    plt.close()
+    return True
+
+
+def plot_instrumented_udp_quality(
+    plt,
+    final_rows: list[dict[str, object]],
+    output_path: Path,
+) -> bool:
+    loss = family_metric_summary(final_rows, "udp_packet_loss_percent", scenario=PRIMARY_TRANSPORT_RESULTS_SCENARIO)
+    delay = family_metric_summary(final_rows, "udp_delay_p95_ms", scenario=PRIMARY_TRANSPORT_RESULTS_SCENARIO)
+    if not loss or not delay:
+        return False
+    loss_dict = dict(loss)
+    delay_dict = dict(delay)
+    families = [
+        family for family in ("OSPF-only", "BFD-like + FRR-like", "AI-MRCE + FRR-like")
+        if family in loss_dict or family in delay_dict
+    ]
+    if not families:
+        return False
+    labels = [PROTECTION_FAMILY_LABELS.get(family, family) for family in families]
+    colors = [protection_family_color(family) for family in families]
+    fig, axes = plt.subplots(1, 2, figsize=(10.2, 4.9))
+    bars = axes[0].bar(labels, [loss_dict.get(family, 0.0) for family in families], color=colors)
+    add_value_labels(axes[0], bars, digits=2)
+    add_axis_headroom(axes[0], [loss_dict.get(family, 0.0) for family in families])
+    axes[0].set_title("Aggregate UDP loss")
+    axes[0].set_ylabel("Packet loss (%)")
+    bars = axes[1].bar(labels, [delay_dict.get(family, 0.0) for family in families], color=colors)
+    add_value_labels(axes[1], bars, digits=1)
+    add_axis_headroom(axes[1], [delay_dict.get(family, 0.0) for family in families])
+    axes[1].set_title("Received-packet UDP delay")
+    axes[1].set_ylabel("p95 delay (ms)")
+    for ax in axes:
+        ax.grid(axis="y", alpha=0.3)
+        ax.tick_params(axis="x", rotation=8)
+    fig.suptitle("Queue-buildup UDP delivery quality", y=0.96)
+    fig.text(
+        0.5,
+        0.01,
+        "Scenario C: AI-MRCE activation 83 s; QoS brownout event 89 s. Delay is computed over received UDP packets.",
+        ha="center",
+        fontsize=8,
+    )
+    fig.tight_layout(rect=(0, 0.08, 1, 0.93))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=200)
+    plt.close(fig)
     return True
 
 
@@ -2964,8 +3651,8 @@ def plot_final_protection_family_summary(
 ) -> bool:
     metric_specs = [
         ("udp_packet_loss_percent", "UDP loss (%)"),
-        ("recovery_time_after_failure_s", "Recovery (s)"),
-        ("lead_time_mean_s", "Lead time (s)"),
+        ("udp_delay_p95_ms", "UDP p95 delay (ms)"),
+        ("lead_time_mean_s", "Lead time (event/ref s)"),
         ("tcp_goodput_proxy_kbps", "TCP goodput proxy (kb/s)"),
     ]
     summaries = [(label, family_metric_summary(final_rows, field, scenario=scenario)) for field, label in metric_specs]
@@ -2977,14 +3664,16 @@ def plot_final_protection_family_summary(
     for ax, (label, summary) in zip(flat_axes, summaries):
         families = [PROTECTION_FAMILY_LABELS.get(family, family) for family, _ in summary]
         values = [value for _, value in summary]
-        ax.bar(families, values, color=["#8c8c8c", "#4c78a8", "#59a14f"][: len(families)])
+        bars = ax.bar(families, values, color=[protection_family_color(family) for family, _ in summary])
+        add_value_labels(ax, bars, digits=1 if "delay" in label.lower() or "goodput" in label.lower() else 2)
+        add_axis_headroom(ax, values)
         ax.set_title(label)
         ax.grid(axis="y", alpha=0.3)
         ax.tick_params(axis="x", rotation=15)
     for ax in flat_axes[len(summaries):]:
         ax.axis("off")
-    fig.suptitle("Transport scenario protection-family summary", y=0.98)
-    fig.tight_layout()
+    fig.suptitle("Congestion-mitigation protection-family summary", y=0.97)
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, dpi=180)
     plt.close()
@@ -3067,7 +3756,15 @@ def plot_protection_family_metric_all_scenarios(
     for index, family in enumerate(families):
         offsets = [x + (index - 1) * width for x in x_positions]
         values = [summaries[scenario].get(family, 0.0) for scenario in summaries]
-        plt.bar(offsets, values, width=width, label=PROTECTION_FAMILY_LABELS.get(family, family))
+        bars = plt.bar(
+            offsets,
+            values,
+            width=width,
+            label=PROTECTION_FAMILY_LABELS.get(family, family),
+            color=protection_family_color(family),
+        )
+        if field == "udp_packet_loss_percent":
+            add_value_labels(plt.gca(), bars, digits=2)
     plt.title(title, pad=10)
     plt.ylabel(ylabel)
     plt.xticks(x_positions, labels, rotation=12, ha="right")
@@ -3237,7 +3934,7 @@ def plot_scenario_ml_activation_leadtime(
     groups: dict[str, dict[str, list[float]]] = {
         mechanism: {"activation": [], "lead": []}
         for mechanism in MECHANISM_ORDER
-        if mechanism.startswith("aimrce") or mechanism == "hybrid_bfd_like_aimrce_frr"
+        if is_final_aimrce_policy(mechanism)
     }
     for row in rows:
         mechanism = str(row.get("model_policy", ""))
@@ -3360,45 +4057,97 @@ def plot_ml_policy_lead_time_by_scenario(
     plt,
     ml_metric_rows: list[dict[str, object]],
     output_path: Path,
+    scenario_c_qos_event_rows: list[dict[str, object]] | None = None,
 ) -> bool:
-    rows = [row for row in ml_metric_rows if parse_float(row.get("lead_time_mean_s")) is not None]
-    if not rows:
-        return False
     policies = [
         "aimrce_rule_based_frr",
         "aimrce_logistic_regression_frr",
         "aimrce_linear_svm_frr",
         "aimrce_shallow_tree_frr",
-        "hybrid_bfd_like_aimrce_frr",
     ]
-    scenario_values: dict[tuple[str, str], float] = {}
-    for scenario in ALL_SCENARIOS:
+    scenarios = PAPER_MAIN_SCENARIOS
+    rows = [row for row in ml_metric_rows if row.get("scenario") in scenarios]
+    if not rows:
+        return False
+    scenario_colors = {
+        CORE_SCENARIO: "#6b7280",
+        COST_AWARE_SCENARIO: "#4c78a8",
+        INSTRUMENTED_TRANSPORT_SCENARIO: "#59a14f",
+    }
+    scenario_values: dict[tuple[str, str], float | None] = {}
+    scenario_seen: set[tuple[str, str]] = set()
+    scenario_c_qos_lead = scenario_c_qos_policy_lead_lookup(scenario_c_qos_event_rows or [])
+    for scenario in scenarios:
         for policy in policies:
             values = [
-                value for row in rows
+                value
+                for row in rows
                 if row.get("scenario") == scenario and row.get("model_policy") == policy
-                if (value := parse_float(row.get("lead_time_mean_s"))) is not None
+                if (
+                    value := (
+                        scenario_c_qos_lead.get(
+                            (profile_label(row.get("profile", "")), PLOT_LABELS.get(policy, policy))
+                        )
+                        if scenario == INSTRUMENTED_TRANSPORT_SCENARIO
+                        else parse_float(row.get("lead_time_mean_s"))
+                    )
+                ) is not None
             ]
+            if any(row.get("scenario") == scenario and row.get("model_policy") == policy for row in ml_metric_rows):
+                scenario_seen.add((scenario, policy))
             if values:
                 scenario_values[(scenario, policy)] = fmean(values)
+            elif (scenario, policy) in scenario_seen:
+                scenario_values[(scenario, policy)] = None
     if not scenario_values:
         return False
-    labels = [SCENARIO_LABELS.get(scenario, scenario) for scenario in ALL_SCENARIOS]
+    labels = [PLOT_LABELS.get(policy, policy) for policy in policies]
     x_positions = list(range(len(labels)))
-    width = 0.15
-    plt.figure(figsize=(11.8, 5.6))
-    for index, policy in enumerate(policies):
-        offsets = [x + (index - 2) * width for x in x_positions]
-        values = [scenario_values.get((scenario, policy), 0.0) for scenario in ALL_SCENARIOS]
-        plt.bar(offsets, values, width=width, label=PLOT_LABELS.get(policy, policy))
-    plt.title("AI-MRCE policy lead time by scenario")
-    plt.ylabel("Lead time before failure (s)")
-    plt.xticks(x_positions, labels, rotation=12, ha="right")
+    width = 0.22
+    plt.figure(figsize=(10.8, 5.5))
+    plotted_values: list[float] = []
+    for index, scenario in enumerate(scenarios):
+        offsets = [x + (index - 1) * width for x in x_positions]
+        values = [scenario_values.get((scenario, policy), 0.0) or 0.0 for policy in policies]
+        bars = plt.bar(
+            offsets,
+            values,
+            width=width,
+            label=SCENARIO_LABELS.get(scenario, scenario),
+            color=scenario_colors.get(scenario, "#666666"),
+        )
+        for bar, policy, value in zip(bars, policies, [scenario_values.get((scenario, policy)) for policy in policies]):
+            if value is None and (scenario, policy) in scenario_seen:
+                bar.set_hatch("//")
+                plt.gca().annotate(
+                    "NA",
+                    xy=(bar.get_x() + bar.get_width() / 2, 0),
+                    xytext=(0, 5),
+                    textcoords="offset points",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                )
+            elif value is not None:
+                plotted_values.append(float(value))
+                plt.gca().annotate(
+                    f"{float(value):.1f}",
+                    xy=(bar.get_x() + bar.get_width() / 2, float(value)),
+                    xytext=(0, 3),
+                    textcoords="offset points",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                )
+    add_axis_headroom(plt.gca(), plotted_values, factor=1.16)
+    plt.title("AI-MRCE runtime-policy lead time")
+    plt.ylabel("Lead time before adverse event (s)")
+    plt.xticks(x_positions, labels)
     plt.grid(axis="y", alpha=0.3)
-    plt.legend(loc="best", ncols=3)
-    plt.tight_layout()
+    plt.legend(loc="upper left", bbox_to_anchor=(1.01, 1.0), frameon=False)
+    plt.tight_layout(rect=(0, 0, 0.86, 1))
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(output_path, dpi=180)
+    plt.savefig(output_path, dpi=200)
     plt.close()
     return True
 
@@ -3452,6 +4201,393 @@ def plot_ml_policy_network_tradeoff(
     return True
 
 
+def plot_event_timeline(
+    plt,
+    rows: list[dict[str, object]],
+    output_path: Path,
+) -> bool:
+    if not rows:
+        return False
+    labels = [str(row.get("scenario_short", "")) for row in rows]
+    y_positions = list(range(len(labels)))
+    markers = [
+        ("ai_mrce_activation_time_s", "AI-MRCE activation", "#59a14f", "o"),
+        ("adverse_event_time_s", "Adverse event", "#d62728", "X"),
+        ("bfd_frr_activation_time_s", "BFD+FRR reaction", "#4c78a8", "^"),
+    ]
+    hard_refs = [
+        value for row in rows
+        if (value := parse_float(row.get("hard_failure_reference_s"))) is not None
+    ]
+    hard_ref = fmean(hard_refs) if hard_refs else None
+    plt.figure(figsize=(11.0, 4.9))
+    ax = plt.gca()
+    plotted_times: list[float] = []
+    if hard_ref is not None:
+        ax.axvline(hard_ref, color="#9ca3af", linestyle="--", linewidth=1.4, zorder=1)
+        ax.annotate(
+            f"Hard failure reference = {hard_ref:.0f} s",
+            xy=(hard_ref, len(labels) - 0.25),
+            xytext=(7, 0),
+            textcoords="offset points",
+            ha="left",
+            va="top",
+            fontsize=8,
+            color="#6b7280",
+        )
+    for y, row in zip(y_positions, rows):
+        scenario_short = str(row.get("scenario_short", ""))
+        ax.hlines(y, 0, 130, color="#e5e7eb", linewidth=2)
+        for field, label, color, marker in markers:
+            value = parse_float(row.get(field))
+            if value is None:
+                continue
+            plotted_times.append(value)
+            ax.scatter(value, y, s=110, color=color, marker=marker, label=label if y == 0 else None, zorder=3)
+            if field == "adverse_event_time_s" and hard_ref is not None and abs(value - hard_ref) < 0.05:
+                continue
+            offset_map = {
+                ("ai_mrce_activation_time_s", "Link failure"): (0, 9),
+                ("ai_mrce_activation_time_s", "Degraded backup"): (0, 9),
+                ("ai_mrce_activation_time_s", "Queue buildup"): (0, 9),
+                ("adverse_event_time_s", "Queue buildup"): (0, -20),
+                ("bfd_frr_activation_time_s", "Link failure"): (-24, 13),
+                ("bfd_frr_activation_time_s", "Degraded backup"): (-26, -18),
+                ("bfd_frr_activation_time_s", "Queue buildup"): (-28, -20),
+            }
+            dx, dy = offset_map.get((field, scenario_short), (0, 9))
+            label_text = f"{value:.1f}s"
+            if field == "adverse_event_time_s" and scenario_short == "Queue buildup":
+                label_text = f"{value:.1f}s\nQoS event"
+            elif field == "bfd_frr_activation_time_s" and scenario_short == "Queue buildup":
+                label_text = f"{value:.1f}s\nreactive"
+            ax.annotate(
+                label_text,
+                xy=(value, y),
+                xytext=(dx, dy),
+                textcoords="offset points",
+                ha="center",
+                va="bottom" if dy >= 0 else "top",
+                fontsize=8,
+                color=color,
+            )
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(labels)
+    ax.set_xlabel("Simulation time (s)")
+    ax.set_xlim(75, 130)
+    ax.set_ylim(-0.55, len(labels) - 0.1)
+    ax.set_title("Scenario event timing and protection activation")
+    ax.grid(axis="x", alpha=0.25)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=3, frameon=False)
+    plt.tight_layout(rect=(0, 0.08, 1, 1))
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=200)
+    plt.close()
+    return bool(plotted_times)
+
+
+def plot_scenario_b_tradeoff(
+    plt,
+    rows: list[dict[str, object]],
+    output_path: Path,
+) -> bool:
+    activated = [
+        row for row in rows
+        if str(row.get("activated_yes_no", "")).lower() == "yes"
+        and parse_float(row.get("lead_time_s")) is not None
+        and parse_float(row.get("udp_loss_reduction_vs_ospf_pp")) is not None
+    ]
+    if not activated:
+        return False
+    marker_by_policy = {"Rule": "o", "LogReg": "s", "SVM": "^", "Tree": "D"}
+    color_by_policy = {"Rule": "#59a14f", "LogReg": "#2ca02c", "SVM": "#1f7a1f", "Tree": "#7fbf7b"}
+    x_jitter_by_policy = {"LogReg": -0.18, "SVM": 0.18}
+    label_offset_by_policy = {"Rule": (4, 4), "LogReg": (4, 9), "SVM": (4, -14)}
+    plt.figure(figsize=(8.6, 5.2))
+    ax = plt.gca()
+    plotted_x: list[float] = []
+    plotted_y: list[float] = []
+    for row in activated:
+        x = parse_float(row.get("lead_time_s"))
+        y = parse_float(row.get("udp_loss_reduction_vs_ospf_pp"))
+        if x is None or y is None:
+            continue
+        policy = str(row.get("policy", ""))
+        profile = str(row.get("profile", ""))
+        plot_x = x + x_jitter_by_policy.get(policy, 0.0)
+        plotted_x.append(plot_x)
+        plotted_y.append(y)
+        facecolor = "none" if policy == "SVM" else color_by_policy.get(policy, "#59a14f")
+        edgecolor = color_by_policy.get(policy, "#1f2937") if policy == "SVM" else "#1f2937"
+        ax.scatter(
+            plot_x,
+            y,
+            s=80,
+            marker=marker_by_policy.get(policy, "o"),
+            facecolors=facecolor,
+            edgecolors=edgecolor,
+            linewidth=1.0 if policy == "SVM" else 0.5,
+            label=policy,
+        )
+        label_dx, label_dy = label_offset_by_policy.get(policy, (4, 4))
+        ax.annotate(
+            profile,
+            xy=(plot_x, y),
+            xytext=(label_dx, label_dy),
+            textcoords="offset points",
+            fontsize=8,
+            va="bottom" if label_dy >= 0 else "top",
+        )
+    handles, labels = ax.get_legend_handles_labels()
+    unique = dict(zip(labels, handles))
+    ax.legend(unique.values(), unique.keys(), frameon=False, title="Policy")
+    ax.axhline(0, color="#9ca3af", linewidth=1)
+    ax.set_xlabel("Lead time / early backup-use proxy (s)")
+    ax.set_ylabel("UDP loss reduction vs OSPF (percentage points)")
+    ax.set_title("Scenario B benefit versus early-backup cost")
+    ax.grid(alpha=0.25)
+    if any(str(row.get("activated_yes_no", "")).lower() != "yes" for row in rows):
+        ax.text(
+            0.01,
+            0.02,
+            "Non-activating policies are retained in the table, not plotted as zero.",
+            transform=ax.transAxes,
+            fontsize=8,
+            color="#4b5563",
+        )
+    ax.text(
+        0.01,
+        0.09,
+        "LogReg/SVM are lightly jittered for visibility; CSV values are unchanged.",
+        transform=ax.transAxes,
+        fontsize=8,
+        color="#4b5563",
+    )
+    if plotted_x:
+        ax.set_xlim(min(plotted_x) - 2, max(plotted_x) + 4)
+    if plotted_y:
+        add_axis_headroom(ax, plotted_y, factor=1.18)
+    plt.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=200)
+    plt.close()
+    return True
+
+
+def plot_randomized_onset_activation_vs_qos_event(
+    plt,
+    rows: list[dict[str, object]],
+    output_path: Path,
+) -> bool:
+    ai_rows = [
+        row for row in rows
+        if str(row.get("mechanism", "")).startswith("aimrce_")
+        and parse_float(row.get("qos_event_time_s")) is not None
+        and parse_float(row.get("ai_activation_time_s")) is not None
+    ]
+    if not ai_rows:
+        return False
+    marker_by_policy = {"Rule": "o", "LogReg": "s", "SVM": "^", "Tree": "D"}
+    color_by_policy = {"Rule": "#59a14f", "LogReg": "#2ca02c", "SVM": "#1f7a1f", "Tree": "#7fbf7b"}
+    plt.figure(figsize=(7.6, 5.2))
+    ax = plt.gca()
+    xs: list[float] = []
+    ys: list[float] = []
+    for row in ai_rows:
+        x = parse_float(row.get("qos_event_time_s"))
+        y = parse_float(row.get("ai_activation_time_s"))
+        if x is None or y is None:
+            continue
+        policy = str(row.get("policy_or_model", "AI-MRCE"))
+        xs.append(x)
+        ys.append(y)
+        ax.scatter(
+            x,
+            y,
+            s=70,
+            marker=marker_by_policy.get(policy, "o"),
+            color=color_by_policy.get(policy, "#59a14f"),
+            edgecolor="#1f2937",
+            linewidth=0.5,
+            label=policy,
+        )
+    if not xs or not ys:
+        plt.close()
+        return False
+    lo = min(xs + ys) - 3
+    hi = max(xs + ys) + 3
+    ax.plot([lo, hi], [lo, hi], color="#9ca3af", linestyle="--", linewidth=1.2, label="activation = QoS event")
+    ax.fill_between([lo, hi], [lo, hi], [lo, lo], color="#d1fae5", alpha=0.25, label="activation before event")
+    handles, labels = ax.get_legend_handles_labels()
+    unique = dict(zip(labels, handles))
+    ax.legend(unique.values(), unique.keys(), frameon=False, fontsize=8)
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+    ax.set_xlabel("Measured QoS brownout event time (s)")
+    ax.set_ylabel("AI-MRCE activation time (s)")
+    ax.set_title("Randomized onset: activation versus QoS event")
+    ax.grid(alpha=0.25)
+    ax.text(
+        0.01,
+        0.02,
+        "Supplementary Scenario C-R; QoS event is offline/passive, not a runtime input.",
+        transform=ax.transAxes,
+        fontsize=8,
+        color="#4b5563",
+    )
+    plt.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=200)
+    plt.close()
+    return True
+
+
+def plot_randomized_onset_lead_time(
+    plt,
+    rows: list[dict[str, object]],
+    output_path: Path,
+) -> bool:
+    plot_rows = [
+        row for row in rows
+        if row.get("mechanism") == "bfd_like_frr" or str(row.get("mechanism", "")).startswith("aimrce_")
+    ]
+    plot_rows = [
+        row for row in plot_rows
+        if parse_float(row.get("randomized_onset_time_s")) is not None
+        and (
+            parse_float(row.get("ai_lead_before_qos_event_s")) is not None
+            or parse_float(row.get("bfd_lead_before_qos_event_s")) is not None
+        )
+    ]
+    if not plot_rows:
+        return False
+    policies = ["BFD+FRR", "Rule", "LogReg", "SVM", "Tree"]
+    color_by_policy = {
+        "BFD+FRR": "#4c78a8",
+        "Rule": "#59a14f",
+        "LogReg": "#2ca02c",
+        "SVM": "#1f7a1f",
+        "Tree": "#7fbf7b",
+    }
+    marker_by_policy = {"BFD+FRR": "^", "Rule": "o", "LogReg": "s", "SVM": "^", "Tree": "D"}
+    plt.figure(figsize=(8.2, 5.2))
+    ax = plt.gca()
+    plotted_y: list[float] = []
+    for policy in policies:
+        xs: list[float] = []
+        ys: list[float] = []
+        for row in plot_rows:
+            label = str(row.get("policy_or_model", ""))
+            if label != policy:
+                continue
+            x = parse_float(row.get("randomized_onset_time_s"))
+            y = parse_float(
+                row.get("bfd_lead_before_qos_event_s") if policy == "BFD+FRR" else row.get("ai_lead_before_qos_event_s")
+            )
+            if x is None or y is None:
+                continue
+            xs.append(x)
+            ys.append(y)
+            plotted_y.append(y)
+        if xs:
+            ax.plot(
+                xs,
+                ys,
+                marker=marker_by_policy.get(policy, "o"),
+                linewidth=1.5,
+                color=color_by_policy.get(policy, "#59a14f"),
+                label=policy,
+            )
+    ax.axhline(0, color="#111827", linewidth=1.0)
+    ax.set_xlabel("Randomized congestion onset time (s)")
+    ax.set_ylabel("Lead time before measured QoS event (s)")
+    ax.set_title("Randomized onset: QoS-event lead time")
+    ax.grid(alpha=0.25)
+    ax.legend(frameon=False, ncol=2, fontsize=8)
+    if plotted_y:
+        add_axis_headroom(ax, plotted_y + [0.0], factor=1.18)
+    ax.text(
+        0.01,
+        0.02,
+        "Positive = activation before QoS event; negative = reaction after event.",
+        transform=ax.transAxes,
+        fontsize=8,
+        color="#4b5563",
+    )
+    plt.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=200)
+    plt.close()
+    return True
+
+
+def plot_randomized_onset_qos_impact(
+    plt,
+    rows: list[dict[str, object]],
+    output_path: Path,
+) -> bool:
+    grouped: dict[str, list[dict[str, object]]] = defaultdict(list)
+    for row in rows:
+        mechanism = str(row.get("mechanism", ""))
+        if mechanism in FINAL_MAIN_MECHANISMS:
+            grouped[paper_family_label(protection_family(mechanism))].append(row)
+    labels = ["OSPF", "BFD+FRR", "AI-MRCE+FRR"]
+    loss_values = [
+        mean_or_none([value for row in grouped.get(label, []) if (value := parse_float(row.get("udp_loss_percent"))) is not None])
+        for label in labels
+    ]
+    delay_values = [
+        mean_or_none([value for row in grouped.get(label, []) if (value := parse_float(row.get("udp_p95_delay_ms"))) is not None])
+        for label in labels
+    ]
+    if all(value is None for value in loss_values + delay_values):
+        return False
+    colors = [
+        PROTECTION_FAMILY_COLORS["OSPF-only"],
+        PROTECTION_FAMILY_COLORS["BFD-like + FRR-like"],
+        PROTECTION_FAMILY_COLORS["AI-MRCE + FRR-like"],
+    ]
+    fig, axes = plt.subplots(1, 2, figsize=(8.8, 4.6), constrained_layout=True)
+    for ax, values, ylabel, title, digits in [
+        (axes[0], loss_values, "Packet loss (%)", "Aggregate UDP loss", 2),
+        (axes[1], delay_values, "p95 delay (ms)", "Received-packet UDP delay", 1),
+    ]:
+        xs = list(range(len(labels)))
+        bars = ax.bar(xs, [value if value is not None else 0.0 for value in values], color=colors, width=0.58)
+        ax.set_xticks(xs, labels)
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+        ax.grid(axis="y", alpha=0.22)
+        plotted = [value for value in values if value is not None]
+        if plotted:
+            add_axis_headroom(ax, plotted, factor=1.22)
+        for bar, value in zip(bars, values):
+            if value is None:
+                ax.text(bar.get_x() + bar.get_width() / 2, 0, "NA", ha="center", va="bottom", fontsize=8)
+            else:
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height(),
+                    f"{value:.{digits}f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                )
+    fig.suptitle("Randomized onset QoS impact", fontsize=12)
+    fig.text(
+        0.5,
+        0.01,
+        "Supplementary Scenario C-R; delay is received-packet conditioned.",
+        ha="center",
+        fontsize=8,
+        color="#4b5563",
+    )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=200)
+    plt.close()
+    return True
+
+
 def generate_figures(
     core_rows: list[dict[str, object]],
     sensitivity_rows: list[dict[str, object]],
@@ -3466,77 +4602,28 @@ def generate_figures(
     stability_rows: list[dict[str, object]],
     final_networking_rows: list[dict[str, object]],
     ml_metric_rows: list[dict[str, object]],
+    event_rows: list[dict[str, object]],
+    scenario_b_tradeoff: list[dict[str, object]],
     transport_endpoint_rows: list[dict[str, object]],
+    scenario_c_qos_event_rows: list[dict[str, object]],
+    randomized_onset_summary_rows: list[dict[str, object]],
     missing_optional: list[str],
 ) -> list[str]:
     plt = require_matplotlib()
     generated: list[str] = []
     paper_rows = [row for row in final_networking_rows if row.get("scenario") in PAPER_MAIN_SCENARIOS]
     figure_specs = [
-        (plot_protection_family_metric_all_scenarios, (paper_rows, "udp_packet_loss_percent", "Paper packet-delivery impact\nCore, cost-aware, and instrumented transport", "Packet loss (%)", FIGURES_DIR / "paper_packet_loss.png", PAPER_MAIN_SCENARIOS)),
-        (plot_delivery_delay_tradeoff, (paper_rows, FIGURES_DIR / "paper_delivery_delay_tradeoff.png")),
-        (plot_protection_family_metric_all_scenarios, (paper_rows, "lead_time_mean_s", "Paper lead-time comparison\nCore, cost-aware, and instrumented transport", "Seconds", FIGURES_DIR / "paper_lead_time.png", PAPER_MAIN_SCENARIOS)),
-        (plot_final_protection_family_summary, (final_networking_rows, FIGURES_DIR / "paper_protection_family_summary.png", PRIMARY_TRANSPORT_RESULTS_SCENARIO)),
-        (plot_protection_family_metric, (final_networking_rows, "tcp_goodput_proxy_kbps", "TCP endpoint goodput proxy\nInstrumented mixed UDP/TCP", "kb/s", FIGURES_DIR / "paper_tcp_goodput_proxy.png", PRIMARY_TRANSPORT_RESULTS_SCENARIO)),
-        (plot_cost_aware_feature_importance, (feature_summary_rows, FIGURES_DIR / "paper_ml_feature_importance.png")),
-        (plot_protection_family_metric_all_scenarios, (final_networking_rows, "udp_packet_loss_percent", "UDP packet loss by protection family\nInstrumented uses configured UDP-app aggregate", "Packet loss (%)", FIGURES_DIR / "final_protection_family_packet_loss.png")),
-        (plot_protection_family_metric_all_scenarios, (final_networking_rows, "average_udp_delay_ms", "Average UDP delay by protection family\nReceived UDP packets only; interpret with packet loss", "Delay (ms)", FIGURES_DIR / "final_protection_family_udp_delay.png")),
-        (plot_delivery_delay_tradeoff, (final_networking_rows, FIGURES_DIR / "final_protection_family_delivery_delay_tradeoff.png")),
-        (plot_loss_recovery_tradeoff, (final_networking_rows, FIGURES_DIR / "final_protection_family_loss_recovery_tradeoff.png")),
-        (plot_protection_family_metric_all_scenarios, (final_networking_rows, "recovery_time_after_failure_s", "Recovery proxy by protection family", "Seconds", FIGURES_DIR / "final_protection_family_recovery_time.png")),
-        (plot_protection_family_metric_all_scenarios, (final_networking_rows, "activation_to_failure_reordered_mean", "Transition reordering by protection family", "Packets", FIGURES_DIR / "final_protection_family_reordering.png")),
-        (plot_protection_family_metric_all_scenarios, (final_networking_rows, "lead_time_mean_s", "Predictive lead time by protection family", "Seconds", FIGURES_DIR / "final_protection_family_lead_time.png")),
-        (plot_protection_family_metric, (final_networking_rows, "tcp_goodput_proxy_kbps", "TCP endpoint goodput proxy", "kb/s", FIGURES_DIR / "final_protection_family_tcp_goodput_proxy.png", PRIMARY_TRANSPORT_RESULTS_SCENARIO)),
-        (plot_final_protection_family_summary, (final_networking_rows, FIGURES_DIR / "final_protection_family_summary.png", PRIMARY_TRANSPORT_RESULTS_SCENARIO)),
-        (plot_ml_policy_lead_time_by_scenario, (ml_metric_rows, FIGURES_DIR / "final_ml_policy_lead_time_by_scenario.png")),
-        (plot_cross_scenario_ai_mrce_vs_baselines, (core_rows + sensitivity_rows + cost_rows + transport_rows, FIGURES_DIR / "cross_scenario_ai_mrce_vs_baselines.png")),
-        (plot_cost_aware_feature_importance, (feature_summary_rows, FIGURES_DIR / "ml_feature_importance_cost_aware.png")),
+        (plot_event_timeline, (event_rows, FIGURES_DIR / "paper_event_timeline.png")),
+        (plot_protection_family_metric_all_scenarios, (paper_rows, "udp_packet_loss_percent", "Packet-delivery impact\nConfigured UDP-flow aggregate where exported", "Packet loss (%)", FIGURES_DIR / "paper_packet_loss.png", PAPER_MAIN_SCENARIOS)),
+        (plot_paper_lead_time, (paper_rows, FIGURES_DIR / "paper_lead_time.png", PAPER_MAIN_SCENARIOS)),
+        (plot_scenario_b_tradeoff, (scenario_b_tradeoff, FIGURES_DIR / "paper_scenario_b_tradeoff.png")),
+        (plot_instrumented_udp_quality, (final_networking_rows, FIGURES_DIR / "paper_queue_buildup_udp_quality.png")),
+        (plot_runtime_feature_importance, (feature_summary_rows, FIGURES_DIR / "paper_runtime_feature_importance.png")),
+        (plot_randomized_onset_activation_vs_qos_event, (randomized_onset_summary_rows, FIGURES_DIR / "paper_randomized_onset_activation_vs_qos_event.png")),
+        (plot_randomized_onset_lead_time, (randomized_onset_summary_rows, FIGURES_DIR / "paper_randomized_onset_lead_time.png")),
+        (plot_randomized_onset_qos_impact, (randomized_onset_summary_rows, FIGURES_DIR / "paper_randomized_onset_qos_impact.png")),
     ]
-
-    scenario_specs = [
-        (CORE_SCENARIO, "core"),
-        (SENSITIVITY_SCENARIO, "sensitivity"),
-        (COST_AWARE_SCENARIO, "cost_aware_backup"),
-        (TRANSPORT_SCENARIO, "transport_impact"),
-        (INSTRUMENTED_TRANSPORT_SCENARIO, "transport_impact_instrumented"),
-    ]
-    for scenario, short_name in scenario_specs:
-        figure_specs.extend(
-            [
-                (plot_scenario_family_metric, (final_networking_rows, scenario, "lead_time_mean_s", f"{SCENARIO_LABELS[scenario]} lead time", "Lead time (s)", FIGURES_DIR / f"{short_name}_lead_time_s.png")),
-                (plot_scenario_family_metric, (final_networking_rows, scenario, "recovery_time_after_failure_s", f"{SCENARIO_LABELS[scenario]} recovery proxy", "Recovery proxy (s)", FIGURES_DIR / f"{short_name}_recovery_time_s.png")),
-                (plot_scenario_family_metric, (final_networking_rows, scenario, "udp_packet_loss_percent", f"{SCENARIO_LABELS[scenario]} monitored UDP packet loss", "Packet loss (%)", FIGURES_DIR / f"{short_name}_udp_packet_loss_percent.png")),
-                (plot_scenario_family_metric, (final_networking_rows, scenario, "average_udp_delay_ms", f"{SCENARIO_LABELS[scenario]} average UDP delay", "Delay (ms)", FIGURES_DIR / f"{short_name}_udp_delay_ms.png")),
-                (plot_scenario_family_metric, (final_networking_rows, scenario, "activation_to_failure_reordered_mean", f"{SCENARIO_LABELS[scenario]} transition reordering", "Packets", FIGURES_DIR / f"{short_name}_reordering_packets.png")),
-                (plot_scenario_network_summary, (final_networking_rows, scenario, FIGURES_DIR / f"{short_name}_network_summary.png")),
-                (plot_scenario_ml_activation_leadtime, (ml_metric_rows, scenario, FIGURES_DIR / f"{short_name}_ml_activation_leadtime.png")),
-                (plot_scenario_feature_driver_summary, (feature_summary_rows, scenario, FIGURES_DIR / f"{short_name}_ml_feature_or_driver_summary.png")),
-            ]
-        )
-    figure_specs.extend(
-        [
-            (plot_transport_tcp_service_metric, (final_networking_rows, "tcp_goodput_proxy_kbps", "Transport TCP endpoint goodput proxy", "kb/s", FIGURES_DIR / "transport_tcp_goodput_proxy_kbps.png")),
-            (plot_transport_tcp_service_metric, (final_networking_rows, "tcp_service_available_rate", "Transport TCP endpoint service availability", "Availability rate", FIGURES_DIR / "transport_tcp_service_availability.png")),
-            (plot_transport_endpoint_metric, (transport_endpoint_rows, "tcp_max_endpoint_receive_gap_after_reference_s_mean", "Transport TCP endpoint receive gap", "Seconds", FIGURES_DIR / "transport_tcp_endpoint_gap_s.png")),
-        ]
-    )
     for function, args in figure_specs:
-        output_path = next((arg for arg in reversed(args) if isinstance(arg, Path)), None)
-        if output_path is None:
-            continue
-        if function(plt, *args):
-            generated.append(str(output_path.relative_to(FINAL_DIR)))
-        else:
-            missing_optional.append(str(output_path.relative_to(PROJECT_ROOT)))
-
-    optional_figures = [
-        (plot_ml_policy_network_tradeoff, (ml_metric_rows, FIGURES_DIR / "final_ml_policy_network_tradeoff.png")),
-        (plot_bfd_profile_response, (sensitivity_rows, FIGURES_DIR / "sensitivity_bfd_like_profile_response.png")),
-        (plot_ml_f1, (ml_rows, FIGURES_DIR / "offline_ml_baseline_vs_extended_f1.png")),
-        (plot_decision_timing, (decision_timing_rows, FIGURES_DIR / "offline_decision_timing_baseline_vs_extended.png")),
-        (plot_network_stability_cost_aware, (stability_rows, backup_cost_rows, FIGURES_DIR / "network_stability_cost_aware.png")),
-    ]
-    for function, args in optional_figures:
         output_path = next((arg for arg in reversed(args) if isinstance(arg, Path)), None)
         if output_path is None:
             continue
@@ -3549,8 +4636,12 @@ def generate_figures(
 
 def metric_group_from_filename(filename: str) -> str:
     name = filename.lower()
+    if "event_timeline" in name:
+        return "activation_lead_time"
     if "packet_loss" in name or "gap_percent" in name:
         return "udp_packet_loss_or_continuity"
+    if "udp_quality" in name:
+        return "udp_delivery_quality"
     if "tradeoff" in name or "trade_off" in name:
         return "delivery_recovery_tradeoff"
     if "udp_delay" in name or "delay_queueing" in name:
@@ -3573,41 +4664,41 @@ def metric_group_from_filename(filename: str) -> str:
 def figure_usefulness_metadata(filename: str) -> dict[str, str]:
     metric_group = metric_group_from_filename(filename)
     current_main = {
+        "paper_event_timeline.png": (
+            "paper_main_scenarios",
+            "Q1",
+            "Shows the causal timing chain with one global 125 s hard-failure reference; Scenario C uses the measured QoS brownout event.",
+            "Use as the main evidence-chain timing figure.",
+        ),
         "paper_packet_loss.png": (
             "paper_main_scenarios",
             "Q2",
-            "Compares packet-delivery impact for the three main manuscript scenario roles only.",
+            "Compares mean packet-delivery impact for the three main manuscript scenario roles only; variability is tabulated separately where scope-consistent.",
             "Use as the primary packet-delivery figure.",
-        ),
-        "paper_delivery_delay_tradeoff.png": (
-            "paper_main_scenarios",
-            "Q2",
-            "Shows UDP packet loss and received-packet delay together for the paper subset.",
-            "Use as the primary delivery/delay QoS trade-off figure.",
         ),
         "paper_lead_time.png": (
             "paper_main_scenarios",
             "Q1/Q3",
-            "Compares predictive lead time for the three main manuscript scenario roles.",
+            "Compares lead time against the scenario-specific adverse event; Scenario C BFD+FRR negative QoS-event lead is shown as reactive-after-event behavior.",
             "Use as the primary lead-time figure.",
         ),
-        "paper_protection_family_summary.png": (
-            INSTRUMENTED_TRANSPORT_SCENARIO,
-            "Q1/Q2/Q3",
-            "Combines key protection-family metrics for the strongest instrumented transport layer.",
-            "Use as the compact final networking overview.",
-        ),
-        "paper_ml_feature_importance.png": (
+        "paper_scenario_b_tradeoff.png": (
             COST_AWARE_SCENARIO,
-            "Q1",
-            "Focuses on cost-aware runtime-safe telemetry features that drive offline model behavior.",
-            "Use as the main ML-feature-driver figure.",
+            "Q1/Q2/Q3",
+            "Shows the Scenario B trade-off between early backup-use lead time and service benefit; LogReg/SVM overlap is visually disambiguated without changing values.",
+            "Use as the main cost-aware policy-differentiation figure.",
         ),
-        "paper_tcp_goodput_proxy.png": (
+        "paper_queue_buildup_udp_quality.png": (
             INSTRUMENTED_TRANSPORT_SCENARIO,
             "Q2",
-            "Reports TCP endpoint-goodput/progress proxy for the instrumented mixed UDP/TCP transport-impact cohort.",
-            "Use as the optional sixth main figure with explicit proxy wording.",
+            "Shows aggregate UDP loss and received-packet p95 delay in the queue-buildup mitigation scenario with the 83 s/89 s activation-event context.",
+            "Use as the Scenario C QoS-brownout impact figure; selected because per-window QoS line data are not sufficiently populated.",
+        ),
+        "paper_runtime_feature_importance.png": (
+            COST_AWARE_SCENARIO,
+            "Q1",
+            "Shows only the four deployed runtime-safe AI-MRCE telemetry inputs with paper-ready labels; Queue length remains visible even with negligible exported importance.",
+            "Use as the main deployed runtime feature-weight figure.",
         ),
     }
     if filename in current_main:
@@ -3615,6 +4706,36 @@ def figure_usefulness_metadata(filename: str) -> dict[str, str]:
         return {
             "scenario": scenario,
             "category": "main_publication",
+            "scientific_question": question,
+            "reason": reason,
+            "recommended_use": use,
+            "metric_group": metric_group,
+        }
+    randomized_onset_figures = {
+        "paper_randomized_onset_activation_vs_qos_event.png": (
+            RANDOMIZED_ONSET_SCENARIO,
+            "Q1",
+            "Supplementary C-R timing diagnostic: compares AI-MRCE activation time with the measured passive QoS-brownout event under shifted onsets.",
+            "Use as supplementary robustness evidence, not as a replacement for the main Scenario C figures.",
+        ),
+        "paper_randomized_onset_lead_time.png": (
+            RANDOMIZED_ONSET_SCENARIO,
+            "Q1/Q3",
+            "Supplementary C-R lead-time diagnostic: shows positive/negative lead relative to measured QoS event across deterministic onset shifts.",
+            "Use to assess timing-profile robustness and late/reactive behavior.",
+        ),
+        "paper_randomized_onset_qos_impact.png": (
+            RANDOMIZED_ONSET_SCENARIO,
+            "Q2",
+            "Supplementary C-R QoS impact diagnostic: summarizes aggregate UDP loss and received-packet p95 delay under randomized onset shifts.",
+            "Use only with exact/proxy caveats and no production generalization claim.",
+        ),
+    }
+    if filename in randomized_onset_figures:
+        scenario, question, reason, use = randomized_onset_figures[filename]
+        return {
+            "scenario": scenario,
+            "category": "supplementary",
             "scientific_question": question,
             "reason": reason,
             "recommended_use": use,
@@ -3630,7 +4751,7 @@ def figure_usefulness_metadata(filename: str) -> dict[str, str]:
         "final_protection_family_delivery_delay_tradeoff.png": (
             "paper_main_scenarios",
             "Q2",
-            "Full generated trade-off view retained for traceability; paper_delivery_delay_tradeoff.png is the readable paper subset.",
+            "Full generated trade-off view retained for traceability; paper_queue_buildup_udp_quality.png is the cleaner main-paper replacement.",
             "Use as supplementary traceability.",
         ),
         "final_protection_family_loss_recovery_tradeoff.png": (
@@ -3642,8 +4763,8 @@ def figure_usefulness_metadata(filename: str) -> dict[str, str]:
         "final_protection_family_reordering.png": (
             "cross_scenario",
             "Q2/Q3",
-            "Important transition-cost metric, but better discussed through tables and supplementary figures.",
-            "Use as supplementary traceability.",
+            "Important transition-cost metric, but better discussed through compact tables for the final manuscript.",
+            "Available in generated diagnostic outputs if needed.",
         ),
         "final_protection_family_lead_time.png": (
             "paper_main_scenarios",
@@ -3654,8 +4775,8 @@ def figure_usefulness_metadata(filename: str) -> dict[str, str]:
         "final_protection_family_tcp_goodput_proxy.png": (
             INSTRUMENTED_TRANSPORT_SCENARIO,
             "Q2",
-            "Full TCP endpoint proxy view retained; paper_tcp_goodput_proxy.png is the paper-facing version.",
-            "Use as supplementary traceability.",
+            "Standalone TCP endpoint proxy view is not selected because TCP goodput is already included in paper_protection_family_summary.png.",
+            "Available in generated diagnostic outputs if needed.",
         ),
         "final_protection_family_summary.png": (
             INSTRUMENTED_TRANSPORT_SCENARIO,
@@ -3678,8 +4799,14 @@ def figure_usefulness_metadata(filename: str) -> dict[str, str]:
         "ml_feature_importance_cost_aware.png": (
             COST_AWARE_SCENARIO,
             "Q1",
-            "Original feature figure retained; paper_ml_feature_importance.png is the main-paper copy.",
-            "Use as supplementary traceability if both are generated.",
+            "Full runtime-safe/extended feature-driver view retained; paper_runtime_feature_importance.png is the deployed-runtime main-paper view.",
+            "Use as supplementary feature-driver traceability.",
+        ),
+        "ml_feature_importance_extended.png": (
+            COST_AWARE_SCENARIO,
+            "Q1",
+            "Extended/offline feature-driver view retained with readable labels, but not used as a runtime-deployment claim.",
+            "Use as supplementary offline/extended feature context.",
         ),
     }
     if filename in demoted_paper_candidates:
@@ -3715,7 +4842,7 @@ def figure_usefulness_metadata(filename: str) -> dict[str, str]:
         "cross_scenario_ai_mrce_vs_baselines.png": (
             "cross_scenario",
             "Q1/Q2/Q3",
-            "Compares OSPF, BFD-like, and AI-MRCE/Hybrid behavior across the progressive realism layers.",
+            "Compares OSPF, BFD-like, and final AI-MRCE behavior across the progressive realism layers.",
             "Use as the cross-scenario publication overview.",
         ),
         "cost_aware_activation_leadtime_by_profile.png": (
@@ -4017,6 +5144,8 @@ def organize_figures(figure_paths: list[str]) -> list[dict[str, object]]:
             target_dir = MAIN_FIGURES_DIR
         elif category == "scenario_main":
             target_dir = SCENARIO_FIGURES_DIR
+        elif category == "supplementary":
+            target_dir = SUPPLEMENTARY_FIGURES_DIR
         else:
             target_dir = DIAGNOSTIC_FIGURES_DIR
         if source.exists():
@@ -4056,15 +5185,17 @@ def markdown_table(rows: list[dict[str, object]], fields: list[str], max_rows: i
 
 def short_scenario_name(scenario: str) -> str:
     if scenario == CORE_SCENARIO:
-        return "core degraded-link model-family"
+        return "predictive link-failure recovery"
     if scenario == SENSITIVITY_SCENARIO:
         return "degradation sensitivity"
     if scenario == COST_AWARE_SCENARIO:
-        return "cost-aware backup"
+        return "cost-aware degraded-backup operation"
     if scenario == TRANSPORT_SCENARIO:
         return "mixed transport-impact baseline"
     if scenario == INSTRUMENTED_TRANSPORT_SCENARIO:
-        return "instrumented mixed transport-impact"
+        return "congestion/queue-buildup early mitigation"
+    if scenario == RANDOMIZED_ONSET_SCENARIO:
+        return "randomized QoS-brownout onset robustness"
     return scenario
 
 
@@ -4076,11 +5207,12 @@ def profile_label(profile: object) -> str:
 def paper_scenario_label(scenario: object) -> str:
     text = str(scenario or "")
     return {
-        CORE_SCENARIO: "Core",
+        CORE_SCENARIO: "Link failure",
         SENSITIVITY_SCENARIO: "Sensitivity",
-        COST_AWARE_SCENARIO: "Cost-aware",
+        COST_AWARE_SCENARIO: "Degraded backup",
         TRANSPORT_SCENARIO: "Transport baseline",
-        INSTRUMENTED_TRANSPORT_SCENARIO: "Instrumented transport",
+        INSTRUMENTED_TRANSPORT_SCENARIO: "Queue buildup",
+        RANDOMIZED_ONSET_SCENARIO: "Randomized onset",
     }.get(text, text)
 
 
@@ -4104,6 +5236,945 @@ def mean_or_none(values: list[float]) -> float | None:
     return fmean(values) if values else None
 
 
+def median_or_none(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    midpoint = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[midpoint]
+    return (ordered[midpoint - 1] + ordered[midpoint]) / 2.0
+
+
+def mad_or_none(values: list[float], center: float | None = None) -> float | None:
+    if not values:
+        return None
+    median_value = center if center is not None else median_or_none(values)
+    if median_value is None:
+        return None
+    return median_or_none([abs(value - median_value) for value in values])
+
+
+def parse_boolish(value: object) -> bool | None:
+    text = str(value or "").strip().lower()
+    if text in {"1", "true", "yes"}:
+        return True
+    if text in {"0", "false", "no"}:
+        return False
+    return None
+
+
+def scenario_c_dataset_value(row: dict[str, str], fields: tuple[str, ...]) -> float | None:
+    for field in fields:
+        value = parse_float(row.get(field))
+        if value is not None:
+            return value
+    return None
+
+
+def parse_scenario_c_qos_monitor_scalars(sca_path: Path | None) -> dict[str, float]:
+    if sca_path is None or not sca_path.is_file():
+        return {}
+    scalars: dict[str, float] = {}
+    with sca_path.open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            parsed = scalar_value_from_line(line)
+            if parsed is None:
+                continue
+            module, scalar, value = parsed
+            if not module.endswith(".qosEventMonitor"):
+                continue
+            if scalar in SCENARIO_C_QOS_MONITOR_SCALARS:
+                scalars[scalar] = value
+    return scalars
+
+
+def scenario_c_qos_monitor_event_from_row(
+    row: dict[str, str],
+    scenario: str = INSTRUMENTED_TRANSPORT_SCENARIO,
+) -> tuple[float | None, str, str] | None:
+    scalars = parse_scenario_c_qos_monitor_scalars(
+        raw_scalar_path_for_outcome(scenario, row)
+    )
+    if not scalars:
+        return None
+
+    detected = (scalars.get("qosEventDetected") or 0.0) >= 0.5
+    event_time = scalars.get("qosEventTime") if detected else None
+    if event_time is not None and event_time < 0:
+        event_time = None
+    threshold_text = (
+        "QosEventMonitor scalar reference; "
+        f"N={paper_float(scalars.get('qosEventConsecutiveWindowsRequired'), 0) or 'NA'} consecutive windows; "
+        f"delay_threshold_s={fmt(scalars.get('qosEventDelayThreshold')) or 'NA'}; "
+        f"packet_count_floor={fmt(scalars.get('qosEventPacketCountFloor')) or 'NA'}; "
+        f"throughput_floor_bps={fmt(scalars.get('qosEventThroughputFloorBps')) or 'NA'}; "
+        f"queue_length_threshold_pk={fmt(scalars.get('qosEventQueueLengthThresholdPk')) or 'NA'}; "
+        f"event_start_s={fmt(scalars.get('qosEventStartTime')) or 'NA'}"
+    )
+    basis_code = scalars.get("qosEventDetectionBasisCode")
+    event_note = (
+        "detected from passive QosEventMonitor scalars in the OSPF/control trace; "
+        "evaluation-only reference, not a runtime AI-MRCE input"
+        if event_time is not None
+        else (
+            "passive QosEventMonitor scalars present but no sustained QoS brownout crossing was detected; "
+            "event reference remains unavailable for this profile/run"
+        )
+    )
+    if basis_code is not None:
+        event_note += f"; detection_basis_code={paper_float(basis_code, 0)}"
+    return event_time, threshold_text, event_note
+
+
+def scenario_c_qos_thresholds(rows: list[dict[str, str]]) -> dict[str, float | None]:
+    baseline = [
+        row for row in rows
+        if (start := parse_float(row.get("window_start_s"))) is not None
+        and 20.0 <= start < SCENARIO_C_QOS_EVENT_WARMUP_END_S
+    ]
+    delay_values = [
+        value for row in baseline
+        if (value := scenario_c_dataset_value(row, ("feat_delay_mean_s", "controller_delay_mean_s"))) is not None
+    ]
+    queue_length_values = [
+        value for row in baseline
+        if (value := scenario_c_dataset_value(
+            row,
+            ("feat_queue_length_last_pk", "bottleneck_queue_length_last_pk", "bottleneck_queue_length_max_pk"),
+        )) is not None
+    ]
+    queueing_values = [
+        value for row in baseline
+        if (value := scenario_c_dataset_value(
+            row,
+            ("feat_queueing_time_mean_s", "bottleneck_queueing_time_mean_s", "bottleneck_queueing_time_max_s"),
+        )) is not None
+    ]
+    delay_median = median_or_none(delay_values)
+    delay_mad = mad_or_none(delay_values, delay_median)
+    queue_length_median = median_or_none(queue_length_values)
+    queue_length_mad = mad_or_none(queue_length_values, queue_length_median)
+    queueing_median = median_or_none(queueing_values)
+    queueing_mad = mad_or_none(queueing_values, queueing_median)
+    return {
+        "delay_threshold_s": (
+            delay_median + max(SCENARIO_C_QOS_DELAY_MIN_EXCESS_S, 3.0 * (delay_mad or 0.0))
+            if delay_median is not None
+            else None
+        ),
+        "queue_length_threshold_pk": (
+            queue_length_median + max(SCENARIO_C_QOS_QUEUE_LENGTH_MIN_EXCESS_PK, 3.0 * (queue_length_mad or 0.0))
+            if queue_length_median is not None
+            else None
+        ),
+        "queueing_threshold_s": (
+            queueing_median + max(SCENARIO_C_QOS_QUEUEING_MIN_EXCESS_S, 3.0 * (queueing_mad or 0.0))
+            if queueing_median is not None
+            else None
+        ),
+    }
+
+
+def scenario_c_row_crosses_qos_threshold(row: dict[str, str], thresholds: dict[str, float | None]) -> bool:
+    delay_value = scenario_c_dataset_value(row, ("feat_delay_mean_s", "controller_delay_mean_s"))
+    throughput_ratio = scenario_c_dataset_value(row, ("feat_throughput_ratio_to_expected",))
+    continuity_ratio = scenario_c_dataset_value(row, ("feat_continuity_packet_count_ratio_proxy",))
+    queue_length_value = scenario_c_dataset_value(
+        row,
+        ("feat_queue_length_last_pk", "bottleneck_queue_length_last_pk", "bottleneck_queue_length_max_pk"),
+    )
+    queueing_value = scenario_c_dataset_value(
+        row,
+        ("feat_queueing_time_mean_s", "bottleneck_queueing_time_mean_s", "bottleneck_queueing_time_max_s"),
+    )
+    service_degraded = parse_boolish(row.get("service_materially_degraded_operational")) is True
+
+    delay_bad = (
+        delay_value is not None
+        and thresholds.get("delay_threshold_s") is not None
+        and delay_value >= float(thresholds["delay_threshold_s"])
+    )
+    throughput_bad = throughput_ratio is not None and throughput_ratio <= SCENARIO_C_QOS_PACKET_RATIO_FLOOR
+    continuity_bad = continuity_ratio is not None and continuity_ratio <= SCENARIO_C_QOS_PACKET_RATIO_FLOOR
+    queue_bad = (
+        queue_length_value is not None
+        and thresholds.get("queue_length_threshold_pk") is not None
+        and queue_length_value >= float(thresholds["queue_length_threshold_pk"])
+    ) or (
+        queueing_value is not None
+        and thresholds.get("queueing_threshold_s") is not None
+        and queueing_value >= float(thresholds["queueing_threshold_s"])
+    )
+
+    # Require at least one time-resolved telemetry value so static service labels
+    # cannot fabricate an event when vector-derived fields are unavailable.
+    has_observed_time_series = any(
+        value is not None
+        for value in (delay_value, throughput_ratio, continuity_ratio, queue_length_value, queueing_value)
+    )
+    if not has_observed_time_series:
+        return False
+    return queue_bad and (delay_bad or throughput_bad or continuity_bad or service_degraded)
+
+
+def scenario_c_detect_qos_event(rows: list[dict[str, str]]) -> tuple[float | None, str, str]:
+    thresholds = scenario_c_qos_thresholds(rows)
+    threshold_text = (
+        f"N={SCENARIO_C_QOS_EVENT_CONSECUTIVE_WINDOWS} consecutive 1s windows after "
+        f"{SCENARIO_C_QOS_EVENT_WARMUP_END_S:.0f}s; packet/throughput floor="
+        f"{SCENARIO_C_QOS_PACKET_RATIO_FLOOR:.2f}; "
+        f"delay_threshold_s={fmt(thresholds.get('delay_threshold_s')) or 'unavailable'}; "
+        f"queue_length_threshold_pk={fmt(thresholds.get('queue_length_threshold_pk')) or 'unavailable'}; "
+        f"queueing_threshold_s={fmt(thresholds.get('queueing_threshold_s')) or 'unavailable'}"
+    )
+    ordered = sorted(
+        [
+            row for row in rows
+            if (start := parse_float(row.get("window_start_s"))) is not None
+            and start >= SCENARIO_C_QOS_EVENT_WARMUP_END_S
+        ],
+        key=lambda row: parse_float(row.get("window_start_s")) or 0.0,
+    )
+    streak = 0
+    streak_start: float | None = None
+    for row in ordered:
+        start = parse_float(row.get("window_start_s"))
+        if start is None:
+            continue
+        if scenario_c_row_crosses_qos_threshold(row, thresholds):
+            if streak == 0:
+                streak_start = start
+            streak += 1
+            if streak >= SCENARIO_C_QOS_EVENT_CONSECUTIVE_WINDOWS:
+                return streak_start, threshold_text, "detected from existing time-window telemetry"
+        else:
+            streak = 0
+            streak_start = None
+    return None, threshold_text, "not detected; current generated time-window telemetry has no usable sustained threshold crossing"
+
+
+def scenario_c_qos_event_timing_rows(
+    outcome_rows: list[dict[str, str]],
+    dataset_rows: list[dict[str, str]],
+    scenario: str = INSTRUMENTED_TRANSPORT_SCENARIO,
+    scenario_role: str | None = None,
+) -> list[dict[str, object]]:
+    scenario_role = scenario_role or PAPER_SCENARIO_ROLES[INSTRUMENTED_TRANSPORT_SCENARIO]
+    monitor_event_by_profile_run: dict[tuple[str, str], tuple[float | None, str, str]] = {}
+    for row in outcome_rows:
+        if row.get("protection_mode") != "ospf_only":
+            continue
+        profile = row.get("degradation_profile_key") or row.get("degradation_profile") or "unspecified"
+        run = row.get("run_number", "")
+        monitor_event = scenario_c_qos_monitor_event_from_row(row, scenario)
+        if monitor_event is not None:
+            monitor_event_by_profile_run[(profile, run)] = monitor_event
+
+    ospf_windows: dict[tuple[str, str], list[dict[str, str]]] = defaultdict(list)
+    for row in dataset_rows:
+        if row.get("protection_mode") != "ospf_only":
+            continue
+        profile = row.get("degradation_profile_key") or row.get("degradation_profile") or "unspecified"
+        run = row.get("run_number", "")
+        ospf_windows[(profile, run)].append(row)
+
+    event_by_profile_run: dict[tuple[str, str], tuple[float | None, str, str]] = {}
+    for key, rows in ospf_windows.items():
+        event_by_profile_run[key] = scenario_c_detect_qos_event(rows)
+    event_by_profile_run.update(monitor_event_by_profile_run)
+
+    output: list[dict[str, object]] = []
+    for row in sorted(
+        outcome_rows,
+        key=lambda item: (
+            PROFILE_ORDER.get(item.get("degradation_profile_key") or item.get("degradation_profile", ""), 99),
+            MECHANISM_ORDER.get(item.get("protection_mode", ""), 99),
+            parse_float(item.get("run_number")) or 0.0,
+        ),
+    ):
+        mechanism = row.get("protection_mode", "")
+        if mechanism not in FINAL_MAIN_MECHANISMS:
+            continue
+        profile = row.get("degradation_profile_key") or row.get("degradation_profile") or "unspecified"
+        run = row.get("run_number", "")
+        event_time, threshold_text, event_note = event_by_profile_run.get(
+            (profile, run),
+            (None, "time-window telemetry unavailable", "no matching OSPF/control event source row"),
+        )
+        activation = parse_float(row.get("protection_activation_time_s"))
+        hard_failure = parse_float(row.get("hard_failure_time_s") or row.get("degradation_hard_failure_time_s"))
+        hard_failure_lead = parse_float(row.get("protection_lead_time_before_failure_s"))
+        qos_lead = event_time - activation if event_time is not None and activation is not None else None
+        output.append(
+            {
+                "scenario_role": scenario_role,
+                "profile": profile_label(profile),
+                "mechanism_or_policy": PLOT_LABELS.get(mechanism, MECHANISM_LABELS.get(mechanism, mechanism)),
+                "run": run,
+                "activation_time_s": paper_float(activation),
+                "hard_failure_time_s": paper_float(hard_failure),
+                "qos_event_time_s": paper_float(event_time),
+                "lead_time_before_hard_failure_s": paper_float(hard_failure_lead),
+                "lead_time_before_qos_event_s": paper_float(qos_lead),
+                "qos_event_definition": (
+                    "offline QoS event: first sustained congestion/QoS-brownout crossing from passive "
+                    "QosEventMonitor scalars when available, otherwise from OSPF/control time-window telemetry; "
+                    "then compare each mechanism activation against that profile/run event"
+                ),
+                "threshold_used": threshold_text,
+                "event_detected_yes_no": "yes" if event_time is not None else "no",
+                "notes": (
+                    event_note
+                    if event_time is not None
+                    else (
+                        f"{event_note}; aggregate UDP p95/loss and TCP goodput remain valid per-run metrics, "
+                        "but they are not timestamped enough to fabricate a QoS-event lead time."
+                    )
+                ),
+            }
+        )
+    return output
+
+
+def scenario_c_qos_event_available(rows: list[dict[str, object]]) -> bool:
+    return any(row.get("event_detected_yes_no") == "yes" and parse_float(row.get("lead_time_before_qos_event_s")) is not None for row in rows)
+
+
+def scenario_c_qos_policy_lead_lookup(rows: list[dict[str, object]]) -> dict[tuple[str, str], float]:
+    grouped: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for row in rows:
+        value = parse_float(row.get("lead_time_before_qos_event_s"))
+        if value is None:
+            continue
+        profile = profile_label(row.get("profile", ""))
+        policy = str(row.get("mechanism_or_policy", ""))
+        grouped[(profile, policy)].append(value)
+    return {key: fmean(values) for key, values in grouped.items() if values}
+
+
+def scenario_c_qos_event_audit_text(rows: list[dict[str, object]]) -> str:
+    detected = [row for row in rows if row.get("event_detected_yes_no") == "yes"]
+    return "\n".join(
+        [
+            "Final Scenario C QoS Event Extractor Applied",
+            "============================================",
+            "",
+            "Scope:",
+            f"- Scenario: {INSTRUMENTED_TRANSPORT_SCENARIO}",
+            "- Paper role: Congestion/Queue-Buildup Early Mitigation",
+            "- This is an analysis-only extractor from existing generated outputs.",
+            "",
+            "Data sources used:",
+            f"- {RESULTS_ROOT / 'ti_inst'}/*.sca passive QosEventMonitor scalars when present",
+            f"- {DATASETS_DIR / f'{INSTRUMENTED_TRANSPORT_SCENARIO}_extended_dataset.csv'}",
+            f"- {OUTCOMES_DIR / f'{INSTRUMENTED_TRANSPORT_SCENARIO}_outcome_summary.csv'}",
+            "",
+            "Event definition selected:",
+            "- Offline Scenario C QoS event = first sustained congestion/QoS-brownout crossing in the OSPF/control trace.",
+            "- Redesigned Scenario C runs use passive QosEventMonitor scalars as the preferred event source.",
+            f"- Fallback dataset-window extraction requires {SCENARIO_C_QOS_EVENT_CONSECUTIVE_WINDOWS} consecutive 1 s windows after {SCENARIO_C_QOS_EVENT_WARMUP_END_S:.0f} s when monitor scalars are absent.",
+            "- The event is then used as a profile/run reference for BFD-like and AI-MRCE activation timing.",
+            "",
+            "Threshold rationale:",
+            "- Monitor delay, delivery, throughput, and queue thresholds are derived from pre-congestion baseline windows and fixed INI parameters.",
+            "- Fallback delay and queue thresholds are derived from pre-congestion baseline windows when time-resolved dataset telemetry is present.",
+            f"- Continuity/throughput degradation uses a fixed floor of {SCENARIO_C_QOS_PACKET_RATIO_FLOOR:.2f} of expected/baseline delivery.",
+            "- Thresholds are not tuned to favor AI-MRCE; they are fixed before mechanism comparison.",
+            "",
+            "Extraction result:",
+            f"- Rows written: {len(rows)}",
+            f"- Rows with detected QoS event: {len(detected)}",
+            "- Time-resolved QoS event extraction was possible: " + ("yes" if detected else "no"),
+            "",
+            "Figure/report consequence:",
+            "- Scenario C lead-time figures use QoS-event timing only when a time-resolved event is detected.",
+            "- If no usable sustained QoS event is detected, Scenario C lead-time values remain hard-failure referenced and are labelled accordingly.",
+            "- Existing hard-failure lead time remains available for traceability and is not removed.",
+            "",
+            "Limitations:",
+            "- Aggregate UDP p95/loss and TCP goodput summaries are valid per-run metrics but are not timestamped enough to create a first-crossing QoS event.",
+            "- The current raw .vec files expose vector declarations but not usable numeric sample rows for this extractor path.",
+            "- A future QoS-event lead-time metric requires valid time-window UDP/probe/queue samples or additional compact vector recording.",
+            "",
+            "Behavior-sensitive confirmation:",
+            "- No simulations were rerun.",
+            "- No C++/NED/INI behavior was changed.",
+            "- No runtime CSVs, AI-MRCE thresholds, BFD-like logic, or FRR-like semantics were changed.",
+            "",
+        ]
+    )
+
+
+def normalized_run_text(value: object) -> str:
+    parsed = parse_float(value)
+    if parsed is None:
+        return str(value or "")
+    return str(int(parsed)) if parsed.is_integer() else str(parsed)
+
+
+def randomized_onset_value_from_row(row: dict[str, object]) -> tuple[float | None, str]:
+    for field in ("randomized_onset_time_s", "onset_seed"):
+        value = parse_float(row.get(field))
+        if value is not None:
+            return value, str(int(value)) if value.is_integer() else str(value)
+    text = " ".join(
+        str(row.get(field, ""))
+        for field in ("config_name", "degradation_profile", "degradation_profile_key", "profile")
+    )
+    match = re.search(r"RandomizedOnset(\d+)", text)
+    if match:
+        value = float(match.group(1))
+        return value, match.group(1)
+    match = re.search(r"randomized_onset_(\d+(?:\.\d+)?)s", text)
+    if match:
+        value = float(match.group(1))
+        return value, str(int(value)) if value.is_integer() else str(value)
+    return None, ""
+
+
+def randomized_metric_lookup(
+    rows: list[dict[str, object]],
+    profile_fields: tuple[str, ...] = ("degradation_profile", "profile"),
+) -> dict[tuple[str, str, str], dict[str, object]]:
+    lookup: dict[tuple[str, str, str], dict[str, object]] = {}
+    for row in rows:
+        scenario = str(row.get("scenario", ""))
+        if scenario != RANDOMIZED_ONSET_SCENARIO:
+            continue
+        profile = ""
+        for field in profile_fields:
+            if row.get(field):
+                profile = str(row.get(field))
+                break
+        mechanism = str(row.get("mechanism_family") or row.get("protection_mode") or "")
+        run = normalized_run_text(row.get("run"))
+        if not run:
+            run = normalized_run_text(row.get("run_number"))
+        if profile and mechanism and run:
+            lookup[(profile, mechanism, run)] = row
+    return lookup
+
+
+def randomized_qos_event_lookup(rows: list[dict[str, object]]) -> dict[tuple[str, str, str], dict[str, object]]:
+    lookup: dict[tuple[str, str, str], dict[str, object]] = {}
+    for row in rows:
+        profile = str(row.get("profile", ""))
+        mechanism = str(row.get("mechanism_or_policy", ""))
+        run = normalized_run_text(row.get("run"))
+        if profile and mechanism and run:
+            lookup[(profile, mechanism, run)] = row
+    return lookup
+
+
+def randomized_onset_scenario_summary_rows(
+    outcome_rows: list[dict[str, str]],
+    qos_event_rows: list[dict[str, object]],
+    inet_by_run_rows: list[dict[str, object]],
+    transport_by_run_rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    qos_lookup = randomized_qos_event_lookup(qos_event_rows)
+    inet_lookup = randomized_metric_lookup(inet_by_run_rows)
+    transport_lookup = randomized_metric_lookup(transport_by_run_rows)
+    output: list[dict[str, object]] = []
+    for row in sorted(
+        outcome_rows,
+        key=lambda item: (
+            randomized_onset_value_from_row(item)[0] or 999.0,
+            MECHANISM_ORDER.get(item.get("protection_mode", ""), 99),
+            parse_float(item.get("run_number")) or 0.0,
+        ),
+    ):
+        mechanism = row.get("protection_mode", "")
+        if mechanism not in FINAL_MAIN_MECHANISMS:
+            continue
+        profile = row.get("degradation_profile_key") or row.get("degradation_profile") or "unspecified"
+        metric_profile = row.get("degradation_profile") or profile
+        profile_display = profile_label(profile)
+        run = normalized_run_text(row.get("run_number"))
+        policy = PLOT_LABELS.get(mechanism, MECHANISM_LABELS.get(mechanism, mechanism))
+        qos_row = qos_lookup.get((profile_display, policy, run), {})
+        metric_key = (metric_profile, mechanism, run)
+        inet_row = inet_lookup.get(metric_key, {})
+        transport_row = transport_lookup.get(metric_key, {})
+        onset_time, onset_seed = randomized_onset_value_from_row(row)
+        activation = parse_float(row.get("protection_activation_time_s"))
+        bfd_activation = parse_float(row.get("bfd_like_detection_time_s") or row.get("protection_activation_time_s"))
+        qos_event = parse_float(qos_row.get("qos_event_time_s"))
+        ai_lead = parse_float(qos_row.get("lead_time_before_qos_event_s")) if mechanism.startswith("aimrce_") else None
+        bfd_lead = (
+            (qos_event - bfd_activation)
+            if mechanism == "bfd_like_frr" and qos_event is not None and bfd_activation is not None
+            else None
+        )
+        tcp_goodput = parse_float(inet_row.get("tcp_goodput_mean_kbps"))
+        if tcp_goodput is None:
+            tcp_bps = parse_float(transport_row.get("tcp_goodput_mean_bps"))
+            tcp_goodput = (tcp_bps / 1000.0) if tcp_bps is not None else None
+        activated = parse_boolish(row.get("protection_activated"))
+        output.append(
+            {
+                "scenario_id": RANDOMIZED_ONSET_SCENARIO,
+                "display_name": PAPER_SCENARIO_ROLES[RANDOMIZED_ONSET_SCENARIO],
+                "onset_seed": onset_seed,
+                "randomized_onset_time_s": paper_float(onset_time),
+                "mechanism": mechanism,
+                "policy_or_model": policy,
+                "qos_event_time_s": paper_float(qos_event),
+                "ai_activation_time_s": paper_float(activation) if mechanism.startswith("aimrce_") else "NA",
+                "bfd_activation_time_s": paper_float(bfd_activation) if mechanism == "bfd_like_frr" else "NA",
+                "ai_lead_before_qos_event_s": paper_float(ai_lead),
+                "bfd_lead_before_qos_event_s": paper_float(bfd_lead),
+                "udp_loss_percent": paper_float(inet_row.get("udp_packet_loss_percent"), 3),
+                "udp_p95_delay_ms": paper_float(inet_row.get("udp_delay_p95_ms"), 3),
+                "tcp_goodput_proxy": paper_float(tcp_goodput, 3),
+                "activated_yes_no": "yes" if activated is True else "no" if activated is False else "NA",
+                "notes": (
+                    "runtime models unchanged; randomized onset is a scenario scheduling parameter only; "
+                    "QoS event is an offline passive-monitor label, not a runtime input"
+                ),
+            }
+        )
+    return output
+
+
+def randomized_onset_lead_time_summary_rows(summary_rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    grouped: dict[tuple[str, str], list[dict[str, object]]] = defaultdict(list)
+    for row in summary_rows:
+        grouped[(str(row.get("mechanism", "")), str(row.get("policy_or_model", "")))].append(row)
+    output: list[dict[str, object]] = []
+    for (mechanism, policy), rows in sorted(grouped.items(), key=lambda item: MECHANISM_ORDER.get(item[0][0], 99)):
+        lead_field = "bfd_lead_before_qos_event_s" if mechanism == "bfd_like_frr" else "ai_lead_before_qos_event_s"
+        leads = [value for row in rows if (value := parse_float(row.get(lead_field))) is not None]
+        no_activation = sum(1 for row in rows if str(row.get("activated_yes_no", "")).lower() == "no")
+        count = len(rows)
+        output.append(
+            {
+                "mechanism": mechanism,
+                "policy_or_model": policy,
+                "mean_lead_time_s": paper_float(mean_or_none(leads)),
+                "std_lead_time_s": paper_float(stdev(leads) if len(leads) > 1 else 0.0 if leads else None),
+                "min_lead_time_s": paper_float(min(leads) if leads else None),
+                "max_lead_time_s": paper_float(max(leads) if leads else None),
+                "count": count,
+                "positive_lead_fraction": paper_float((sum(1 for value in leads if value > 0) / count) if count else None, 3),
+                "late_activation_fraction": paper_float((sum(1 for value in leads if value < 0) / count) if count else None, 3),
+                "no_activation_fraction": paper_float((no_activation / count) if count else None, 3),
+            }
+        )
+    return output
+
+
+def randomized_onset_event_shift_validation_rows(summary_rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    by_onset: dict[str, list[dict[str, object]]] = defaultdict(list)
+    for row in summary_rows:
+        if row.get("mechanism") == "ospf_only":
+            by_onset[str(row.get("onset_seed", ""))].append(row)
+    output: list[dict[str, object]] = []
+    for onset_seed, rows in sorted(by_onset.items(), key=lambda item: parse_float(item[0]) or 999.0):
+        onset = parse_float(rows[0].get("randomized_onset_time_s")) if rows else None
+        events = [value for row in rows if (value := parse_float(row.get("qos_event_time_s"))) is not None]
+        event = mean_or_none(events)
+        delta = event - onset if event is not None and onset is not None else None
+        valid = event is not None and onset is not None and event > onset
+        output.append(
+            {
+                "onset_seed": onset_seed,
+                "randomized_onset_time_s": paper_float(onset),
+                "measured_qos_event_time_s": paper_float(event),
+                "qos_event_minus_onset_s": paper_float(delta),
+                "valid_shift_yes_no": "yes" if valid else "no",
+                "notes": (
+                    "QoS event detected after shifted onset from passive monitor scalars"
+                    if valid
+                    else "QoS event missing or not after shifted onset; robustness interpretation must be conservative"
+                ),
+            }
+        )
+    return output
+
+
+def randomized_onset_claim_boundary_rows() -> list[dict[str, object]]:
+    return [
+        {
+            "claim_or_boundary": "Controlled onset-shift robustness",
+            "supported_yes_no": "conditional",
+            "basis": "Compares shifted scenario scheduling, passive QoS-event timestamps, and unchanged runtime-policy activation.",
+            "caveat": "Supplementary evidence only; not a production generalization or stochastic field validation.",
+        },
+        {
+            "claim_or_boundary": "No retraining / no runtime CSV change",
+            "supported_yes_no": "yes",
+            "basis": "C-R configs reuse existing runtime artifacts and four-feature runtime vector.",
+            "caveat": "If randomized-onset results are weak, the conclusion is timing-profile sensitivity, not model failure hidden by retraining.",
+        },
+        {
+            "claim_or_boundary": "No oracle runtime input",
+            "supported_yes_no": "yes",
+            "basis": "Onset time is an INI scheduling parameter; QoS-event time is read only from passive output scalars during analysis.",
+            "caveat": "Do not describe QoS-event time as an AI-MRCE feature.",
+        },
+        {
+            "claim_or_boundary": "QoS metrics",
+            "supported_yes_no": "yes",
+            "basis": "UDP loss uses configured-flow aggregate scalar counts when exported; UDP delay percentiles are received-packet conditioned; TCP goodput is endpoint proxy.",
+            "caveat": "No exact TCP loss/retransmission or production-grade congestion-detection claim.",
+        },
+    ]
+
+
+def randomized_onset_audit_text(
+    summary_rows: list[dict[str, object]],
+    lead_rows: list[dict[str, object]],
+    shift_rows: list[dict[str, object]],
+) -> str:
+    shifted_events = [parse_float(row.get("measured_qos_event_time_s")) for row in shift_rows]
+    shifted_events = [value for value in shifted_events if value is not None]
+    ai_rows = [row for row in summary_rows if str(row.get("mechanism", "")).startswith("aimrce_")]
+    ai_leads = [value for row in ai_rows if (value := parse_float(row.get("ai_lead_before_qos_event_s"))) is not None]
+    bfd_rows = [row for row in summary_rows if row.get("mechanism") == "bfd_like_frr"]
+    bfd_leads = [value for row in bfd_rows if (value := parse_float(row.get("bfd_lead_before_qos_event_s"))) is not None]
+    event_shift_supported = len(set(paper_float(value) for value in shifted_events)) > 1
+    positive_ai_fraction = (sum(1 for value in ai_leads if value > 0) / len(ai_leads)) if ai_leads else None
+    if not summary_rows:
+        verdict = "Inconclusive due missing randomized-onset outputs."
+    elif not event_shift_supported:
+        verdict = "Timing-profile sensitivity or incomplete event-shift evidence; measured QoS event did not clearly vary across onsets."
+    elif positive_ai_fraction is not None and positive_ai_fraction >= 0.8:
+        verdict = "Robustness supported for this controlled onset-shift sweep."
+    elif positive_ai_fraction is not None and positive_ai_fraction > 0:
+        verdict = "Partial robustness; some policies/onsets activate before the QoS event and others do not."
+    else:
+        verdict = "Late-response outcome; AI-MRCE did not maintain positive QoS-event lead in this sweep."
+    return "\n".join(
+        [
+            "Randomized-Onset Robustness Audit",
+            "=================================",
+            "",
+            f"Scenario id: {RANDOMIZED_ONSET_SCENARIO}",
+            f"Display name: {PAPER_SCENARIO_ROLES[RANDOMIZED_ONSET_SCENARIO]}",
+            "",
+            "Questions:",
+            f"1. Was the degradation/congestion onset shifted? {'yes' if shift_rows else 'not verified'}",
+            f"2. Did the measured QoS event time shift? {'yes' if event_shift_supported else 'no or incomplete'}",
+            f"3. Did AI-MRCE activation shift with telemetry? {'see activation-vs-QoS-event table/figure' if ai_rows else 'no AI rows available'}",
+            f"4. Did AI-MRCE keep positive QoS-event lead time? {paper_float(positive_ai_fraction, 3)} positive-lead fraction" if positive_ai_fraction is not None else "4. Did AI-MRCE keep positive QoS-event lead time? unavailable",
+            f"5. Did BFD+FRR remain reactive? {'yes; negative/non-positive QoS-event lead observed' if any(value <= 0 for value in bfd_leads) else 'unavailable or not clearly negative'}",
+            "6. Were runtime models retrained? no",
+            "7. Were runtime CSVs changed? no",
+            "8. Were any oracle inputs introduced? no; onset is a schedule parameter and QoS event is offline passive output.",
+            "9. Suitability: supplementary robustness evidence only.",
+            f"10. Robustness verdict: {verdict}",
+            "",
+            "Recommended manuscript wording:",
+            "Supplementary Scenario C-R shifts the telemetry-producing queue-buildup onset across deterministic seeds while keeping the deployed AI-MRCE runtime artifacts unchanged. The analysis compares passive QoS-brownout timestamps with activation timing; positive lead before the measured event supports telemetry-responsive behavior, while late or fixed-time activation is reported as timing-profile sensitivity rather than hidden.",
+            "",
+        ]
+    )
+
+
+def final_rows_with_scenario_c_qos_lead_time(
+    final_rows: list[dict[str, object]],
+    qos_event_rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    if not scenario_c_qos_event_available(qos_event_rows):
+        return final_rows
+    grouped: dict[tuple[str, str], list[float]] = defaultdict(list)
+    for row in qos_event_rows:
+        value = parse_float(row.get("lead_time_before_qos_event_s"))
+        if value is None:
+            continue
+        grouped[(str(row.get("profile", "")), str(row.get("mechanism_or_policy", "")))].append(value)
+    output: list[dict[str, object]] = []
+    for row in final_rows:
+        copied = dict(row)
+        if copied.get("scenario") == INSTRUMENTED_TRANSPORT_SCENARIO:
+            profile = profile_label(copied.get("profile"))
+            mechanism = str(copied.get("mechanism_family", ""))
+            policy_label = PLOT_LABELS.get(mechanism, MECHANISM_LABELS.get(mechanism, mechanism))
+            if copied.get("protection_family") == "AI-MRCE + FRR-like":
+                values = [
+                    value
+                    for policy in ("Rule", "LogReg", "SVM", "Tree")
+                    for value in grouped.get((profile, policy), [])
+                ]
+            else:
+                values = grouped.get((profile, policy_label), [])
+            if values:
+                copied["lead_time_mean_s"] = fmt(fmean(values))
+        output.append(copied)
+    return output
+
+
+def mean_float_from_rows(rows: list[dict[str, object]], field: str) -> float | None:
+    values = [value for row in rows if (value := parse_float(row.get(field))) is not None]
+    return fmean(values) if values else None
+
+
+def event_timeline_rows(
+    final_rows: list[dict[str, object]],
+    policy_rows: list[dict[str, object]],
+    qos_event_rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    output: list[dict[str, object]] = []
+    qos_event_time = mean_float_from_rows(
+        [row for row in qos_event_rows if str(row.get("mechanism_or_policy", "")) == "OSPF"],
+        "qos_event_time_s",
+    )
+    hard_failure_reference = 125.0
+    for scenario in PAPER_MAIN_SCENARIOS:
+        role = PAPER_SCENARIO_ROLES.get(scenario, paper_scenario_label(scenario))
+        short = SCENARIO_LABELS.get(scenario, scenario)
+        ai_policy_rows = [
+            row for row in policy_rows
+            if row.get("scenario_role") == role and str(row.get("activated_yes_no", "")).lower() == "yes"
+        ]
+        ai_activation = mean_float_from_rows(ai_policy_rows, "activation_time_s")
+        ai_lead = mean_float_from_rows(ai_policy_rows, "lead_time_s")
+        bfd_rows = [
+            row for row in final_rows
+            if row.get("scenario") == scenario and row.get("mechanism_family") == "bfd_like_frr"
+        ]
+        bfd_activation = mean_float_from_rows(bfd_rows, "activation_time_mean_s")
+        bfd_lead = mean_float_from_rows(bfd_rows, "lead_time_mean_s")
+        adverse_event = (ai_activation + ai_lead) if ai_activation is not None and ai_lead is not None else None
+        adverse_type = "hard link failure"
+        onset = "NA"
+        if scenario == COST_AWARE_SCENARIO:
+            adverse_type = "degraded-backup / cost-aware failure point"
+        elif scenario == INSTRUMENTED_TRANSPORT_SCENARIO:
+            adverse_type = "measured QoS/congestion brownout"
+            adverse_event = qos_event_time
+            onset = "controlled bottleneck stress; explicit onset scalar unavailable"
+            if bfd_activation is not None and adverse_event is not None:
+                bfd_lead = adverse_event - bfd_activation
+        if scenario != INSTRUMENTED_TRANSPORT_SCENARIO and adverse_event is None:
+            adverse_event = hard_failure_reference
+        interpretation = (
+            "AI-MRCE activation precedes the scenario-specific adverse event."
+            if ai_lead is not None and ai_lead > 0
+            else "No positive AI-MRCE lead time available."
+        )
+        if scenario == INSTRUMENTED_TRANSPORT_SCENARIO:
+            interpretation += " Scenario C lead time is referenced to the measured QoS brownout; hard failure is traceability only."
+        output.append(
+            {
+                "scenario_short": short,
+                "scenario_role": role,
+                "adverse_event_type": adverse_type,
+                "degradation_or_congestion_onset_s": onset,
+                "ai_mrce_activation_time_s": paper_float(ai_activation, 2),
+                "bfd_frr_activation_time_s": paper_float(bfd_activation, 2),
+                "adverse_event_time_s": paper_float(adverse_event, 2),
+                "hard_failure_reference_s": paper_float(hard_failure_reference, 2),
+                "ai_mrce_lead_time_s": paper_float(ai_lead, 2),
+                "bfd_frr_lead_time_s": paper_float(bfd_lead, 2),
+                "timing_interpretation": interpretation,
+            }
+        )
+    return output
+
+
+def scenario_b_tradeoff_rows(
+    ml_metric_rows: list[dict[str, object]],
+    final_rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    ospf_by_profile = {
+        str(row.get("profile", "")): row
+        for row in final_rows
+        if row.get("scenario") == COST_AWARE_SCENARIO and row.get("mechanism_family") == "ospf_only"
+    }
+    rows: list[dict[str, object]] = []
+    for row in ml_metric_rows:
+        if row.get("scenario") != COST_AWARE_SCENARIO:
+            continue
+        policy = str(row.get("model_policy", ""))
+        if not is_final_aimrce_policy(policy):
+            continue
+        profile = str(row.get("profile", ""))
+        ospf = ospf_by_profile.get(profile, {})
+        lead = parse_float(row.get("lead_time_mean_s"))
+        activation = parse_float(row.get("activation_time_mean_s"))
+        udp_loss = parse_float(row.get("udp_packet_loss_percent"))
+        ospf_loss = parse_float(ospf.get("udp_packet_loss_percent"))
+        tcp_goodput = parse_float(row.get("tcp_goodput_proxy_kbps"))
+        ospf_tcp = parse_float(ospf.get("tcp_goodput_proxy_kbps"))
+        activated = activation is not None or lead is not None
+        reduction = (ospf_loss - udp_loss) if ospf_loss is not None and udp_loss is not None else None
+        tcp_gain = (tcp_goodput - ospf_tcp) if tcp_goodput is not None and ospf_tcp is not None else None
+        rows.append(
+            {
+                "profile": profile_label(profile),
+                "policy": PLOT_LABELS.get(policy, policy),
+                "activated_yes_no": "yes" if activated else "no",
+                "activation_time_s": paper_float(activation, 2),
+                "lead_time_s": paper_float(lead, 2),
+                "early_backup_usage_time_s": paper_float(lead, 2) if lead is not None and lead > 0 else "NA",
+                "udp_loss_reduction_vs_ospf_pp": paper_float(reduction, 3),
+                "tcp_goodput_gain_vs_ospf_kbps": paper_float(tcp_gain, 2),
+                "tradeoff_interpretation": (
+                    "Activated policy; read benefit with early backup-use time as an opportunity-cost proxy."
+                    if activated
+                    else "Conservative/non-activating policy; retained as an explicit outcome, not missing data."
+                ),
+            }
+        )
+    return sorted(
+        rows,
+        key=lambda row: (
+            {"Mild": 1, "Moderate": 2, "Fast warning": 3}.get(str(row.get("profile", "")), 99),
+            MECHANISM_ORDER.get(next((k for k, v in PLOT_LABELS.items() if v == row.get("policy")), ""), 99),
+        ),
+    )
+
+
+def scenario_b_tradeoff_metric_definition_rows() -> list[dict[str, str]]:
+    return [
+        {
+            "metric": "udp_loss_reduction_vs_ospf_pp",
+            "formula": "OSPF UDP loss percent - policy UDP loss percent, matched by Scenario B profile",
+            "exact_or_proxy": "derived from exported UDP loss percentages; percentage-point delta",
+            "notes": "Positive values indicate lower UDP loss than OSPF; not a utility function.",
+        },
+        {
+            "metric": "early_backup_usage_time_s",
+            "formula": "lead_time_s for activating policies before the adverse event",
+            "exact_or_proxy": "opportunity-cost proxy",
+            "notes": "Represents time spent on the repair route before the event; does not price the backup path.",
+        },
+        {
+            "metric": "tcp_goodput_gain_vs_ospf_kbps",
+            "formula": "policy TCP endpoint goodput proxy - OSPF TCP endpoint goodput proxy, matched by Scenario B profile",
+            "exact_or_proxy": "endpoint progress proxy delta",
+            "notes": "TCP stack retransmission/loss/finite-flow completion are not claimed.",
+        },
+    ]
+
+
+def policy_activation_matrix_rows(policy_rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    scenarios = [
+        ("Link failure", "Predictive Link-Failure Recovery"),
+        ("Degraded backup", "Cost-Aware Degraded-Backup Operation"),
+        ("Queue buildup", "Congestion/Queue-Buildup Early Mitigation"),
+    ]
+    rows: list[dict[str, object]] = []
+    for policy in ("Rule", "LogReg", "SVM", "Tree"):
+        output = {"policy": policy}
+        notes = []
+        for short, role in scenarios:
+            matching = [row for row in policy_rows if row.get("scenario_role") == role and row.get("policy_or_model") == policy]
+            activated = [row for row in matching if str(row.get("activated_yes_no", "")).lower() == "yes"]
+            if activated:
+                activation = mean_float_from_rows(activated, "activation_time_s")
+                lead = mean_float_from_rows(activated, "lead_time_s")
+                value = f"yes; act {paper_float(activation, 2)} s; lead {paper_float(lead, 2)} s"
+            elif matching:
+                value = "no; conservative"
+                if short == "Degraded backup" and policy == "Tree":
+                    notes.append("Tree is conservative/non-activating in Scenario B.")
+            else:
+                value = "NA"
+            output[short.lower().replace(" ", "_")] = value
+        output["interpretation"] = " ".join(notes) if notes else "Runtime-policy activation summarized from final paper-facing timing table."
+        rows.append(output)
+    return rows
+
+
+def result_variability_summary_rows(
+    network_by_run_rows: list[dict[str, object]],
+    scenario_c_qos_event_rows: list[dict[str, object]] | None = None,
+    udp_loss_rows: list[dict[str, object]] | None = None,
+) -> list[dict[str, object]]:
+    metrics = [
+        ("lead_time_s", "lead_time_s", "activation timing; Scenario C hard-failure trace remains in by-run diagnostics"),
+        ("post_failure_unobserved", "post_failure_unobserved", "receiver-observed continuity proxy"),
+        ("post_hard_failure_udp_delay_mean_s", "post_hard_failure_udp_delay_mean_s", "received-packet-conditioned delay proxy"),
+    ]
+    groups: dict[tuple[str, str, str, str, str], list[float]] = defaultdict(list)
+    for row in network_by_run_rows:
+        scenario = str(row.get("scenario", ""))
+        if scenario not in PAPER_MAIN_SCENARIOS:
+            continue
+        profile = profile_label(row.get("degradation_profile", ""))
+        mechanism = str(row.get("mechanism_family", ""))
+        if mechanism == "ospf_only":
+            family = "OSPF"
+        elif mechanism == "bfd_like_frr":
+            family = "BFD+FRR"
+        elif is_final_aimrce_policy(mechanism):
+            family = "AI-MRCE+FRR"
+        else:
+            continue
+        for metric, field, caveat in metrics:
+            value = parse_float(row.get(field))
+            if value is not None:
+                groups[(PAPER_SCENARIO_ROLES.get(scenario, scenario), profile, family, metric, caveat)].append(value)
+    for row in udp_loss_rows or []:
+        scenario = str(row.get("scenario", ""))
+        if scenario not in PAPER_MAIN_SCENARIOS:
+            continue
+        if row.get("udp_loss_source") != "exact_app0_sent_received_scalars":
+            continue
+        value = parse_float(row.get("udp_packet_loss_percent"))
+        if value is None:
+            continue
+        mechanism = str(row.get("mechanism_family", ""))
+        if mechanism == "ospf_only":
+            family = "OSPF"
+        elif mechanism == "bfd_like_frr":
+            family = "BFD+FRR"
+        elif is_final_aimrce_policy(mechanism):
+            family = "AI-MRCE+FRR"
+        else:
+            continue
+        groups[
+            (
+                PAPER_SCENARIO_ROLES.get(scenario, scenario),
+                profile_label(row.get("profile", "")),
+                family,
+                "monitored_udp_app0_loss_percent",
+                "exact monitored UDP app[0] run-level loss; traceability only when main figure uses configured UDP-flow aggregate",
+            )
+        ].append(value)
+    for row in scenario_c_qos_event_rows or []:
+        value = parse_float(row.get("lead_time_before_qos_event_s"))
+        if value is None:
+            continue
+        mechanism = str(row.get("mechanism_or_policy", ""))
+        if mechanism == "BFD-like":
+            family = "BFD+FRR"
+        elif mechanism in {"Rule", "LogReg", "SVM", "Tree"}:
+            family = "AI-MRCE+FRR"
+        else:
+            continue
+        groups[
+            (
+                PAPER_SCENARIO_ROLES.get(INSTRUMENTED_TRANSPORT_SCENARIO, INSTRUMENTED_TRANSPORT_SCENARIO),
+                profile_label(row.get("profile", "")),
+                family,
+                "qos_event_lead_time_s",
+                "offline QoS-event lead-time proxy; not a runtime input",
+            )
+        ].append(value)
+    rows: list[dict[str, object]] = []
+    for (scenario_role, profile, family, metric, caveat), values in sorted(groups.items()):
+        rows.append(
+            {
+                "scenario_role": scenario_role,
+                "profile": profile,
+                "protection_family": family,
+                "metric": metric,
+                "mean": paper_float(fmean(values), 4),
+                "std": paper_float(stdev(values), 4) if len(values) > 1 else "0.0000",
+                "min": paper_float(min(values), 4),
+                "max": paper_float(max(values), 4),
+                "count": str(len(values)),
+                "exact_or_proxy": caveat,
+            }
+        )
+    return rows
+
+
 def main_results_compact_rows(final_rows: list[dict[str, object]]) -> list[dict[str, object]]:
     """Build a compact paper-facing protection-family table.
 
@@ -4112,11 +6183,14 @@ def main_results_compact_rows(final_rows: list[dict[str, object]]) -> list[dict[
     """
     groups: dict[tuple[str, str, str], list[dict[str, object]]] = defaultdict(list)
     for row in final_rows:
+        family = str(row.get("protection_family", ""))
+        if family not in PROTECTION_FAMILY_ORDER:
+            continue
         groups[
             (
                 str(row.get("scenario", "")),
                 str(row.get("profile", "") or "core_reference"),
-                str(row.get("protection_family", "")),
+                family,
             )
         ].append(row)
 
@@ -4136,10 +6210,10 @@ def main_results_compact_rows(final_rows: list[dict[str, object]]) -> list[dict[
         ]
         mechanisms = [str(row.get("mechanism_family", "")) for row in rows]
         if family == "AI-MRCE + FRR-like":
-            aggregation = "mean across Rule/LogReg/SVM/Tree/Hybrid policies"
+            aggregation = "mean across Rule/LogReg/SVM/Tree policies"
             interpretation = (
                 "Family-level AI-MRCE aggregate; inspect ml_metrics_by_scenario.csv "
-                "for policy spread and shallow-tree conservative behavior."
+                "for policy spread and shallow-tree conservative behavior; Hybrid excluded from final main analysis."
             )
         elif family == "BFD-like + FRR-like":
             aggregation = "bfd_like_frr single reactive comparator"
@@ -4168,7 +6242,10 @@ def main_results_compact_rows(final_rows: list[dict[str, object]]) -> list[dict[
     return output
 
 
-def main_results_paper_subset_rows(final_rows: list[dict[str, object]]) -> list[dict[str, object]]:
+def main_results_paper_subset_rows(
+    final_rows: list[dict[str, object]],
+    scenario_c_qos_event_available_flag: bool = False,
+) -> list[dict[str, object]]:
     """Build the intentionally small manuscript table.
 
     This table keeps only the three scenario roles that add distinct value to the
@@ -4180,11 +6257,14 @@ def main_results_paper_subset_rows(final_rows: list[dict[str, object]]) -> list[
         scenario = str(row.get("scenario", ""))
         if scenario not in PAPER_MAIN_SCENARIOS:
             continue
+        family = str(row.get("protection_family", ""))
+        if family not in PROTECTION_FAMILY_ORDER:
+            continue
         groups[
             (
                 scenario,
                 str(row.get("profile", "") or "core_reference"),
-                str(row.get("protection_family", "")),
+                family,
             )
         ].append(row)
 
@@ -4207,12 +6287,18 @@ def main_results_paper_subset_rows(final_rows: list[dict[str, object]]) -> list[
         delay_values = values("udp_delay_p95_ms") or values("average_udp_delay_ms")
         delay_label = "p95" if values("udp_delay_p95_ms") else "mean"
         tcp_goodput = mean_or_none(values("tcp_goodput_proxy_kbps"))
+        lead_value = mean_or_none(values("lead_time_mean_s"))
         if family == "AI-MRCE + FRR-like":
-            interpretation = "Family mean over Rule/LogReg/SVM/Tree/Hybrid; policy spread remains in ml_metrics_by_scenario.csv."
+            interpretation = "Family mean over Rule/LogReg/SVM/Tree; policy spread remains in ml_metrics_by_scenario.csv, with Hybrid retained only as legacy traceability."
         elif family == "BFD-like + FRR-like":
             interpretation = "Reactive comparator; delay/recovery values include transition effects."
         else:
             interpretation = "No-protection baseline; interpret low delay together with packet loss/continuity."
+        if scenario == INSTRUMENTED_TRANSPORT_SCENARIO:
+            if scenario_c_qos_event_available_flag:
+                interpretation += " Scenario C lead time is QoS-event referenced in this paper subset."
+            else:
+                interpretation += " Scenario C QoS-event timing is unavailable from current time-resolved outputs; lead time remains hard-failure referenced."
 
         output.append(
             {
@@ -4228,7 +6314,13 @@ def main_results_paper_subset_rows(final_rows: list[dict[str, object]]) -> list[
                 "recovery_or_disruption_proxy_s": paper_float(
                     mean_or_none(values("recovery_time_after_failure_s")), 3
                 ),
-                "lead_time_s": paper_float(mean_or_none(values("lead_time_mean_s")), 2),
+                "lead_time_s": (
+                    f"{paper_float(lead_value, 2)} (hard-failure ref)"
+                    if scenario == INSTRUMENTED_TRANSPORT_SCENARIO
+                    and not scenario_c_qos_event_available_flag
+                    and lead_value is not None
+                    else paper_float(lead_value, 2)
+                ),
                 "tcp_goodput_or_endpoint_metric": (
                     f"{paper_float(tcp_goodput, 2)} kb/s" if tcp_goodput is not None else "NA"
                 ),
@@ -4241,103 +6333,467 @@ def main_results_paper_subset_rows(final_rows: list[dict[str, object]]) -> list[
 def paper_figure_selection_rows() -> list[dict[str, str]]:
     return [
         {
-            "figure": "main_figures/paper_packet_loss.png",
-            "use": "Main paper",
-            "scenario_scope": "Core, Cost-aware, Instrumented transport",
-            "reason": "Primary packet-delivery impact view without supplementary scenario clutter.",
-            "visual_readability": "Readable",
-            "main_or_supplementary": "main",
-            "note": "Instrumented transport uses configured UDP-app aggregate where available.",
+            "figure": "main_figures/paper_event_timeline.png",
+            "selected_for_final_core_yes_no": "yes",
+            "selected_for_main_paper_yes_no": "yes",
+            "result_block": "Causal Evidence Chain",
+            "reason": "Makes the mechanism visible: adverse event timing, AI-MRCE activation, BFD+FRR reaction, and hard-failure traceability.",
+            "scenario_scope": "Predictive link failure, degraded backup, queue buildup",
+            "metric_scope": "Activation and adverse-event timing",
+            "aggregation_note": "Scenario-level mean timing across selected profiles/runs; Scenario C uses measured QoS-event timing and a single 125 s hard-failure reference line.",
+            "caveat": "QoS event time is an offline evaluation label and not a runtime AI-MRCE input; the 125 s hard-failure line is traceability-only for Scenario C.",
         },
         {
-            "figure": "main_figures/paper_delivery_delay_tradeoff.png",
-            "use": "Main paper",
-            "scenario_scope": "Core, Cost-aware, Instrumented transport",
-            "reason": "Shows why delay alone is insufficient when delivery is poor.",
-            "visual_readability": "Readable",
-            "main_or_supplementary": "main",
-            "note": "UDP delay is conditioned on received packets.",
+            "figure": "main_figures/paper_packet_loss.png",
+            "selected_for_final_core_yes_no": "yes",
+            "selected_for_main_paper_yes_no": "yes",
+            "result_block": "Network/QoS Results",
+            "reason": "Primary packet-delivery impact view without supplementary scenario clutter.",
+            "scenario_scope": "Predictive link failure, degraded backup, queue buildup",
+            "metric_scope": "UDP packet loss",
+            "aggregation_note": "Protection-family means across selected profiles/runs.",
+            "caveat": "Unified main scenarios use configured UDP-flow aggregates where exported; run-level monitored app[0] variability is tabulated in result_variability_summary.csv but not plotted as aggregate-scope error bars.",
         },
         {
             "figure": "main_figures/paper_lead_time.png",
-            "use": "Main paper",
-            "scenario_scope": "Core, Cost-aware, Instrumented transport",
+            "selected_for_final_core_yes_no": "yes",
+            "selected_for_main_paper_yes_no": "yes",
+            "result_block": "Protection/Recovery Results",
             "reason": "Shows proactive activation/lead-time advantage.",
-            "visual_readability": "Readable",
-            "main_or_supplementary": "main",
-            "note": "Family-level AI-MRCE values aggregate runtime policies.",
+            "scenario_scope": "Predictive link failure, degraded backup, queue buildup",
+            "metric_scope": "Lead time before adverse network event; Scenario C uses measured QoS-event timing",
+            "aggregation_note": "Averaged across relevant profiles/runs; AI-MRCE+FRR is a family mean across runtime policies.",
+            "caveat": "OSPF is omitted because it has no proactive activation event; Scenario C BFD+FRR has negative QoS-event lead and is plotted below zero as reactive-after-event behavior.",
         },
         {
-            "figure": "main_figures/paper_protection_family_summary.png",
-            "use": "Main paper",
-            "scenario_scope": "Instrumented transport",
-            "reason": "Compact final networking overview using the strongest telemetry layer.",
-            "visual_readability": "Readable",
-            "main_or_supplementary": "main",
-            "note": "TCP values remain endpoint proxies.",
+            "figure": "main_figures/paper_scenario_b_tradeoff.png",
+            "selected_for_final_core_yes_no": "yes",
+            "selected_for_main_paper_yes_no": "yes",
+            "result_block": "Cost-Aware Policy Differentiation",
+            "reason": "Shows the Scenario B opportunity-cost trade-off: earlier backup use versus UDP-loss reduction.",
+            "scenario_scope": "Cost-aware degraded-backup operation",
+            "metric_scope": "Runtime-policy lead time and UDP-loss reduction versus OSPF",
+            "aggregation_note": "Policy/profile rows from existing final metrics; non-activation is retained in the table, not plotted as zero; LogReg/SVM points are lightly jittered for visibility.",
+            "caveat": "Early backup-use time is an opportunity-cost proxy, not a weighted TE utility; LogReg/SVM overlap because their timing and benefit are identical or nearly identical.",
         },
         {
-            "figure": "main_figures/paper_ml_feature_importance.png",
-            "use": "Main paper",
-            "scenario_scope": "Cost-aware",
-            "reason": "Explains runtime-safe ML policy drivers where policy differentiation is clearest.",
-            "visual_readability": "Readable",
-            "main_or_supplementary": "main",
-            "note": "Instrumented offline ML audit is not required for the pruned narrative.",
+            "figure": "main_figures/paper_queue_buildup_udp_quality.png",
+            "selected_for_final_core_yes_no": "yes",
+            "selected_for_main_paper_yes_no": "yes",
+            "result_block": "Network/QoS Results",
+            "reason": "Clean two-panel UDP delivery-quality view for the redesigned queue-buildup scenario; selected because per-window QoS line data are not sufficiently populated.",
+            "scenario_scope": "Congestion/queue-buildup early mitigation",
+            "metric_scope": "Aggregate UDP loss and UDP p95 delay",
+            "aggregation_note": "Protection-family means across queue-buildup profiles/runs; annotate AI-MRCE activation at 83 s and QoS brownout at 89 s.",
+            "caveat": "UDP delay is computed over received packets only; QoS-over-time line plotting remains future instrumentation work.",
         },
         {
-            "figure": "main_figures/paper_tcp_goodput_proxy.png",
-            "use": "Optional main paper",
-            "scenario_scope": "Instrumented transport",
-            "reason": "Shows endpoint TCP progress in the mixed UDP/TCP setting.",
-            "visual_readability": "Readable if used with proxy wording",
-            "main_or_supplementary": "main",
-            "note": "Do not interpret as TCP-stack goodput, exact TCP loss, RTT, or retransmissions.",
+            "figure": "main_figures/paper_runtime_feature_importance.png",
+            "selected_for_final_core_yes_no": "yes",
+            "selected_for_main_paper_yes_no": "yes",
+            "result_block": "ML and Runtime Policy Results",
+            "reason": "Explains only deployed runtime-safe AI-MRCE telemetry drivers with readable paper labels.",
+            "scenario_scope": "Cost-aware degraded-backup operation",
+            "metric_scope": "Runtime-safe AI-MRCE feature-driver ranking",
+            "aggregation_note": "Maximum absolute coefficient/importance across evaluated runtime policies.",
+            "caveat": "Relative ranking only; values are not physical units; Queue length remains in the deployed vector but has negligible exported importance in this setting.",
+        },
+    ]
+
+
+def mechanism_policy_classification_rows() -> list[dict[str, str]]:
+    return [
+        {
+            "mechanism_or_policy": "OSPF",
+            "category": "routing baseline",
+            "uses_ai_mrce": "no",
+            "uses_runtime_csv": "no",
+            "uses_ml_model": "no",
+            "reactive_or_predictive": "reactive baseline",
+            "paper_role": "Conventional routing baseline; no proactive activation or AI-MRCE runtime policy.",
         },
         {
-            "figure": "diagnostic_figures/final_protection_family_loss_recovery_tradeoff.png",
-            "use": "Supplementary",
-            "scenario_scope": "All scenarios",
-            "reason": "Useful traceability view, but less central than delivery-delay trade-off.",
-            "visual_readability": "Moderate",
-            "main_or_supplementary": "supplementary",
-            "note": "Keep for reviewer traceability.",
+            "mechanism_or_policy": "BFD+FRR",
+            "category": "reactive protection comparator",
+            "uses_ai_mrce": "no",
+            "uses_runtime_csv": "no",
+            "uses_ml_model": "no",
+            "reactive_or_predictive": "reactive",
+            "paper_role": "Project-local BFD-like detector plus FRR-like repair-route comparator.",
         },
         {
-            "figure": "diagnostic_figures/final_protection_family_reordering.png",
-            "use": "Supplementary",
-            "scenario_scope": "All scenarios",
-            "reason": "Important transition-cost metric but not one of the smallest main-paper figures.",
-            "visual_readability": "Moderate",
-            "main_or_supplementary": "supplementary",
-            "note": "Discuss in text/table when needed.",
+            "mechanism_or_policy": "Rule",
+            "category": "deterministic AI-MRCE runtime policy",
+            "uses_ai_mrce": "yes",
+            "uses_runtime_csv": "no",
+            "uses_ml_model": "no",
+            "reactive_or_predictive": "predictive",
+            "paper_role": "Transparent rule-based AI-MRCE policy; not a learned ML model.",
         },
         {
-            "figure": "diagnostic_figures/final_ml_policy_lead_time_by_scenario.png",
-            "use": "Supplementary",
-            "scenario_scope": "All scenarios",
-            "reason": "Policy comparison is valuable but visually broader than the main narrative.",
-            "visual_readability": "Moderate",
-            "main_or_supplementary": "supplementary",
-            "note": "Use ml_metrics_by_scenario.csv for policy-level claims.",
+            "mechanism_or_policy": "LogReg",
+            "category": "learned AI-MRCE runtime ML policy",
+            "uses_ai_mrce": "yes",
+            "uses_runtime_csv": "yes",
+            "uses_ml_model": "yes",
+            "reactive_or_predictive": "predictive",
+            "paper_role": "Logistic-regression runtime ML policy loaded from CSV.",
         },
         {
-            "figure": "diagnostic_figures/cross_scenario_ai_mrce_vs_baselines.png",
-            "use": "Supplementary",
-            "scenario_scope": "All scenarios",
-            "reason": "Broad overview retained for traceability; main report now uses three scenario roles.",
-            "visual_readability": "Moderate",
-            "main_or_supplementary": "supplementary",
-            "note": "Sensitivity and transport baseline are supporting layers.",
+            "mechanism_or_policy": "SVM",
+            "category": "learned AI-MRCE runtime ML policy",
+            "uses_ai_mrce": "yes",
+            "uses_runtime_csv": "yes",
+            "uses_ml_model": "yes",
+            "reactive_or_predictive": "predictive",
+            "paper_role": "Linear-SVM runtime ML policy loaded from CSV; score is a bounded margin ranking, not a calibrated probability.",
         },
         {
-            "figure": "diagnostic_figures/*scenario-level*.png",
-            "use": "Supplementary",
-            "scenario_scope": "Per-scenario",
-            "reason": "Scenario-consistent figures remain available without crowding the main manuscript.",
-            "visual_readability": "Varies by metric",
-            "main_or_supplementary": "supplementary",
-            "note": "See generated_figure_manifest.csv for exact files.",
+            "mechanism_or_policy": "Tree",
+            "category": "learned AI-MRCE runtime ML policy",
+            "uses_ai_mrce": "yes",
+            "uses_runtime_csv": "yes",
+            "uses_ml_model": "yes",
+            "reactive_or_predictive": "predictive",
+            "paper_role": "Shallow decision-tree runtime ML policy loaded from CSV.",
+        },
+        {
+            "mechanism_or_policy": "Hybrid",
+            "category": "hybrid reactive-predictive runtime policy",
+            "uses_ai_mrce": "yes",
+            "uses_runtime_csv": "no",
+            "uses_ml_model": "no",
+            "reactive_or_predictive": "hybrid",
+            "paper_role": "First-trigger arbitration between rule-based AI-MRCE and project-local BFD-like detection; not a pure ML model. Retained only as legacy/future traceability and excluded from final main figures, family means, and policy comparisons.",
+        },
+    ]
+
+
+def runtime_csv_lineage_for_manuscript_rows() -> list[dict[str, str]]:
+    manifest_path = PROJECT_ROOT / "simulations" / "regionalbackbone" / "aimrce_runtime_manifest.csv"
+    manifest_rows: dict[str, dict[str, str]] = {}
+    if manifest_path.exists():
+        with manifest_path.open("r", newline="", encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                manifest_rows[str(row.get("decision_mode", "")).strip()] = row
+
+    def manifest_value(decision_mode: str, field: str, default: str = "not_applicable") -> str:
+        return str(manifest_rows.get(decision_mode, {}).get(field, "") or default)
+
+    feature_order = "bottleneck_queue_length_last_pk; receiver_app0_e2e_delay_mean_s; receiver_app0_throughput_mean_bps; receiver_app0_packet_count"
+    common_no_retrain = "no; final reporting pass did not retrain/export runtime artifacts"
+    return [
+        {
+            "policy_or_mechanism": "Rule AI-MRCE+FRR",
+            "uses_runtime_csv": "no",
+            "runtime_csv_file": "not_applicable",
+            "learned_model_yes_no": "no",
+            "runtime_feature_order": feature_order,
+            "threshold": "0.6 ruleRiskThreshold",
+            "training_export_config": "not_applicable",
+            "training_rows": "not_applicable",
+            "positive_class_rate": "not_applicable",
+            "retrained_after_final_scenario_c_redesign": common_no_retrain,
+            "role_in_paper": "deterministic AI-MRCE runtime policy; included in final main analysis",
+            "caveat": "Rule is transparent and telemetry-driven, but it is not a learned ML model.",
+        },
+        {
+            "policy_or_mechanism": "LogReg AI-MRCE+FRR",
+            "uses_runtime_csv": "yes",
+            "runtime_csv_file": "aimrce_runtime_logreg.csv",
+            "learned_model_yes_no": "yes",
+            "runtime_feature_order": manifest_value("logisticRegression", "features", feature_order).replace(" ", "; "),
+            "threshold": manifest_value("logisticRegression", "threshold", "0.6"),
+            "training_export_config": manifest_value("logisticRegression", "selected_configs", "RegionalBackboneCongestionDegradation"),
+            "training_rows": manifest_value("logisticRegression", "training_rows", "105"),
+            "positive_class_rate": manifest_value("logisticRegression", "positive_class_rate", ""),
+            "retrained_after_final_scenario_c_redesign": common_no_retrain,
+            "role_in_paper": "CSV-deployed learned runtime AI-MRCE policy; included in final main analysis",
+            "caveat": "Training/export lineage supports controlled prototype validation, not universal deployment generalization.",
+        },
+        {
+            "policy_or_mechanism": "SVM AI-MRCE+FRR",
+            "uses_runtime_csv": "yes",
+            "runtime_csv_file": "aimrce_runtime_linsvm.csv",
+            "learned_model_yes_no": "yes",
+            "runtime_feature_order": manifest_value("linearSvm", "features", feature_order).replace(" ", "; "),
+            "threshold": manifest_value("linearSvm", "threshold", "0.6"),
+            "training_export_config": manifest_value("linearSvm", "selected_configs", "RegionalBackboneCongestionDegradation"),
+            "training_rows": manifest_value("linearSvm", "training_rows", "105"),
+            "positive_class_rate": manifest_value("linearSvm", "positive_class_rate", ""),
+            "retrained_after_final_scenario_c_redesign": common_no_retrain,
+            "role_in_paper": "CSV-deployed learned runtime AI-MRCE policy; included in final main analysis",
+            "caveat": "Linear-SVM score is a bounded margin ranking in this implementation, not a calibrated probability.",
+        },
+        {
+            "policy_or_mechanism": "Tree AI-MRCE+FRR",
+            "uses_runtime_csv": "yes",
+            "runtime_csv_file": "aimrce_runtime_shallow_tree.csv",
+            "learned_model_yes_no": "yes",
+            "runtime_feature_order": manifest_value("shallowTree", "features", feature_order).replace(" ", "; "),
+            "threshold": manifest_value("shallowTree", "threshold", "0.6"),
+            "training_export_config": manifest_value("shallowTree", "selected_configs", "RegionalBackboneCongestionDegradation"),
+            "training_rows": manifest_value("shallowTree", "training_rows", "105"),
+            "positive_class_rate": manifest_value("shallowTree", "positive_class_rate", ""),
+            "retrained_after_final_scenario_c_redesign": common_no_retrain,
+            "role_in_paper": "CSV-deployed learned runtime AI-MRCE policy; included in final main analysis",
+            "caveat": "Tree non-activation in Scenario B is retained as conservative policy behavior, not missing data.",
+        },
+        {
+            "policy_or_mechanism": "Hybrid",
+            "uses_runtime_csv": "no",
+            "runtime_csv_file": "not_applicable",
+            "learned_model_yes_no": "no",
+            "runtime_feature_order": "not_applicable",
+            "threshold": "not_applicable",
+            "training_export_config": "not_applicable",
+            "training_rows": "not_applicable",
+            "positive_class_rate": "not_applicable",
+            "retrained_after_final_scenario_c_redesign": "not_applicable",
+            "role_in_paper": "legacy/future traceability only; excluded from final main analysis",
+            "caveat": "Hybrid combines project-local BFD-like detection and AI-MRCE arbitration; it is not a pure ML model.",
+        },
+    ]
+
+
+def mechanism_taxonomy_for_manuscript_rows() -> list[dict[str, str]]:
+    return [
+        {
+            "mechanism": "OSPF",
+            "category": "routing baseline",
+            "runtime_policy_type": "none",
+            "learned_model_yes_no": "no",
+            "proactive_yes_no": "no",
+            "reactive_yes_no": "yes",
+            "included_in_main_analysis": "yes",
+            "role_in_paper": "No-protection routing baseline with conventional OSPF behavior; no proactive activation event.",
+            "standards_claim_allowed": "standard INET OSPF configuration only",
+            "caveat": "Do not assign proactive lead time to OSPF.",
+        },
+        {
+            "mechanism": "BFD+FRR",
+            "category": "reactive protection comparator",
+            "runtime_policy_type": "project-local BFD-like detector plus FRR-like repair route",
+            "learned_model_yes_no": "no",
+            "proactive_yes_no": "no",
+            "reactive_yes_no": "yes",
+            "included_in_main_analysis": "yes",
+            "role_in_paper": "Fast reactive comparator against proactive AI-MRCE activation.",
+            "standards_claim_allowed": "no",
+            "caveat": "Project-local BFD-like and FRR-like abstractions; not RFC BFD, LFA, TI-LFA, RSVP-TE, or production FRR.",
+        },
+        {
+            "mechanism": "Rule AI-MRCE+FRR",
+            "category": "deterministic AI-MRCE policy",
+            "runtime_policy_type": "rule-based proactive telemetry policy",
+            "learned_model_yes_no": "no",
+            "proactive_yes_no": "yes",
+            "reactive_yes_no": "no",
+            "included_in_main_analysis": "yes",
+            "role_in_paper": "Transparent runtime AI-MRCE policy in the final AI-MRCE family.",
+            "standards_claim_allowed": "no",
+            "caveat": "Rule is not a learned ML model.",
+        },
+        {
+            "mechanism": "LogReg AI-MRCE+FRR",
+            "category": "learned AI-MRCE runtime policy",
+            "runtime_policy_type": "CSV-deployed logistic-regression model",
+            "learned_model_yes_no": "yes",
+            "proactive_yes_no": "yes",
+            "reactive_yes_no": "no",
+            "included_in_main_analysis": "yes",
+            "role_in_paper": "Learned runtime policy for proactive repair-route activation.",
+            "standards_claim_allowed": "no",
+            "caveat": "Controlled prototype model; no universal production-grade generalization claim.",
+        },
+        {
+            "mechanism": "SVM AI-MRCE+FRR",
+            "category": "learned AI-MRCE runtime policy",
+            "runtime_policy_type": "CSV-deployed linear-SVM model",
+            "learned_model_yes_no": "yes",
+            "proactive_yes_no": "yes",
+            "reactive_yes_no": "no",
+            "included_in_main_analysis": "yes",
+            "role_in_paper": "Learned runtime policy for proactive repair-route activation.",
+            "standards_claim_allowed": "no",
+            "caveat": "SVM score is a runtime decision score, not a calibrated probability claim.",
+        },
+        {
+            "mechanism": "Tree AI-MRCE+FRR",
+            "category": "learned AI-MRCE runtime policy",
+            "runtime_policy_type": "CSV-deployed shallow decision tree",
+            "learned_model_yes_no": "yes",
+            "proactive_yes_no": "yes",
+            "reactive_yes_no": "no",
+            "included_in_main_analysis": "yes",
+            "role_in_paper": "Learned runtime policy; conservative non-activation remains visible where observed.",
+            "standards_claim_allowed": "no",
+            "caveat": "Tree non-activation in Scenario B is a policy outcome, not missing data.",
+        },
+        {
+            "mechanism": "Hybrid",
+            "category": "hybrid reactive-predictive traceability policy",
+            "runtime_policy_type": "first-trigger arbitration between rule-based AI-MRCE and BFD-like detection",
+            "learned_model_yes_no": "no",
+            "proactive_yes_no": "yes",
+            "reactive_yes_no": "yes",
+            "included_in_main_analysis": "no",
+            "role_in_paper": "Legacy/future traceability only; excluded from final main figures, AI-MRCE family means, and runtime-policy comparisons.",
+            "standards_claim_allowed": "no",
+            "caveat": "Hybrid is not a pure ML model and should not be used in ML-model rankings.",
+        },
+    ]
+
+
+def metric_claim_boundary_for_manuscript_rows() -> list[dict[str, str]]:
+    return [
+        {
+            "metric": "UDP packet loss",
+            "exact_or_proxy": "exact where configured-flow counters are exported",
+            "source": "INET UDP sent/received counters and final networking summaries",
+            "used_for_claim": "packet-delivery impact across final scenario roles",
+            "not_claimed": "universal packet-loss behavior outside evaluated traffic/scenario set",
+            "caption_caveat": "Configured UDP-flow aggregate where exported; monitored app[0] traceability is separate.",
+        },
+        {
+            "metric": "UDP p95 delay",
+            "exact_or_proxy": "received-packet-conditioned delay statistic",
+            "source": "received UDP packet delay summaries",
+            "used_for_claim": "delay among packets that arrived",
+            "not_claimed": "delay for lost/unobserved packets or complete user-perceived QoE",
+            "caption_caveat": "Interpret together with packet loss and continuity gaps.",
+        },
+        {
+            "metric": "TCP goodput proxy",
+            "exact_or_proxy": "endpoint progress proxy",
+            "source": "TCP endpoint received-byte/goodput/progress summaries",
+            "used_for_claim": "transport endpoint progress under evaluated scenarios",
+            "not_claimed": "exact TCP stack loss, retransmissions, RTT, cwnd, or finite flow completion",
+            "caption_caveat": "Endpoint proxy only.",
+        },
+        {
+            "metric": "recovery/disruption proxy",
+            "exact_or_proxy": "receiver-observed proxy",
+            "source": "receiver continuity and packet-gap summaries",
+            "used_for_claim": "service disruption/recovery visibility at receiver",
+            "not_claimed": "direct OSPF convergence timer or protocol-state convergence",
+            "caption_caveat": "Receiver-observed disruption proxy, not routing convergence.",
+        },
+        {
+            "metric": "lead time before adverse event",
+            "exact_or_proxy": "activation timing relative to configured/offline event reference",
+            "source": "AI-MRCE/BFD activation scalars and event_timeline_summary.csv",
+            "used_for_claim": "proactive versus reactive timing advantage",
+            "not_claimed": "runtime knowledge of failure/QoS-event time",
+            "caption_caveat": "OSPF has no proactive activation; Scenario C uses QoS-event lead.",
+        },
+        {
+            "metric": "Scenario C QoS-event time",
+            "exact_or_proxy": "offline evaluation label",
+            "source": "passive QosEventMonitor/output telemetry and scenario_c_qos_event_timing.csv",
+            "used_for_claim": "Scenario C adverse-event reference for paper-facing lead time",
+            "not_claimed": "runtime input, universal congestion detector, or controller oracle",
+            "caption_caveat": "Offline evaluation-only reference; hard failure remains traceability-only.",
+        },
+        {
+            "metric": "BFD+FRR activation time",
+            "exact_or_proxy": "simulator activation scalar for project-local comparator",
+            "source": "AiMrceController BFD-like diagnostics",
+            "used_for_claim": "reactive comparator timing",
+            "not_claimed": "standards-compliant BFD session behavior",
+            "caption_caveat": "Project-local BFD-like detector plus FRR-like repair-route abstraction.",
+        },
+        {
+            "metric": "AI-MRCE activation time",
+            "exact_or_proxy": "simulator activation scalar",
+            "source": "AiMrceController activation diagnostics",
+            "used_for_claim": "runtime telemetry policy activation timing",
+            "not_claimed": "future/oracle-driven activation",
+            "caption_caveat": "Driven by runtime-safe telemetry vector and threshold/streak logic.",
+        },
+        {
+            "metric": "runtime feature weights",
+            "exact_or_proxy": "model-artifact coefficient/importance ranking",
+            "source": "runtime CSV artifacts and feature-importance summary",
+            "used_for_claim": "relative deployed telemetry driver ranking",
+            "not_claimed": "physical causality or comparable units across model families",
+            "caption_caveat": "Readable labels shown in figures; raw feature names preserved in CSVs.",
+        },
+        {
+            "metric": "Scenario B early backup-use proxy",
+            "exact_or_proxy": "opportunity-cost proxy",
+            "source": "activation timing relative to adverse event in scenario_b_tradeoff.csv",
+            "used_for_claim": "trade-off between early activation and service benefit",
+            "not_claimed": "full traffic-engineering utility or operational cost model",
+            "caption_caveat": "Proxy for early repair-route use, not weighted TE optimization.",
+        },
+    ]
+
+
+def final_policy_set_rows() -> list[dict[str, str]]:
+    return [
+        {
+            "mechanism_or_policy": "OSPF",
+            "final_status": "included_main",
+            "category": "routing baseline",
+            "included_in_main_figures": "yes",
+            "included_in_ai_mrce_family_mean": "no",
+            "included_in_pure_ml_model_set": "no",
+            "reason": "Required no-protection/routing baseline; OSPF has no proactive activation event.",
+        },
+        {
+            "mechanism_or_policy": "BFD+FRR",
+            "final_status": "included_main",
+            "category": "reactive protection comparator",
+            "included_in_main_figures": "yes",
+            "included_in_ai_mrce_family_mean": "no",
+            "included_in_pure_ml_model_set": "no",
+            "reason": "Required fast reactive comparator against proactive AI-MRCE activation; project-local BFD-like plus FRR-like repair route.",
+        },
+        {
+            "mechanism_or_policy": "Rule",
+            "final_status": "included_main",
+            "category": "rule-based AI-MRCE runtime policy",
+            "included_in_main_figures": "yes",
+            "included_in_ai_mrce_family_mean": "yes",
+            "included_in_pure_ml_model_set": "no",
+            "reason": "Transparent deterministic AI-MRCE policy; not a learned ML model but part of the deployed AI-MRCE policy family.",
+        },
+        {
+            "mechanism_or_policy": "LogReg",
+            "final_status": "included_main",
+            "category": "learned AI-MRCE runtime ML policy",
+            "included_in_main_figures": "yes",
+            "included_in_ai_mrce_family_mean": "yes",
+            "included_in_pure_ml_model_set": "yes",
+            "reason": "CSV-deployed logistic-regression AI-MRCE runtime model.",
+        },
+        {
+            "mechanism_or_policy": "SVM",
+            "final_status": "included_main",
+            "category": "learned AI-MRCE runtime ML policy",
+            "included_in_main_figures": "yes",
+            "included_in_ai_mrce_family_mean": "yes",
+            "included_in_pure_ml_model_set": "yes",
+            "reason": "CSV-deployed linear-SVM AI-MRCE runtime model.",
+        },
+        {
+            "mechanism_or_policy": "Tree",
+            "final_status": "included_main",
+            "category": "learned AI-MRCE runtime ML policy",
+            "included_in_main_figures": "yes",
+            "included_in_ai_mrce_family_mean": "yes",
+            "included_in_pure_ml_model_set": "yes",
+            "reason": "CSV-deployed shallow-tree AI-MRCE runtime model; conservative/non-activating rows remain visible when present.",
+        },
+        {
+            "mechanism_or_policy": "Hybrid",
+            "final_status": "excluded_traceability_future",
+            "category": "hybrid reactive-predictive policy",
+            "included_in_main_figures": "no",
+            "included_in_ai_mrce_family_mean": "no",
+            "included_in_pure_ml_model_set": "no",
+            "reason": "Combines project-local BFD-like reactive detection with AI-MRCE/predictive logic; not a pure ML model and not part of the final paper-facing mechanism set.",
         },
     ]
 
@@ -4353,6 +6809,7 @@ def paper_relevant_missing_optional(items: list[str]) -> list[str]:
         f"{INSTRUMENTED_TRANSPORT_SCENARIO}_offline_decision_timing.csv",
         f"{INSTRUMENTED_TRANSPORT_SCENARIO}_feature_importance.csv",
         f"{INSTRUMENTED_TRANSPORT_SCENARIO}_extended_feature_classification.txt",
+        "activation_root_cause_cost_aware_backup_trace.csv",
     )
     filtered: list[str] = []
     for item in items:
@@ -4371,7 +6828,7 @@ def core_findings(core_rows: list[dict[str, object]]) -> list[str]:
     aimrce_group = [
         row
         for key, row in by_mechanism.items()
-        if key.startswith("aimrce_") or key == "hybrid_bfd_like_aimrce_frr"
+        if is_final_aimrce_policy(key)
     ]
     if ospf:
         findings.append(
@@ -4384,7 +6841,7 @@ def core_findings(core_rows: list[dict[str, object]]) -> list[str]:
     if aimrce_group:
         times = sorted({str(row.get("activation_time_mean", "")) for row in aimrce_group if row.get("activation_time_mean", "")})
         findings.append(
-            "AI-MRCE and hybrid variants activate proactively in the progressive brownout profile; observed mean activation times are "
+            "Final AI-MRCE policies activate proactively in the progressive brownout profile; observed mean activation times are "
             + ", ".join(times)
             + " s."
         )
@@ -4520,8 +6977,7 @@ def report_lines(
         aimrce_rows = [
             row
             for row in rows
-            if str(row.get("mechanism_family", "")).startswith("aimrce")
-            or row.get("mechanism_family") == "hybrid_bfd_like_aimrce_frr"
+            if is_final_aimrce_policy(str(row.get("mechanism_family", "")))
         ]
         lead_values = [
             value
@@ -4537,11 +6993,11 @@ def report_lines(
             earliest = min(activation_values, key=lambda item: item[1] if item[1] is not None else math.inf)
             latest = max(activation_values, key=lambda item: item[1] if item[1] is not None else -math.inf)
             policy_sentence = (
-                f"Earliest AI-MRCE/Hybrid mean activation: {earliest[0]} at {fmt(earliest[1])} s; "
-                f"latest activating AI-MRCE/Hybrid mean activation: {latest[0]} at {fmt(latest[1])} s."
+                f"Earliest final AI-MRCE mean activation: {earliest[0]} at {fmt(earliest[1])} s; "
+                f"latest activating final AI-MRCE mean activation: {latest[0]} at {fmt(latest[1])} s."
             )
         else:
-            policy_sentence = "No AI-MRCE/Hybrid activation time was available in this scenario summary."
+            policy_sentence = "No final AI-MRCE activation time was available in this scenario summary."
         if scenario == CORE_SCENARIO:
             limitation = "Main limitation: deterministic brownout behavior makes ML policy timings overlap heavily."
         elif scenario == SENSITIVITY_SCENARIO:
@@ -4564,14 +7020,14 @@ def report_lines(
         heading("Final AI-MRCE Evaluation Report", 1),
         "",
         heading("1. Executive Summary"),
-        "This final evaluation report combines existing generated artifacts from four scenario families and presents them scenario-by-scenario. It is a reporting and visualization layer only: no simulations are rerun and no experiment behavior is changed.",
+        "This final evaluation report combines existing generated artifacts and presents them scenario-by-scenario. It is a reporting and visualization layer only: no simulations are rerun and no experiment behavior is changed.",
         "",
         bullets(
             [
-                "Core degraded-link model-family cohort: establishes the basic OSPF vs BFD-like vs AI-MRCE comparison.",
+                "Predictive Link-Failure Recovery cohort: establishes the basic OSPF vs BFD-like vs AI-MRCE comparison.",
                 "Degradation-sensitivity cohort: checks profile-conditioned robustness across mild_slow, moderate, and severe_fast profiles.",
-                "Cost-aware backup cohort: remains the strongest model-policy differentiation evidence because backup-path use has mild nonzero cost.",
-                "Mixed UDP/TCP transport-impact cohort: closest-to-deployment validation layer with concurrent UDP diagnostics and TCP endpoint progress proxies.",
+                "Cost-Aware Degraded-Backup Operation cohort: remains the strongest model-policy differentiation evidence because backup-path use has mild nonzero cost.",
+                "Congestion/Queue-Buildup Early Mitigation cohort: final network-impact layer with queue buildup, concurrent UDP diagnostics, and TCP endpoint progress proxies.",
             ]
         ),
         "",
@@ -4580,9 +7036,9 @@ def report_lines(
             [
                 f"Core scenario: {CORE_SCENARIO}; full five-run mode; run-count total from summary rows: {core_runs}.",
                 f"Sensitivity scenario: {SENSITIVITY_SCENARIO}; full five-run mode; run-count total from summary rows: {sensitivity_runs}.",
-                f"Cost-aware backup scenario: {COST_AWARE_SCENARIO}; full five-run mode; run-count total from summary rows: {cost_runs}.",
-                f"Mixed transport-impact scenario: {TRANSPORT_SCENARIO}; run-count total from summary rows: {transport_runs}.",
-                "The first three cohorts are UDP-only. The mixed transport-impact cohort reports TCP endpoint received-byte/goodput/progress proxies only; no TCP retransmission, RTT, cwnd, or production transport conclusions are claimed.",
+                f"Cost-aware degraded-backup scenario: {COST_AWARE_SCENARIO}; full five-run mode; run-count total from summary rows: {cost_runs}.",
+                f"Baseline mixed transport-impact scenario: {TRANSPORT_SCENARIO}; run-count total from summary rows: {transport_runs}.",
+                "Unified main cohorts use mixed UDP/TCP traffic. TCP endpoint received-byte/goodput/progress proxies are reported only as endpoint proxies; no TCP retransmission, RTT, cwnd, or production transport conclusions are claimed.",
                 "The active setting is deterministic progressive degraded-link/brownout stress evaluation.",
                 "Five runs provide reproducibility and mechanism/profile coverage for controlled cohorts, not broad stochastic statistical significance.",
                 "Pipeline integrity statuses: "
@@ -4591,7 +7047,7 @@ def report_lines(
         ),
         "",
         heading("3. Scenario-Level Evaluation Overview"),
-        "Each scenario section answers the same questions: lead time, ML policy behavior, OSPF-only behavior, BFD-like behavior, AI-MRCE behavior, network/application impact, and scenario limitation.",
+        "Each scenario section answers the same questions: lead time, AI-MRCE runtime-policy behavior, OSPF-only behavior, BFD-like behavior, network/application impact, and scenario limitation.",
         "",
         markdown_table(
             cross_scenario_rows,
@@ -4618,18 +7074,18 @@ def report_lines(
             ]
         ),
         "",
-        heading("4. Scenario A: Core Degraded-Link Model-Family"),
+        heading("4. Scenario A: Predictive Link-Failure Recovery"),
         "Purpose: basic OSPF-only vs project-local BFD-like + FRR-like vs proactive AI-MRCE + FRR-like comparison in the deterministic progressive degraded-link/brownout reference cohort.",
         "",
         heading("A1. Activation / Lead-Time", 3),
         bullets(scenario_answer_block(scenario_core_rows, CORE_SCENARIO)[:2]),
         "",
-        heading("A2. ML Policy Behavior", 3),
+        heading("A2. AI-MRCE Runtime-Policy Behavior", 3),
         bullets(
             [
-                "Rule-based, SVM, shallow-tree, and hybrid timing overlap strongly in this deterministic reference setting.",
+                "Rule-based, LogReg, SVM, and shallow-tree timing overlap strongly in this deterministic reference setting.",
                 "Logistic regression remains slightly later where reported.",
-                "This cohort supports the proactive-vs-reactive claim, not strong ML model differentiation.",
+                "This cohort supports the proactive-vs-reactive claim, not strong learned-model differentiation.",
             ]
         ),
         "",
@@ -4663,7 +7119,7 @@ def report_lines(
         heading("B1. Activation / Lead-Time By Profile", 3),
         bullets(scenario_answer_block(scenario_sensitivity_rows, SENSITIVITY_SCENARIO)[:2]),
         "",
-        heading("B2. ML Policy Behavior By Profile", 3),
+        heading("B2. AI-MRCE Runtime-Policy Behavior By Profile", 3),
         bullets(
             [
                 "AI-MRCE timing remains stable across sensitivity profiles, which supports robustness.",
@@ -4696,17 +7152,17 @@ def report_lines(
             ]
         ),
         "",
-        heading("6. Scenario C: Cost-Aware Backup Path"),
+        heading("6. Scenario B: Cost-Aware Degraded-Backup Operation"),
         "Purpose: evaluate predictive switching benefit against a mild backup-path penalty. This remains the strongest scenario for model-policy differentiation because early protection is useful but not free.",
         "",
         heading("C1. Activation / Lead-Time By Profile", 3),
         bullets(scenario_answer_block(scenario_cost_rows, COST_AWARE_SCENARIO)[:2]),
         "",
-        heading("C2. ML Policy Behavior By Profile", 3),
+        heading("C2. AI-MRCE Runtime-Policy Behavior By Profile", 3),
         bullets(
             [
                 "Cost-aware profiles reveal clearer differences among AI-MRCE policies than the core/sensitivity cohorts.",
-                "Linear SVM and logistic regression can activate earlier in some cost-aware profiles, while rule-based/hybrid can be later.",
+                "Linear SVM and logistic regression can activate earlier in some cost-aware profiles, while rule-based can be later.",
                 "Shallow tree is conservative/non-activating in the cost-aware traces; the audit found no runtime-loading or feature-mapping bug.",
             ]
         ),
@@ -4748,7 +7204,7 @@ def report_lines(
         heading("D1. Activation / Lead-Time By Profile", 3),
         bullets(scenario_answer_block(scenario_transport_rows, TRANSPORT_SCENARIO)[:2]),
         "",
-        heading("D2. ML Policy Behavior Under Mixed Traffic", 3),
+        heading("D2. AI-MRCE Runtime-Policy Behavior Under Mixed Traffic", 3),
         bullets(
             [
                 "The same seven mechanism families are evaluated so mixed-traffic behavior can be compared against the UDP-only cost-aware backup scenario.",
@@ -4906,7 +7362,7 @@ def report_lines(
                 "BFD-like high delay is generally explainable by reactive activation near failure, transition/reordering effects, late-arriving packets, or remaining post-failure gaps rather than a separate simulator bug.",
                 "AI-MRCE zero or near-zero recovery proxy is valid only when protection is active before hard failure and post-failure continuity is preserved.",
                 "TCP goodput remains endpoint received-byte/progress proxy only; it is not TCP-stack RTT, retransmission, cwnd, or exact flow-completion evidence.",
-                "Family-level AI-MRCE figures aggregate rule, LogReg, SVM, tree, and hybrid policies by mean; use policy-level tables for model-specific claims.",
+                "Family-level AI-MRCE figures aggregate rule, LogReg, SVM, and tree policies by mean; Hybrid is retained only as legacy/future traceability.",
             ]
         ),
         "",
@@ -5001,12 +7457,13 @@ def report_lines(
                 "`tables/scenario_cost_aware_summary.csv` for backup-cost trade-offs.",
                 "`tables/scenario_transport_impact_summary.csv` and `tables/transport_endpoint_summary.csv` for mixed UDP/TCP endpoint-impact evidence.",
                 "`tables/cross_scenario_summary.csv` for the overview.",
-                "`tables/ml_policy_leadtime_summary.csv` for model-policy timing.",
-                "`tables/ml_metrics_by_scenario.csv` for consistent ML policy/network metrics.",
+                "`tables/ml_policy_leadtime_summary.csv` for runtime-policy timing.",
+                "`tables/ml_metrics_by_scenario.csv` for consistent runtime-policy/network metrics.",
                 "`tables/network_impact_by_scenario.csv` for UDP/network-impact components.",
                 "`tables/final_networking_metrics_summary.csv` for exact monitored UDP app[0] loss, recovery proxy, UDP delay, reordering, and TCP endpoint proxy metrics.",
                 "`tables/metric_availability_by_scenario.csv` for exact/proxy/unavailable metric status.",
                 "`tables/metric_window_definitions.csv` for time-window and received-packet conditioning notes.",
+                "`tables/scenario_c_qos_event_timing.csv` for Scenario C QoS-event timing extraction status and hard-failure lead-time traceability.",
                 "`tables/protection_family_aggregation_notes.csv` for protection-family aggregation rules and risks.",
                 "`tables/bfd_like_delay_diagnostic.csv` for BFD-like delay sanity checks.",
                 "`tables/generated_figure_manifest.csv` for the current regenerated figure inventory.",
@@ -5031,7 +7488,7 @@ def report_lines(
                 "No universal failure prediction claim is made.",
                 "BFD-like is project-local and not RFC-compliant BFD.",
                 "FRR-like routes are project-local static repair-route abstractions, not standards-compliant LFA/TI-LFA/RSVP-TE/OSPF FRR.",
-                "The first three cohorts are UDP-only; the mixed transport-impact cohort reports TCP endpoint progress proxies only, not TCP-stack recovery or production TCP QoS claims.",
+                "Unified main cohorts use mixed UDP/TCP traffic; TCP endpoint progress proxies are reported, not TCP-stack recovery or production TCP QoS claims.",
                 "Profiles are deterministic degraded-link/brownout stress scenarios, not calibrated field traces.",
                 "ML labels are simulator-derived and scenario-conditioned.",
                 "Offline ML results are not production-grade generalization evidence.",
@@ -5082,10 +7539,14 @@ def paper_report_lines(
     paper_selection_rows: list[dict[str, object]],
     feature_summary_rows: list[dict[str, object]],
     ml_metric_rows: list[dict[str, object]],
+    scenario_c_qos_event_rows: list[dict[str, object]],
     metric_window_rows: list[dict[str, object]],
     aggregation_note_rows: list[dict[str, object]],
     bfd_delay_rows: list[dict[str, object]],
     figure_usefulness_rows: list[dict[str, object]],
+    randomized_summary_rows: list[dict[str, object]],
+    randomized_lead_rows: list[dict[str, object]],
+    randomized_shift_rows: list[dict[str, object]],
     missing_optional: list[str],
     pipeline_statuses: dict[str, str],
     markdown: bool,
@@ -5103,10 +7564,7 @@ def paper_report_lines(
         values = [
             value
             for row in rows
-            if (
-                str(row.get("mechanism_family", "")).startswith("aimrce")
-                or row.get("mechanism_family") == "hybrid_bfd_like_aimrce_frr"
-            )
+            if is_final_aimrce_policy(str(row.get("mechanism_family", "")))
             if (value := parse_float(row.get("lead_time_mean"))) is not None
         ]
         return range_text(values) or "NA"
@@ -5118,10 +7576,7 @@ def paper_report_lines(
                 parse_float(row.get("activation_time_mean")),
             )
             for row in rows
-            if (
-                str(row.get("mechanism_family", "")).startswith("aimrce")
-                or row.get("mechanism_family") == "hybrid_bfd_like_aimrce_frr"
-            )
+            if is_final_aimrce_policy(str(row.get("mechanism_family", "")))
         ]
         policies = [item for item in policies if item[1] is not None]
         if not policies:
@@ -5138,6 +7593,34 @@ def paper_report_lines(
             policy_summary(rows),
             f"OSPF post-failure unobserved gaps: {paper_float(ospf.get('post_failure_unobserved_mean'), 1)}.",
             f"BFD+FRR activation / lead time: {paper_float(bfd.get('activation_time_mean'), 2)} s / {paper_float(bfd.get('lead_time_mean'), 2)} s.",
+        ]
+
+    def scenario_c_micro_summary() -> list[str]:
+        ai_rows = [
+            row for row in scenario_c_qos_event_rows
+            if str(row.get("mechanism_or_policy", "")) in {"Rule", "LogReg", "SVM", "Tree"}
+        ]
+        bfd_rows = [row for row in scenario_c_qos_event_rows if str(row.get("mechanism_or_policy", "")) == "BFD-like"]
+        ai_leads = [
+            value for row in ai_rows
+            if (value := parse_float(row.get("lead_time_before_qos_event_s"))) is not None
+        ]
+        ai_activation = [
+            value for row in ai_rows
+            if (value := parse_float(row.get("activation_time_s"))) is not None
+        ]
+        qos_times = [
+            value for row in scenario_c_qos_event_rows
+            if str(row.get("mechanism_or_policy", "")) == "OSPF"
+            if (value := parse_float(row.get("qos_event_time_s"))) is not None
+        ]
+        bfd_activation = mean_float_from_rows(bfd_rows, "activation_time_s")
+        bfd_qos_lead = mean_float_from_rows(bfd_rows, "lead_time_before_qos_event_s")
+        return [
+            f"AI-MRCE QoS-event lead-time range: {range_text(ai_leads) or 'not available'} s.",
+            f"AI-MRCE activation time range: {range_text(ai_activation) or 'not available'} s.",
+            f"Measured QoS brownout event time: {range_text(qos_times) or 'not available'} s.",
+            f"BFD+FRR activation / QoS-event lead time: {paper_float(bfd_activation, 2)} s / {paper_float(bfd_qos_lead, 2)} s.",
         ]
 
     def scenario_role_row(row: dict[str, object]) -> dict[str, object]:
@@ -5157,23 +7640,47 @@ def paper_report_lines(
         }
 
     overview_rows = [scenario_role_row(row) for row in cross_scenario_rows]
-    cost_feature_preview = [
-        row for row in feature_summary_rows
-        if row.get("scenario") == COST_AWARE_SCENARIO
-    ] or feature_summary_rows
+    runtime_feature_preview = paper_runtime_feature_importance_rows(feature_summary_rows)
+    ml_policy_timing_preview = ml_policy_timing_by_scenario_rows(ml_metric_rows, scenario_c_qos_event_rows)
     bfd_suspicious_count = sum(
         1 for row in bfd_delay_rows if str(row.get("suspicious_yes_no", "")).lower() == "yes"
     )
     if bfd_suspicious_count:
         bfd_delay_note = (
-            f"`tables/bfd_like_delay_diagnostic.csv` flags {bfd_suspicious_count} BFD+FRR row(s) for inspection. "
-            "Higher BFD-like delay remains interpretable only with transition timing, late arrivals, queueing, reordering, and packet-loss context."
+            "BFD+FRR delay outliers are documented in supplementary diagnostics and should be interpreted with transition timing, queueing, reordering, and packet-loss context."
         )
     else:
         bfd_delay_note = (
             "No suspicious BFD+FRR delay rows were found in `tables/bfd_like_delay_diagnostic.csv`; "
             "higher BFD-like delay is explainable by reactive transition timing, late arrivals, queueing, and reordering."
         )
+    randomized_ai_leads = [
+        value for row in randomized_summary_rows
+        if str(row.get("mechanism", "")).startswith("aimrce_")
+        and (value := parse_float(row.get("ai_lead_before_qos_event_s"))) is not None
+    ]
+    randomized_shift_events = [
+        value for row in randomized_shift_rows
+        if (value := parse_float(row.get("measured_qos_event_time_s"))) is not None
+    ]
+    randomized_positive_fraction = (
+        sum(1 for value in randomized_ai_leads if value > 0) / len(randomized_ai_leads)
+        if randomized_ai_leads else None
+    )
+    randomized_event_shifted = len(set(paper_float(value) for value in randomized_shift_events)) > 1
+    if not randomized_summary_rows:
+        randomized_verdict = "Inconclusive: randomized-onset outputs are not yet present."
+    elif randomized_event_shifted and randomized_positive_fraction is not None and randomized_positive_fraction >= 0.8:
+        randomized_verdict = "Robustness supported for this controlled onset-shift sweep."
+    elif randomized_event_shifted and randomized_positive_fraction:
+        randomized_verdict = "Partial robustness: the QoS event shifts, but some policy/onset cases are late or unavailable."
+    elif randomized_event_shifted:
+        randomized_verdict = (
+            "Timing-profile sensitivity detected: the QoS event shifts with onset, but the deployed policies "
+            "do not maintain positive QoS-event lead in this sweep."
+        )
+    else:
+        randomized_verdict = "Timing-profile sensitivity or incomplete event-shift evidence; interpret conservatively."
     instrumented_runs = sum(int(row.get("run_count") or 0) for row in instrumented_scenario_rows)
     main_figure_rows = [
         {
@@ -5181,31 +7688,55 @@ def paper_report_lines(
             "reason": row.get("reason", ""),
         }
         for row in paper_selection_rows
-        if row.get("main_or_supplementary") == "main"
+        if str(row.get("selected_for_final_core_yes_no", "")).lower() == "yes"
     ]
-    supplementary_artifacts = [
-        "`tables/generated_figure_manifest.csv` for every current figure.",
-        "`tables/figure_usefulness_table.csv` for figure category/usefulness classification.",
-        "`tables/paper_figure_selection.csv` for the final main-vs-supplementary selection.",
+    traceability_artifacts = [
+        "`tables/generated_figure_manifest.csv` for the compact current figure inventory.",
+        "`tables/figure_usefulness_table.csv` for current figure role/usefulness classification.",
+        "`tables/paper_figure_selection.csv` for final-core selection, metric scope, aggregation notes, and caveats.",
+        "`tables/final_policy_set.csv` for the final included/excluded mechanism policy set, including Hybrid's traceability-only status.",
         "`tables/main_results_compact.csv` for the full five-scenario compact table.",
+        "`tables/ml_policy_timing_by_scenario.csv` for compact paper-facing AI-MRCE runtime-policy activation/lead-time behavior.",
+        "`tables/paper_runtime_feature_importance.csv` for readable runtime-safe feature labels used in the main ML figure.",
         "`tables/final_networking_metrics_summary.csv` for full exact/proxy networking metrics.",
         "`tables/ml_metrics_by_scenario.csv` for policy-level model/network metrics.",
         "`tables/metric_window_definitions.csv` and `tables/metric_availability_by_scenario.csv` for metric validity boundaries.",
         "`tables/protection_family_aggregation_notes.csv` for AI-MRCE family aggregation rules.",
         "`tables/bfd_like_delay_diagnostic.csv` for BFD+FRR delay sanity checks.",
+        "`tables/event_timeline_summary.csv` for adverse-event, AI-MRCE activation, and BFD+FRR reaction timing.",
+        "`tables/scenario_b_tradeoff.csv` and `tables/scenario_b_tradeoff_metric_definition.csv` for the cost-aware benefit/cost trade-off.",
+        "`tables/policy_activation_matrix.csv` for final runtime-policy activation/non-activation across the three scenarios.",
+        "`tables/result_variability_summary.csv` for mean/std/min/max/count traceability over key by-run proxy metrics.",
+        "`tables/runtime_csv_lineage_for_manuscript.csv` for deployed runtime CSV lineage, feature order, threshold, and no-retraining status.",
+        "`tables/mechanism_taxonomy_for_manuscript.csv` for final baseline/reactive/proactive/ML/hybrid taxonomy.",
+        "`tables/metric_claim_boundary_for_manuscript.csv` for exact/proxy claim boundaries and caption caveats.",
+        "`reproducibility_appendix_notes.md` for manuscript appendix command and artifact references.",
+        "`manuscript_claim_guardrails.md` for allowed and forbidden manuscript claims.",
     ]
+    scenario_c_qos_detected = scenario_c_qos_event_available(scenario_c_qos_event_rows)
+    scenario_c_event_reference_note = (
+        "Scenario C is not interpreted only as a hard-failure timing scenario; current outputs provide measured QoS-event timestamps, so Scenario C lead-time figures are QoS-event referenced while hard-failure lead time remains available for traceability."
+        if scenario_c_qos_detected
+        else "Scenario C is not interpreted only as a hard-failure timing scenario; however, if a measured QoS-event timestamp is unavailable from current generated outputs, Scenario C lead-time figures remain explicitly hard-failure referenced."
+    )
+    scenario_c_limitation_note = (
+        "Scenario C QoS-event timing is an offline evaluation label derived from passive monitor/output telemetry, not a runtime input to AI-MRCE; it should be interpreted as a controlled congestion-brownout proxy rather than a universal congestion detector."
+        if scenario_c_qos_detected
+        else "Scenario C compact recording does not currently provide a validated measured QoS-event timestamp; activation/lead-time and network-impact summaries remain valid, but current Scenario C lead-time figures are hard-failure referenced unless `scenario_c_qos_event_timing.csv` reports detected QoS events."
+    )
 
     lines = [
         heading("Final AI-MRCE Results Summary", 1),
         "",
         heading("1. Executive Summary"),
-        "This paper-facing report uses three main scenario roles and keeps two additional validated cohorts as supplementary traceability. Simulator behavior, thresholds, route semantics, runtime model artifacts, metric definitions, and raw outcomes are unchanged.",
+        "This paper-facing report uses three unified mixed UDP/TCP main scenario roles with clearer scientific separation: Predictive Link-Failure Recovery, Cost-Aware Degraded-Backup Operation, and Congestion/Queue-Buildup Early Mitigation. OSPF timers, AI-MRCE thresholds, route semantics, BFD-like logic, FRR-like repair-route semantics, and metric definitions are unchanged.",
         "",
         bullets(
             [
-                "Core concept validation demonstrates the basic proactive-vs-reactive protection result.",
-                "Cost-aware backup is the primary model-policy differentiation scenario because early switching has a measurable opportunity cost.",
-                f"Instrumented mixed UDP/TCP transport impact is the strongest networking layer and has {instrumented_runs} summary-row runs.",
+                "The final paper-facing output uses six compact core figures: causal event timing, packet delivery, lead time, cost-aware trade-off, queue-buildup UDP quality, and runtime telemetry drivers.",
+                "Predictive Link-Failure Recovery validates proactive AI-MRCE+FRR activation before hard failure under a controlled brownout.",
+                "Cost-Aware Degraded-Backup Operation isolates the opportunity cost of early backup use and remains the primary policy-timing/differentiation scenario.",
+                f"Congestion/Queue-Buildup Early Mitigation is the strongest network-impact scenario; it keeps mixed UDP/TCP traffic while stressing the protected primary span with queue buildup and has {instrumented_runs} summary-row runs.",
                 "Sensitivity and the baseline mixed-transport cohort are retained as supplementary robustness/traceability layers.",
                 "Exact UDP loss, received-packet-conditioned delay, continuity gaps, recovery/disruption proxy, and TCP endpoint proxies are kept explicitly separated.",
             ]
@@ -5214,8 +7745,58 @@ def paper_report_lines(
         heading("2. Main Scenario Roles"),
         markdown_table(overview_rows, ["scenario", "role", "profiles", "run_count_total", "use"], max_rows=5),
         "",
+        heading("2a. Common Experimental Setup"),
+        bullets(
+            [
+                "All three main roles use the same RegionalBackbone topology, INET OSPF routing configuration, project-local BFD-like comparator, project-local FRR-like static repair-route semantics, and deployed four-feature AI-MRCE runtime vector.",
+                "All three use the unified mixed UDP/TCP workload: UDP app[0] remains the monitored/probe flow, staged UDP app[1..6] flows provide background/application load, and TCP app[7] is reported only through endpoint received-byte/goodput/progress proxies.",
+                "The protected primary span is coreNW -> coreNE, the hard disconnect remains at 125 s, and OSPF has no proactive activation event for lead-time figures.",
+                "Exact/proxy wording is common across the manuscript: UDP delay is received-packet-conditioned, recovery is a receiver-observed disruption proxy, and TCP stack loss/retransmission/finite-flow completion are non-claims unless explicitly exported.",
+            ]
+        ),
+        "",
+        heading("2b. Scenario-Specific Roles and Differences"),
+        bullets(
+            [
+                "Scenario A uses a controlled brownout/hard-failure profile for basic proactive-vs-reactive validation; it is not the primary policy-differentiation scenario.",
+                "Scenario B disables the core bottleneck and enables a mildly penalized southern backup corridor, so it isolates the opportunity cost of early repair-route activation.",
+                "Scenario C keeps the cost-aware mixed workload and repair corridor but enables the protected-span core bottleneck, making the primary path congestion-prone before hard failure and adding targeted INET telemetry for final network-impact figures.",
+                "Scenario C is a controlled congestion/queue-buildup stress test of the protected primary span.",
+            ]
+        ),
+        "",
+        heading("2c. Why Scenario C Is Not Just Instrumented Cost-Aware"),
+        bullets(
+            [
+                "Scenario C changes network behavior, not only measurement: enableCoreBottleneck=true replaces the protected coreNW-coreNE 100 Mbps primary span with the 10 Mbps bottleneck channel.",
+                "Scenario B and Scenario C intentionally share profiles, mechanisms, traffic, runtime models, and repair-route semantics so the difference is interpretable: B tests backup opportunity cost; C tests proactive mitigation of queue buildup and QoS collapse.",
+                "Scenario C is therefore the main network-impact layer, while Scenario B remains the cleaner policy-timing and trade-off layer.",
+            ]
+        ),
+        "",
+        heading("2d. Scenario-Specific Adverse Event Definition"),
+        bullets(
+            [
+                "Scenario A adverse event: hard link failure.",
+                "Scenario B adverse event: degraded-backup/cost-aware failure point; lead time must be interpreted with backup opportunity cost, reordering, and continuity diagnostics.",
+                "Scenario C adverse event: measured QoS/congestion brownout event when time-resolved extraction is available.",
+                "Existing hard-failure lead time remains available for traceability and is not removed.",
+                scenario_c_event_reference_note,
+                "`tables/scenario_c_qos_event_timing.csv` documents whether the QoS-event timestamp was detected for each Scenario C profile/mechanism/run.",
+            ]
+        ),
+        "",
+        heading("2e. Limitations by Scenario"),
+        bullets(
+            [
+                "Scenario A should not be used to claim broad model differentiation because the controlled brownout makes several AI-MRCE policies activate similarly.",
+                "Scenario B should be interpreted as an opportunity-cost/trade-off scenario, not as a full production TE utility optimization.",
+                scenario_c_limitation_note,
+            ]
+        ),
+        "",
         heading("3. Compact Main Results"),
-        "This table keeps only Core, Cost-aware, and Instrumented transport. AI-MRCE+FRR rows are family means across Rule, LogReg, SVM, Tree, and Hybrid; policy-level spread remains in `tables/ml_metrics_by_scenario.csv`.",
+        "This table keeps only the three final scenario roles. AI-MRCE+FRR rows are family means across Rule, LogReg, SVM, and Tree. Hybrid is retained only as legacy/future traceability and is excluded from final main figures, family means, and runtime-policy comparisons; policy-level spread remains in `tables/ml_metrics_by_scenario.csv`.",
         "",
         markdown_table(
             paper_subset_rows,
@@ -5232,100 +7813,286 @@ def paper_report_lines(
             max_rows=30,
         ),
         "",
-        heading("4. Core Concept Validation"),
-        "Purpose: minimal controlled proof that proactive AI-MRCE+FRR can reduce disruption compared with OSPF-only and BFD-like+FRR-like. It is not used for model differentiation.",
+        heading("4. Scenario A: Predictive Link-Failure Recovery"),
+        "Purpose: controlled hard-failure anticipation under the unified mixed UDP/TCP workload. This validates that AI-MRCE can activate FRR-like repair before a hard link failure and reduce service disruption compared with OSPF-only and BFD-like+FRR-like. It is not used for model differentiation and is not a pure routing-protocol benchmark.",
         "",
-        bullets(scenario_micro_summary(core_rows) + ["Interpretation: core validates the concept, but deterministic brownout telemetry makes policy timings overlap heavily."]),
+        bullets(scenario_micro_summary(core_rows) + ["Interpretation: this scenario validates proactive-vs-reactive recovery, but deterministic brownout telemetry makes policy timings overlap heavily."]),
         "",
-        heading("5. Cost-Aware Policy Differentiation"),
-        "Purpose: show that predictive switching is not free. The primary path is normally better; the backup path is QoS-capable but mildly penalized.",
+        heading("5. Scenario B: Cost-Aware Degraded-Backup Operation"),
+        "Purpose: show that predictive switching is not free under the shared mixed UDP/TCP workload. The primary path is normally better; the backup path is QoS-capable but mildly penalized, so early activation has a measurable opportunity cost.",
         "",
         bullets(scenario_micro_summary(cost_rows) + ["Interpretation: use this scenario for lead-time vs early backup use/reordering/delay trade-off and ML policy timing differentiation."]),
         "",
-        heading("6. Instrumented Mixed UDP/TCP Transport Impact"),
-        "Purpose: strongest publication networking layer. It uses the cost-aware mixed UDP/TCP setting with richer targeted INET telemetry while preserving scenario semantics.",
+        heading("6. Scenario C: Congestion/Queue-Buildup Early Mitigation"),
+        "Purpose: strongest publication networking layer. It keeps the mixed UDP/TCP workload but enables a protected-span bottleneck so staged traffic creates progressive queue buildup, delay growth, and service degradation before hard failure. AI-MRCE still uses only runtime-available telemetry.",
+        "Scenario C is a controlled congestion/queue-buildup stress test of the protected primary span.",
         "",
         bullets(
-            scenario_micro_summary(instrumented_scenario_rows)
+            scenario_c_micro_summary()
             + [
-                "Aggregate UDP loss, UDP delay percentiles, TCP endpoint goodput, and available TCP/queue summaries should be taken from the instrumented tables/figures.",
-                "TCP retransmissions, exact TCP loss, and finite flow-completion remain non-claims unless explicitly exported.",
+                "This scenario is primarily interpreted through aggregate UDP loss, received-packet UDP delay percentiles, TCP endpoint goodput/progress, and exported queue/TCP summaries.",
+                "It is no longer just a richer measurement copy of the degraded-backup scenario: its protected primary path is intentionally congestion-prone through the enabled core bottleneck.",
             ]
         ),
         "",
         heading("7. Supporting/Supplementary Scenarios"),
         bullets(
             [
-                "Sensitivity remains a robustness check across Mild slow, Moderate, and Severe fast profiles; it is supplementary because model-policy timings overlap strongly.",
-                "Transport baseline remains mixed-traffic traceability; it is superseded by instrumented transport for paper-facing networking metrics.",
+                "Sensitivity remains a robustness check across Mild slow, Moderate, and Severe fast profiles; it is supplementary because runtime-policy timings overlap strongly.",
+                "Transport baseline remains mixed-traffic traceability; it is superseded by the queue-buildup scenario for paper-facing networking metrics.",
             ]
         ),
         "",
-        heading("8. ML Feature and Policy Interpretation"),
+        heading("8. ML and AI-MRCE Runtime Policy Results"),
+        "Runtime-policy timing and telemetry-driver interpretation are reported separately. This avoids letting protection-family averages hide policy-specific behavior while keeping the paper figure set compact.",
+        "",
+        heading("8.1 AI-MRCE Runtime Policy Activation and Lead-Time Behavior", 3),
+        "The compact table below restores policy-specific activation and lead-time results for the three final scenario roles. Non-activation is kept as an explicit conservative policy outcome, not as missing data. Full rows are in `tables/ml_policy_timing_by_scenario.csv` and raw policy identifiers remain in `tables/ml_metrics_by_scenario.csv`.",
+        "",
+        "The final paper-facing AI-MRCE runtime-policy set includes one deterministic rule-based policy and three learned runtime ML policies: Rule, Logistic Regression, Linear SVM, and Shallow Tree. The pure ML policies are Logistic Regression, Linear SVM, and Shallow Tree; Rule is deterministic. Hybrid combines rule-based AI-MRCE activation with BFD-like reactive detection using first-trigger arbitration, so it is retained only as legacy/future traceability rather than a final main policy.",
+        "",
+        markdown_table(
+            ml_policy_timing_preview,
+            [
+                "scenario_short",
+                "profile",
+                "policy_or_model",
+                "activated_yes_no",
+                "activation_time_s",
+                "lead_time_s",
+                "notes",
+            ],
+            max_rows=18,
+        ),
+        "",
+        "The event timeline figure and `tables/policy_activation_matrix.csv` visualize the same policy-specific activation behavior across the final three scenario roles. The timeline uses one global 125 s hard-failure reference line; for Scenario C, the measured 89 s QoS brownout is the paper-facing adverse event and the hard-failure line is traceability-only. Non-activation is retained as a conservative outcome, not plotted as zero.",
+        "Scenario B exposes the strongest policy-level timing differences, while Scenario A and Scenario C produce early activation across all deployed AI-MRCE policies.",
+        "In the Scenario B trade-off figure, LogReg and SVM points are lightly jittered only for readability because their activation timing and service-benefit values are identical or nearly identical; Tree non-activation remains explicit in `tables/policy_activation_matrix.csv` and is not plotted as zero.",
+        "",
+        heading("8.2 Runtime Telemetry Drivers", 3),
         bullets(
             [
-                "Cost-aware feature importance is the preferred driver view because core/sensitivity ML scores are more saturated.",
-                "Instrumented offline ML audit artifacts are not required for the pruned main narrative; using cost-aware feature importance avoids implying a deployed runtime-v2 model.",
+                "The main runtime feature-weight figure shows only the four deployed runtime-safe telemetry inputs with readable display labels.",
+                "Extended/offline feature drivers are intentionally not plotted in the final core figure set because they are not runtime deployment claims.",
                 "Runtime AI-MRCE uses deployed policy artifacts only; no runtime v2 model export is claimed.",
                 "The deployed runtime feature vector is limited to queue length, receiver-side probe delay mean, receiver-side probe throughput, and receiver-side probe packet count.",
+                "The deployed policies reacted mainly to receiver-observed probe delay, packet-count continuity, and throughput; queue length remained available but had negligible exported importance in this setting.",
+                "The feature-driver values are a relative ranking across evaluated runtime policies, not physical units.",
                 "Tree non-activation in cost-aware/transport traces remains documented as conservative/no-bug behavior.",
                 "Family-level AI-MRCE figures can hide policy spread; use `tables/ml_metrics_by_scenario.csv` for policy claims.",
             ]
         ),
         "",
         markdown_table(
-            cost_feature_preview,
-            ["model", "rank", "feature", "importance_or_coefficient", "feature_category", "runtime_safe_candidate"],
-            max_rows=8,
+            runtime_feature_preview,
+            ["feature_display_name", "max_abs_importance_or_coefficient", "source_models", "interpretation"],
+            max_rows=4,
+        ),
+        "",
+        heading("8.3 ML Limitations and Non-Claims", 3),
+        bullets(
+            [
+                "The deployed LogReg, SVM, and Tree runtime artifacts use the same four-feature runtime vector and the existing 0.60 threshold; no retraining/export was performed by this reporting pass.",
+                "The existing runtime manifest identifies `RegionalBackboneCongestionDegradation` as the export/training config; this supports the Scenario C congestion/queue-buildup stress design, while the final paper-facing Scenario C evaluation excludes Hybrid and contains 90 outcome rows.",
+                "The rule-based policy is a deterministic baseline policy, while LogReg, SVM, and Tree are CSV-deployed runtime models. Hybrid combines project-local BFD-like detection with AI-MRCE logic and is excluded from final paper-facing policy comparisons.",
+                "Tree non-activation in the cost-aware degraded-backup role is a conservative runtime-policy result and remains visible in the runtime-policy timing table.",
+            ]
         ),
         "",
         heading("9. Runtime Telemetry Deployability"),
         bullets(
             [
                 "Runtime AI-MRCE decisions use compact telemetry that is observable before failure: protected-queue occupancy and active-probe receiver delay/throughput/count summaries.",
+                "Manuscript-ready no-oracle statement: AI-MRCE runtime decisions do not use hardFailureTime, QoS-event time, scenario phase labels, future labels, lead-time values, or recovery/disruption outcomes.",
                 "A real deployment would need telemetry adapters such as active probing or TWAMP-like probes, endpoint/application receive counters, SNMP/streaming telemetry/gNMI queue counters, or controller-collected path probes.",
-                "Hard-failure time, lead time, recovery time, post-failure gaps, activation-to-failure reordering, scenario phase labels, and scripted impairment settings are not runtime model inputs.",
+                "hardFailureTime is retained only for diagnostics, event reference, and offline lead-time calculation; it is not part of the runtime feature vector.",
+                "Scenario C QoS-event time is an offline evaluation label derived from passive monitor/output telemetry, not a runtime input to AI-MRCE.",
                 "Richer INET telemetry and telemetry-v2 extended columns are research/evaluation infrastructure unless separately validated and exported into new runtime artifacts.",
-                "The telemetry realism classification is recorded in `analysis/output/audit/telemetry_realism_classification.csv`.",
+                "Runtime telemetry deployability is documented in the methodology notes and kept separate from evaluation-only metrics in the final tables.",
             ]
         ),
         "",
-        heading("10. Metric Sanity and Exact/Proxy Boundaries"),
+        heading("10. Manuscript Claim Boundaries"),
+        bullets(
+            [
+                "Allowed: controlled OMNeT++/INET prototype validation of telemetry-driven proactive repair-route activation before scenario-specific adverse events.",
+                "Allowed: QoS improvement under the evaluated controlled scenarios and limited Scenario C robustness without retraining/export.",
+                "Allowed: project-local BFD-like+FRR-like reactive comparator and project-local FRR-like static repair-route abstraction.",
+                "Forbidden: universal failure prediction, production-grade congestion detector, standards-compliant BFD/FRR implementation, replacement for real BFD/FRR, exact TCP stack recovery, or statistical significance from deterministic scenarios.",
+                "Deterministic stress profiles support reproducibility and mechanism validation, not broad stochastic confidence; stochastic impairment and traffic seeds remain future work.",
+                "Scenario C has validated QoS-event timing and aggregate QoS impact, but dense QoS-over-time and detailed risk/action trace analysis require future compact vector export.",
+            ]
+        ),
+        "",
+        heading("11. Metric Sanity and Exact/Proxy Boundaries"),
         bullets(
             [
                 "Delay is computed over received UDP packets only. Low delay with high packet loss or continuity gaps does not imply better service quality.",
-                "OSPF can look low-delay because lost or unobserved packets do not contribute delay samples; prioritize delivery-delay and loss-recovery trade-off figures.",
+                "OSPF can look low-delay because lost or unobserved packets do not contribute delay samples; prioritize packet loss, queue-buildup UDP quality, and summary figures over delay alone.",
                 bfd_delay_note,
+                "Packet loss values are protection-family means; unified main scenarios use configured UDP-flow aggregates where INET metric summaries are generated, otherwise monitored UDP app[0] loss is reported explicitly. Run-level monitored app[0] loss variability is tabulated in `tables/result_variability_summary.csv`, but not plotted as error bars because it is not always the same metric scope as the aggregate packet-loss bars.",
+                "Lead time is averaged across the relevant profiles/runs; OSPF is omitted from lead-time bars because it has no proactive activation event. Scenario C uses measured QoS-event lead time; BFD+FRR has negative QoS-event lead because it reacts after the QoS brownout, so the lead-time figure shows it below zero rather than hiding it.",
+                "The Scenario C UDP quality figure is based on the congestion/queue-buildup mitigation scenario and should be read with the event timeline: AI-MRCE activates at 83 s, the measured QoS brownout event is at 89 s, and QoS-event timing is offline evaluation-only and not a runtime input.",
                 "Recovery time is a receiver-observed disruption/recovery proxy, not a direct routing-protocol convergence timer.",
                 "TCP goodput is an endpoint progress proxy. TCP RTT/cwnd summaries are used only where explicitly exported by INET; exact TCP loss, retransmission, and finite flow-completion remain non-claims.",
-                "Exact/proxy status and comparison windows are documented in `tables/metric_window_definitions.csv` and `tables/metric_availability_by_scenario.csv`; instrumented UDP loss is an aggregate across configured UDP apps where exported.",
+                "Exact/proxy status and comparison windows are documented in `tables/metric_window_definitions.csv` and `tables/metric_availability_by_scenario.csv`; UDP loss is an aggregate across configured UDP apps where exported.",
+                "Paper-facing figures use readable display labels; detailed CSVs preserve raw feature names and full traceability.",
             ]
         ),
         "",
-        heading("11. Recommended Main-Paper Figures"),
-        "Use only these 5-6 figures for the main manuscript narrative:",
+        heading("12. Recommended Main-Paper Figures"),
+        "Recommended main-paper figures:",
         "",
         markdown_table(main_figure_rows, ["figure", "reason"], max_rows=6),
         "",
-        "Complete scenario-level and diagnostic figure inventories are available in `tables/generated_figure_manifest.csv` and `tables/figure_usefulness_table.csv`.",
+        "Q1 reviewer interpretation: The core result is not only that AI-MRCE reduces aggregate loss/delay, but that the timing of AI-MRCE activation precedes the scenario-specific adverse event. This timing advantage explains the QoS improvements while Scenario B demonstrates that proactive activation must still be evaluated against backup-use cost and policy conservativeness.",
         "",
-        heading("12. Recommended Supplementary Artifacts"),
-        bullets(supplementary_artifacts),
+        "The old cross-scenario delivery-delay scatter is not part of the final core figure set because it is visually dense and mixes more context than the manuscript needs. The final core set is intentionally compact.",
+        "The previous protection-family summary and standalone runtime-policy lead-time figures are not selected as final core figures because the event timeline and Scenario B trade-off figure make the causal mechanism clearer.",
         "",
-        heading("13. Limitations and Non-Claims"),
+        heading("13. Supplementary Scenario C-R: Randomized QoS-Brownout Onset Robustness"),
+        "Purpose: test whether AI-MRCE activation follows runtime telemetry symptoms when the queue-buildup onset is shifted by deterministic scenario seeds.",
+        "",
+        bullets(
+            [
+                f"Scenario id: `{RANDOMIZED_ONSET_SCENARIO}`.",
+                "Design: same topology, mixed UDP/TCP workload, BFD-like/FRR-like semantics, thresholds, and runtime CSV artifacts as Scenario C; only the telemetry-producing congestion/onset schedule is shifted.",
+                "Runtime safety: randomized onset time, QoS-event time, hard-failure reference, lead time, and outcome labels are not runtime AI-MRCE inputs.",
+                f"Event shift detected: {'yes' if randomized_event_shifted else 'no or unavailable'}.",
+                f"AI-MRCE positive QoS-event lead fraction: {paper_float(randomized_positive_fraction, 3)}.",
+                f"Verdict: {randomized_verdict}",
+                "Use: supplementary robustness evidence only; it does not replace the main Scenario C results and does not support production generalization.",
+            ]
+        ),
+        "",
+        "Generated C-R artifacts include `tables/randomized_onset_scenario_summary.csv`, `tables/randomized_onset_lead_time_summary.csv`, `tables/randomized_onset_event_shift_validation.csv`, `tables/randomized_onset_claim_boundary.csv`, and supplementary figures under `supplementary_figures/`.",
+        "",
+        heading("14. Traceability Tables"),
+        "The final report avoids a large supplementary figure set. Detailed traceability remains in compact CSV tables:",
+        "",
+        bullets(traceability_artifacts),
+        "",
+        heading("15. Limitations and Non-Claims"),
         bullets(
             [
                 "No universal failure-prediction or production-grade ML generalization claim is made.",
+                "Hybrid reactive-predictive arbitration is not part of the final main mechanism set; it remains available only as traceability/future-work evidence.",
                 "BFD-like is project-local and not RFC-compliant BFD.",
                 "FRR-like static repair routes are project-local abstractions, not standards-compliant LFA/TI-LFA/RSVP-TE/OSPF FRR.",
-                "The first three cohorts are UDP-only; TCP claims apply only to endpoint proxy metrics and explicitly exported TCP summaries in the mixed transport-impact scenarios.",
+                "The three main paper-facing scenarios use a mixed UDP/TCP workload; TCP claims remain endpoint proxy claims only, not TCP-stack recovery claims.",
+                "TCP retransmissions, exact TCP loss, and finite TCP flow-completion remain non-claims unless explicitly exported by the current result artifacts.",
                 "Deterministic profiles support controlled reproducibility, not broad stochastic confidence.",
                 "Extended telemetry is research infrastructure and is not deployed as runtime AI-MRCE v2.",
+                "Detailed Scenario C QoS-over-time and risk/action traces require future compact vector export; current main claims use event timing plus aggregate QoS/network-impact evidence.",
             ]
         ),
         "",
     ]
     return "\n".join(lines)
+
+
+def reproducibility_appendix_notes_text() -> str:
+    final_figures = [
+        "paper_event_timeline.png",
+        "paper_packet_loss.png",
+        "paper_lead_time.png",
+        "paper_scenario_b_tradeoff.png",
+        "paper_queue_buildup_udp_quality.png",
+        "paper_runtime_feature_importance.png",
+    ]
+    final_tables = [
+        "event_timeline_summary.csv",
+        "main_results_paper_subset.csv",
+        "policy_activation_matrix.csv",
+        "scenario_b_tradeoff.csv",
+        "scenario_c_qos_event_timing.csv",
+        "paper_runtime_feature_importance.csv",
+        "runtime_csv_lineage_for_manuscript.csv",
+        "mechanism_taxonomy_for_manuscript.csv",
+        "metric_claim_boundary_for_manuscript.csv",
+        "result_variability_summary.csv",
+    ]
+    lines = [
+        "# Reproducibility Appendix Notes",
+        "",
+        "## Environment",
+        "",
+        "- Project path indicates OMNeT++ 6.3.0 Windows x86_64; verify and state the exact INET version from the local installation before submission.",
+        "- Host OS for this artifact set: Windows project workspace under the OMNeT++ sample tree.",
+        "- Generated outputs are local artifacts under `analysis/output`; source/config/runtime model files live outside that generated folder.",
+        "",
+        "## Final Scenario IDs",
+        "",
+        f"- Predictive Link-Failure Recovery: `{CORE_SCENARIO}`.",
+        f"- Cost-Aware Degraded-Backup Operation: `{COST_AWARE_SCENARIO}`.",
+        f"- Congestion/Queue-Buildup Early Mitigation: `{INSTRUMENTED_TRANSPORT_SCENARIO}`.",
+        "",
+        "## Final Main Figures",
+        "",
+        *[f"- `analysis/output/final_evaluation/main_figures/{name}`" for name in final_figures],
+        "",
+        "## Manuscript Tables",
+        "",
+        *[f"- `analysis/output/final_evaluation/tables/{name}`" for name in final_tables],
+        "",
+        "## Runtime CSV Artifacts",
+        "",
+        "- `simulations/regionalbackbone/aimrce_runtime_manifest.csv`.",
+        "- `simulations/regionalbackbone/aimrce_runtime_logreg.csv`.",
+        "- `simulations/regionalbackbone/aimrce_runtime_linsvm.csv`.",
+        "- `simulations/regionalbackbone/aimrce_runtime_shallow_tree.csv`.",
+        "",
+        "## Wrapper Commands",
+        "",
+        "- `cmd /c run_analysis.bat evaluate-results`.",
+        f"- `cmd /c run_analysis.bat pipeline-integrity --scenario {CORE_SCENARIO}`.",
+        f"- `cmd /c run_analysis.bat pipeline-integrity --scenario {COST_AWARE_SCENARIO}`.",
+        f"- `cmd /c run_analysis.bat pipeline-integrity --scenario {INSTRUMENTED_TRANSPORT_SCENARIO}`.",
+        f"- `cmd /c run_analysis.bat package-current-experiment --scenario {CORE_SCENARIO}`.",
+        f"- `cmd /c run_analysis.bat package-current-experiment --scenario {COST_AWARE_SCENARIO}`.",
+        f"- `cmd /c run_analysis.bat package-current-experiment --scenario {INSTRUMENTED_TRANSPORT_SCENARIO}`.",
+        "",
+        "## Generated-versus-source Policy",
+        "",
+        "- Generated figures, tables, reports, package outputs, and audit notes are under `analysis/output`.",
+        "- Raw OMNeT++ results under `results` are not copied into compact packages by default.",
+        "- Compact packages are intended for current experiment traceability; they do not include raw `.vec`, `.vci`, `.sca`, or `.elog` files unless explicitly requested.",
+        "",
+        "## Non-reproduction Notes",
+        "",
+        "- This appendix material does not require rerunning simulations.",
+        "- Runtime CSV artifacts were not retrained/exported by the final reporting pass.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def manuscript_claim_guardrails_text() -> str:
+    return "\n".join(
+        [
+            "# Manuscript Claim Guardrails",
+            "",
+            "## Allowed Claims",
+            "",
+            "- Controlled OMNeT++/INET prototype validation.",
+            "- Telemetry-driven proactive repair-route activation before scenario-specific adverse events.",
+            "- Earlier AI-MRCE activation than the project-local reactive comparator in the evaluated scenarios.",
+            "- QoS improvement under the evaluated controlled scenarios.",
+            "- Limited Scenario C robustness without runtime model retraining/export.",
+            "- Project-local BFD-like+FRR-like reactive comparator.",
+            "- Runtime AI-MRCE decisions based on the deployed four-feature telemetry vector.",
+            "",
+            "## Forbidden / Unsafe Claims",
+            "",
+            "- Universal failure prediction.",
+            "- Production-grade congestion detector.",
+            "- Standards-compliant BFD or FRR implementation.",
+            "- Replacement for real BFD, LFA, TI-LFA, RSVP-TE, OSPF FRR, or operational traffic engineering.",
+            "- Exact TCP stack recovery, exact TCP loss, retransmission, RTT, cwnd, or finite flow-completion claims.",
+            "- Statistical significance from deterministic scenario profiles.",
+            "- Generalized real-world deployment readiness.",
+            "- Runtime use of hardFailureTime, QoS-event time, scenario phase labels, future labels, lead time, or recovery outcomes.",
+        ]
+    ) + "\n"
 
 
 def create_audit_note(
@@ -5365,17 +8132,17 @@ def create_audit_note(
             "===================================================",
             "",
             "Files changed:",
-            "- analysis/evaluate_results.py",
-            "- analysis/clean_generated.py",
+            "- analysis/core/evaluate_results.py",
+            "- analysis/diagnostics/clean_generated.py",
             "- analysis/output/final_evaluation/* generated report artifacts",
             "",
             "Report sections changed:",
             "- Final report is now organized by scenario: core, sensitivity, cost-aware backup, and mixed UDP/TCP transport impact.",
-            "- Each scenario answers activation/lead-time, ML policy behavior, OSPF, BFD-like, AI-MRCE, network impact, and limitation questions.",
-            "- Cost-aware backup remains the primary policy-differentiation scenario while the mixed transport-impact cohort adds endpoint TCP progress evidence.",
+            "- Each scenario answers activation/lead-time, AI-MRCE runtime-policy behavior, OSPF, BFD-like, network impact, and limitation questions.",
+            "- Cost-aware degraded-backup operation remains the primary policy-differentiation scenario while the queue-buildup cohort adds congestion/QoS mitigation evidence.",
             "- Cross-scenario, ML feature-driver, network/application-impact, transport-impact, and TCP feasibility sections were added.",
             "- Figure list is split into main/scenario figures versus supplementary/diagnostic figures.",
-            "- Consistent metric view added across all four scenarios.",
+            "- Consistent metric view added across the final mixed UDP/TCP scenario roles.",
             "- TCP non-claim is explicit: only endpoint TCP progress proxies are reported; RTT/retransmission/cwnd/production TCP conclusions are not claimed.",
             "",
             "Shallow-tree conclusion:",
@@ -5426,7 +8193,7 @@ def create_audit_note(
             "- Source/config/runtime-model/raw-result files were not deleted.",
             "",
             "Remaining limitations:",
-            "- First three cohorts remain UDP-only; mixed transport-impact TCP metrics are endpoint proxies only.",
+            "- TCP metrics remain endpoint proxies only; exact TCP loss/retransmission/finite-flow claims are not made.",
             "- Shallow-tree non-activation is documented as conservative runtime behavior, not fixed.",
             "- Offline ML feature importance does not justify runtime v2 export by itself.",
             "- Scenario-level figures summarize existing metrics and do not add new metric definitions.",
@@ -5441,6 +8208,67 @@ def create_audit_note(
             "- cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_cost_aware_backup",
             "- cmd /c run_analysis.bat pipeline-integrity --scenario regionalbackbone_failure_detection_cost_aware_transport_impact",
             "",
+        ]
+    )
+
+
+def figure_evidence_chain_audit_text(
+    paper_selection_rows: list[dict[str, object]],
+    scenario_c_qos_event_rows: list[dict[str, object]],
+) -> str:
+    selected = [
+        row for row in paper_selection_rows
+        if str(row.get("selected_for_final_core_yes_no", "")).lower() == "yes"
+    ]
+    figure_lines = [
+        f"- {row.get('figure')}: {row.get('reason')} Exact/proxy caveat: {row.get('caveat')}"
+        for row in selected
+    ] or ["- None"]
+    scenario_c_detected = scenario_c_qos_event_available(scenario_c_qos_event_rows)
+    qos_times = [
+        value for row in scenario_c_qos_event_rows
+        if str(row.get("mechanism_or_policy", "")) == "OSPF"
+        if (value := parse_float(row.get("qos_event_time_s"))) is not None
+    ]
+    return "\n".join(
+        [
+            "Final Figure Evidence-Chain Audit",
+            "=================================",
+            "",
+            f"Generated: {datetime.now().isoformat(timespec='seconds')}",
+            "",
+            "Core evidence chain:",
+            "- AI-MRCE activation is interpreted against the scenario-specific adverse event.",
+            "- BFD+FRR is treated as the reactive comparator and is not expected to mitigate pre-failure QoS brownout without a detectable failure.",
+            "- Scenario B is interpreted as an opportunity-cost/trade-off scenario, not as a pure early-is-always-better result.",
+            "- Scenario C QoS-event timing is offline evaluation-only and is not a runtime AI-MRCE input.",
+            "",
+            "Final selected figures:",
+            *figure_lines,
+            "",
+            "Scenario C QoS-event reference:",
+            f"- QoS-event referenced: {'yes' if scenario_c_detected else 'no'}.",
+            f"- OSPF/control QoS-event time range: {range_text(qos_times) if qos_times else 'NA'} s.",
+            "- Hard-failure time remains traceability-only for Scenario C.",
+            "- Scenario C BFD+FRR negative QoS-event lead is shown in the lead-time figure when available; it means the reactive comparator acts after the QoS brownout event.",
+            "",
+            "Figure-specific reviewer checks:",
+            "- paper_event_timeline.png supports the causal timing claim; Scenario C is QoS-event referenced and the 125 s hard-failure line is traceability-only.",
+            "- paper_packet_loss.png supports packet-delivery impact; variability is tabulated in result_variability_summary.csv rather than plotted because run-level app[0] loss and configured-flow aggregate loss are not always the same scope.",
+            "- paper_lead_time.png supports proactive/reactive timing; BFD+FRR negative Scenario C QoS lead is plotted below zero and explained.",
+            "- paper_scenario_b_tradeoff.png supports opportunity-cost and policy differentiation; LogReg/SVM marker overlap is explained and lightly jittered only visually, while Tree non-activation remains tabled rather than plotted as zero.",
+            "- paper_queue_buildup_udp_quality.png supports Scenario C QoS impact; the figure notes AI-MRCE activation at 83 s and measured QoS brownout at 89 s.",
+            "- paper_runtime_feature_importance.png supports deployed runtime-feature interpretation; Queue length = 0 is kept and explained as negligible exported importance, not physical irrelevance.",
+            "",
+            "Scenario C QoS-over-time line-plot decision:",
+            "- Per-window Scenario C dataset rows exist, but the current compact rows do not contain sufficiently populated per-window UDP p95/delivery/queue series for a defensible line plot.",
+            "- Therefore `paper_queue_buildup_udp_quality.png` remains the selected Scenario C QoS figure, and future line plotting would require explicit per-window scalar/vector export for UDP p95 delay, delivery ratio, queue occupancy, and TCP endpoint goodput.",
+            "",
+            "Non-claims preserved:",
+            "- UDP p95 delay is received-packet-conditioned.",
+            "- TCP goodput is an endpoint progress proxy.",
+            "- Recovery/disruption remains receiver-observed proxy evidence.",
+            "- No exact TCP loss/retransmission or production-grade universal generalization claim is made.",
         ]
     )
 
@@ -5472,12 +8300,12 @@ def create_scenario_rationalization_audit(
             "",
             "Main scenarios retained:",
             f"- {CORE_SCENARIO}: core concept validation.",
-            f"- {COST_AWARE_SCENARIO}: cost-aware policy differentiation.",
-            f"- {INSTRUMENTED_TRANSPORT_SCENARIO}: instrumented mixed UDP/TCP transport impact.",
+            f"- {COST_AWARE_SCENARIO}: cost-aware degraded-backup operation and policy differentiation.",
+            f"- {INSTRUMENTED_TRANSPORT_SCENARIO}: congestion/queue-buildup early mitigation.",
             "",
             "Scenarios moved to supplementary/traceability:",
             f"- {SENSITIVITY_SCENARIO}: robustness/supporting evidence; policy timings overlap strongly.",
-            f"- {TRANSPORT_SCENARIO}: baseline mixed-traffic traceability; superseded by instrumented transport for paper-facing networking metrics.",
+            f"- {TRANSPORT_SCENARIO}: baseline mixed-traffic traceability; superseded by the queue-buildup scenario for paper-facing networking metrics.",
             "",
             "Figures retained as main:",
             *main_figures,
@@ -5532,7 +8360,7 @@ def create_inet_metric_availability_audit(
             "Inspected project/INET elements:",
             "- StandardHost-based hostA and hostB application stacks in simulations/regionalbackbone/RegionalBackbone.ned.",
             "- UdpBasicApp/UdpSink application statistics configured in simulations/regionalbackbone/omnetpp.ini.",
-            "- TcpBasicClientApp/TcpGenericServerApp endpoint statistics configured for the mixed transport-impact cohort.",
+            "- TcpBasicClientApp/TcpGenericServerApp endpoint statistics configured for unified mixed UDP/TCP cohorts.",
             "- Ethernet queue statistics on the protected bottleneck/cost-aware span, especially queueLength, queueBitLength, and queueingTime.",
             "- LinkDegradationController appliedDelay/appliedPacketErrorRate vectors.",
             "- AiMrceController activation, risk, queue, throughput, BFD-like, and repair-route scalars/vectors already parsed by the analysis pipeline.",
@@ -5595,7 +8423,7 @@ def create_final_networking_metrics_audit(
             "============================================",
             "",
             "Files changed:",
-            "- analysis/evaluate_results.py",
+            "- analysis/core/evaluate_results.py",
             "- analysis/output/final_evaluation/* generated report artifacts",
             "- analysis/output/audit/inet_metric_availability_audit.txt",
             "- analysis/output/audit/final_networking_metrics_inet_audit_applied.txt",
@@ -5646,13 +8474,14 @@ def main() -> None:
     start = time.perf_counter()
     args = parse_args()
     output_dir = args.output_dir if args.output_dir.is_absolute() else PROJECT_ROOT / args.output_dir
-    global FINAL_DIR, TABLES_DIR, FIGURES_DIR, MAIN_FIGURES_DIR, SCENARIO_FIGURES_DIR, DIAGNOSTIC_FIGURES_DIR
+    global FINAL_DIR, TABLES_DIR, FIGURES_DIR, MAIN_FIGURES_DIR, SCENARIO_FIGURES_DIR, DIAGNOSTIC_FIGURES_DIR, SUPPLEMENTARY_FIGURES_DIR
     FINAL_DIR = output_dir
     TABLES_DIR = FINAL_DIR / "tables"
     FIGURES_DIR = FINAL_DIR / "figures"
     MAIN_FIGURES_DIR = FINAL_DIR / "main_figures"
     SCENARIO_FIGURES_DIR = FINAL_DIR / "scenario_figures"
     DIAGNOSTIC_FIGURES_DIR = FINAL_DIR / "diagnostic_figures"
+    SUPPLEMENTARY_FIGURES_DIR = FINAL_DIR / "supplementary_figures"
 
     missing_optional: list[str] = []
     input_paths = [
@@ -5661,6 +8490,9 @@ def main() -> None:
         OUTCOMES_DIR / f"{CORE_SCENARIO}_summary.csv",
         NETWORK_IMPACT_DIR / f"{CORE_SCENARIO}_network_impact_summary.csv",
         NETWORK_IMPACT_DIR / f"{CORE_SCENARIO}_network_impact_by_run.csv",
+        NETWORK_IMPACT_DIR / f"{CORE_SCENARIO}_transport_summary.csv",
+        NETWORK_IMPACT_DIR / f"{CORE_SCENARIO}_transport_by_run.csv",
+        NETWORK_IMPACT_DIR / f"{CORE_SCENARIO}_inet_metrics_summary.csv",
         ML_AUDIT_DIR / f"{CORE_SCENARIO}_offline_ml_benchmark.csv",
         ML_AUDIT_DIR / f"{CORE_SCENARIO}_offline_decision_timing.csv",
         ML_AUDIT_DIR / f"{CORE_SCENARIO}_feature_importance.csv",
@@ -5684,6 +8516,9 @@ def main() -> None:
         "network": NETWORK_IMPACT_DIR / f"{COST_AWARE_SCENARIO}_network_impact_summary.csv",
         "network_by_run": NETWORK_IMPACT_DIR / f"{COST_AWARE_SCENARIO}_network_impact_by_run.csv",
         "backup_cost": NETWORK_IMPACT_DIR / f"{COST_AWARE_SCENARIO}_backup_path_cost_summary.csv",
+        "transport_summary": NETWORK_IMPACT_DIR / f"{COST_AWARE_SCENARIO}_transport_summary.csv",
+        "transport_by_run": NETWORK_IMPACT_DIR / f"{COST_AWARE_SCENARIO}_transport_by_run.csv",
+        "inet_metrics": NETWORK_IMPACT_DIR / f"{COST_AWARE_SCENARIO}_inet_metrics_summary.csv",
         "ml": ML_AUDIT_DIR / f"{COST_AWARE_SCENARIO}_offline_ml_benchmark.csv",
         "timing": ML_AUDIT_DIR / f"{COST_AWARE_SCENARIO}_offline_decision_timing.csv",
         "importance": ML_AUDIT_DIR / f"{COST_AWARE_SCENARIO}_feature_importance.csv",
@@ -5726,20 +8561,40 @@ def main() -> None:
         "integrity": DEBUG_DIR / f"pipeline_integrity_{INSTRUMENTED_TRANSPORT_SCENARIO}.txt",
     }
     input_paths.extend(instrumented_paths.values())
+    randomized_paths = {
+        "outcome": OUTCOMES_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_outcome_summary.csv",
+        "headline": OUTCOMES_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_headline_summary.csv",
+        "summary": OUTCOMES_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_summary.csv",
+        "network": NETWORK_IMPACT_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_network_impact_summary.csv",
+        "network_by_run": NETWORK_IMPACT_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_network_impact_by_run.csv",
+        "backup_cost": NETWORK_IMPACT_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_backup_path_cost_summary.csv",
+        "transport_summary": NETWORK_IMPACT_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_transport_summary.csv",
+        "transport_by_run": NETWORK_IMPACT_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_transport_by_run.csv",
+        "inet_metrics": NETWORK_IMPACT_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_inet_metrics_summary.csv",
+        "inet_metrics_by_run": NETWORK_IMPACT_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_inet_metrics_by_run.csv",
+        "integrity": DEBUG_DIR / f"pipeline_integrity_{RANDOMIZED_ONSET_SCENARIO}.txt",
+    }
+    input_paths.extend(randomized_paths.values())
 
     core_outcome = read_csv_optional(input_paths[0], missing_optional)
-    sensitivity_outcome = read_csv_optional(input_paths[9], missing_optional)
+    sensitivity_outcome = read_csv_optional(input_paths[12], missing_optional)
     core_network = read_csv_optional(input_paths[3], missing_optional)
-    sensitivity_network = read_csv_optional(input_paths[12], missing_optional)
-    core_ml = read_csv_optional(input_paths[5], missing_optional)
-    sensitivity_ml = read_csv_optional(input_paths[14], missing_optional)
-    core_timing = read_csv_optional(input_paths[6], missing_optional)
-    sensitivity_timing = read_csv_optional(input_paths[15], missing_optional)
-    core_importance = read_csv_optional(input_paths[7], missing_optional)
-    sensitivity_importance = read_csv_optional(input_paths[16], missing_optional)
+    core_network_by_run = read_csv_optional(input_paths[4], missing_optional)
+    core_endpoint = read_csv_optional(input_paths[5], missing_optional)
+    core_inet_metrics = read_csv_optional(input_paths[7], missing_optional)
+    sensitivity_network = read_csv_optional(input_paths[15], missing_optional)
+    core_ml = read_csv_optional(input_paths[8], missing_optional)
+    sensitivity_ml = read_csv_optional(input_paths[17], missing_optional)
+    core_timing = read_csv_optional(input_paths[9], missing_optional)
+    sensitivity_timing = read_csv_optional(input_paths[18], missing_optional)
+    core_importance = read_csv_optional(input_paths[10], missing_optional)
+    sensitivity_importance = read_csv_optional(input_paths[19], missing_optional)
     cost_outcome = read_csv_optional(cost_paths["outcome"], missing_optional)
     cost_network = read_csv_optional(cost_paths["network"], missing_optional)
+    cost_network_by_run = read_csv_optional(cost_paths["network_by_run"], missing_optional)
     cost_backup_cost = read_csv_optional(cost_paths["backup_cost"], missing_optional)
+    cost_endpoint = read_csv_optional(cost_paths["transport_summary"], missing_optional)
+    cost_inet_metrics = read_csv_optional(cost_paths["inet_metrics"], missing_optional)
     cost_ml = read_csv_optional(cost_paths["ml"], missing_optional)
     cost_timing = read_csv_optional(cost_paths["timing"], missing_optional)
     cost_importance = read_csv_optional(cost_paths["importance"], missing_optional)
@@ -5754,34 +8609,48 @@ def main() -> None:
     transport_importance = read_csv_optional(transport_paths["importance"], missing_optional)
     instrumented_outcome = read_csv_optional(instrumented_paths["outcome"], missing_optional)
     instrumented_network = read_csv_optional(instrumented_paths["network"], missing_optional)
+    instrumented_network_by_run = read_csv_optional(instrumented_paths["network_by_run"], missing_optional)
     instrumented_backup_cost = read_csv_optional(instrumented_paths["backup_cost"], missing_optional)
     instrumented_endpoint = read_csv_optional(instrumented_paths["transport_summary"], missing_optional)
     instrumented_inet_metrics = read_csv_optional(instrumented_paths["inet_metrics"], missing_optional)
     instrumented_ml = read_csv_optional(instrumented_paths["ml"], missing_optional)
     instrumented_timing = read_csv_optional(instrumented_paths["timing"], missing_optional)
     instrumented_importance = read_csv_optional(instrumented_paths["importance"], missing_optional)
-    core_classification = read_text_optional(input_paths[8], missing_optional)
-    sensitivity_classification = read_text_optional(input_paths[17], missing_optional)
+    randomized_outcome = read_csv_optional(randomized_paths["outcome"], missing_optional)
+    randomized_network = read_csv_optional(randomized_paths["network"], missing_optional)
+    randomized_network_by_run = read_csv_optional(randomized_paths["network_by_run"], missing_optional)
+    randomized_backup_cost = read_csv_optional(randomized_paths["backup_cost"], missing_optional)
+    randomized_transport_summary = read_csv_optional(randomized_paths["transport_summary"], missing_optional)
+    randomized_transport_by_run = read_csv_optional(randomized_paths["transport_by_run"], missing_optional)
+    randomized_inet_metrics = read_csv_optional(randomized_paths["inet_metrics"], missing_optional)
+    randomized_inet_metrics_by_run = read_csv_optional(randomized_paths["inet_metrics_by_run"], missing_optional)
+    core_classification = read_text_optional(input_paths[11], missing_optional)
+    sensitivity_classification = read_text_optional(input_paths[20], missing_optional)
     cost_classification = read_text_optional(cost_paths["classification"], missing_optional)
     transport_classification = read_text_optional(transport_paths["classification"], missing_optional)
     instrumented_classification = read_text_optional(instrumented_paths["classification"], missing_optional)
-    core_integrity = read_text_optional(input_paths[18], missing_optional)
-    sensitivity_integrity = read_text_optional(input_paths[19], missing_optional)
+    core_integrity = read_text_optional(input_paths[21], missing_optional)
+    sensitivity_integrity = read_text_optional(input_paths[22], missing_optional)
     cost_integrity = read_text_optional(cost_paths["integrity"], missing_optional)
     transport_integrity = read_text_optional(transport_paths["integrity"], missing_optional)
     instrumented_integrity = read_text_optional(instrumented_paths["integrity"], missing_optional)
+    randomized_integrity = read_text_optional(randomized_paths["integrity"], missing_optional)
 
     # Register optional inputs that are useful provenance but not required by the current calculations.
     for optional_path in [
         input_paths[1],
         input_paths[2],
         input_paths[4],
-        input_paths[10],
-        input_paths[11],
+        input_paths[6],
+        input_paths[7],
         input_paths[13],
+        input_paths[14],
+        input_paths[16],
         cost_paths["headline"],
         cost_paths["summary"],
         cost_paths["network_by_run"],
+        cost_paths["transport_by_run"],
+        cost_paths["inet_metrics"],
         transport_paths["headline"],
         transport_paths["summary"],
         transport_paths["network_by_run"],
@@ -5791,6 +8660,12 @@ def main() -> None:
         instrumented_paths["network_by_run"],
         instrumented_paths["transport_by_run"],
         instrumented_paths["inet_metrics"],
+        randomized_paths["headline"],
+        randomized_paths["summary"],
+        randomized_paths["network_by_run"],
+        randomized_paths["transport_by_run"],
+        randomized_paths["inet_metrics"],
+        randomized_paths["inet_metrics_by_run"],
     ]:
         if not optional_path.exists():
             missing_optional.append(str(optional_path.relative_to(PROJECT_ROOT)))
@@ -5900,9 +8775,41 @@ def main() -> None:
         },
         network_rows,
         backup_cost_rows,
-        transport_endpoint + instrumented_endpoint,
-        instrumented_inet_metrics,
+        core_endpoint + cost_endpoint + transport_endpoint + instrumented_endpoint,
+        core_inet_metrics + cost_inet_metrics + instrumented_inet_metrics,
         udp_loss_rows,
+    )
+    instrumented_extended_dataset_rows = read_csv_optional(
+        DATASETS_DIR / f"{INSTRUMENTED_TRANSPORT_SCENARIO}_extended_dataset.csv",
+        missing_optional,
+    )
+    scenario_c_qos_event_rows = scenario_c_qos_event_timing_rows(
+        instrumented_outcome,
+        instrumented_extended_dataset_rows,
+    )
+    randomized_extended_dataset_rows = read_csv_optional(
+        DATASETS_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_extended_dataset.csv",
+        missing_optional,
+    )
+    randomized_qos_event_rows = scenario_c_qos_event_timing_rows(
+        randomized_outcome,
+        randomized_extended_dataset_rows,
+        RANDOMIZED_ONSET_SCENARIO,
+        PAPER_SCENARIO_ROLES[RANDOMIZED_ONSET_SCENARIO],
+    )
+    randomized_summary_rows = randomized_onset_scenario_summary_rows(
+        randomized_outcome,
+        randomized_qos_event_rows,
+        randomized_inet_metrics_by_run,
+        randomized_transport_by_run,
+    )
+    randomized_lead_rows = randomized_onset_lead_time_summary_rows(randomized_summary_rows)
+    randomized_shift_rows = randomized_onset_event_shift_validation_rows(randomized_summary_rows)
+    randomized_claim_boundary_rows = randomized_onset_claim_boundary_rows()
+    scenario_c_qos_event_available_flag = scenario_c_qos_event_available(scenario_c_qos_event_rows)
+    final_networking_rows_for_paper = final_rows_with_scenario_c_qos_lead_time(
+        final_networking_rows,
+        scenario_c_qos_event_rows,
     )
     shallow_tree_audit, shallow_tree_audit_text = create_shallow_tree_activation_audit(
         cost_outcome,
@@ -5923,6 +8830,8 @@ def main() -> None:
         "transport_extended": dataset_shape(DATASETS_DIR / f"{TRANSPORT_SCENARIO}_extended_dataset.csv", missing_optional),
         "instrumented_transport_baseline": dataset_shape(DATASETS_DIR / f"{INSTRUMENTED_TRANSPORT_SCENARIO}_dataset.csv", missing_optional),
         "instrumented_transport_extended": dataset_shape(DATASETS_DIR / f"{INSTRUMENTED_TRANSPORT_SCENARIO}_extended_dataset.csv", missing_optional),
+        "randomized_onset_baseline": dataset_shape(DATASETS_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_dataset.csv", missing_optional),
+        "randomized_onset_extended": dataset_shape(DATASETS_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_extended_dataset.csv", missing_optional),
     }
     feature_counts = {
         "core": parse_feature_classification(core_classification),
@@ -5937,14 +8846,21 @@ def main() -> None:
         COST_AWARE_SCENARIO: pipeline_status(cost_integrity),
         TRANSPORT_SCENARIO: pipeline_status(transport_integrity),
         INSTRUMENTED_TRANSPORT_SCENARIO: pipeline_status(instrumented_integrity),
+        RANDOMIZED_ONSET_SCENARIO: pipeline_status(randomized_integrity),
     }
     metric_availability_rows = metric_availability_by_scenario_rows(final_networking_rows)
     metric_window_rows = metric_window_definition_rows()
     aggregation_note_rows = protection_family_aggregation_rows()
     bfd_delay_rows = bfd_like_delay_diagnostic_rows(final_networking_rows)
     main_results_rows = main_results_compact_rows(final_networking_rows)
-    main_results_paper_rows = main_results_paper_subset_rows(final_networking_rows)
+    main_results_paper_rows = main_results_paper_subset_rows(
+        final_networking_rows_for_paper,
+        scenario_c_qos_event_available_flag,
+    )
     paper_figure_rows = paper_figure_selection_rows()
+    paper_runtime_feature_rows = paper_runtime_feature_importance_rows(feature_summary_rows)
+    mechanism_classification_rows = mechanism_policy_classification_rows()
+    final_policy_rows = final_policy_set_rows()
     ml_metric_rows = ml_metrics_by_scenario_rows(
         final_networking_rows,
         {
@@ -5955,6 +8871,23 @@ def main() -> None:
             INSTRUMENTED_TRANSPORT_SCENARIO: instrumented_outcome,
         },
     )
+    ml_policy_timing_rows = ml_policy_timing_by_scenario_rows(ml_metric_rows, scenario_c_qos_event_rows)
+    event_timeline = event_timeline_rows(
+        final_networking_rows_for_paper,
+        ml_policy_timing_rows,
+        scenario_c_qos_event_rows,
+    )
+    scenario_b_tradeoff = scenario_b_tradeoff_rows(ml_metric_rows, final_networking_rows_for_paper)
+    scenario_b_tradeoff_definition = scenario_b_tradeoff_metric_definition_rows()
+    policy_activation_matrix = policy_activation_matrix_rows(ml_policy_timing_rows)
+    result_variability_rows = result_variability_summary_rows(
+        core_network_by_run + cost_network_by_run + instrumented_network_by_run,
+        scenario_c_qos_event_rows,
+        udp_loss_rows,
+    )
+    runtime_csv_lineage_rows = runtime_csv_lineage_for_manuscript_rows()
+    mechanism_taxonomy_rows = mechanism_taxonomy_for_manuscript_rows()
+    metric_claim_boundary_rows = metric_claim_boundary_for_manuscript_rows()
 
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
     deleted_figure_files = clear_generated_final_evaluation_images()
@@ -5990,6 +8923,23 @@ def main() -> None:
         TABLES_DIR / "main_results_compact.csv",
         TABLES_DIR / "main_results_paper_subset.csv",
         TABLES_DIR / "paper_figure_selection.csv",
+        TABLES_DIR / "paper_runtime_feature_importance.csv",
+        TABLES_DIR / "ml_policy_timing_by_scenario.csv",
+        TABLES_DIR / "mechanism_policy_classification.csv",
+        TABLES_DIR / "final_policy_set.csv",
+        TABLES_DIR / "scenario_c_qos_event_timing.csv",
+        TABLES_DIR / "event_timeline_summary.csv",
+        TABLES_DIR / "scenario_b_tradeoff.csv",
+        TABLES_DIR / "scenario_b_tradeoff_metric_definition.csv",
+        TABLES_DIR / "policy_activation_matrix.csv",
+        TABLES_DIR / "result_variability_summary.csv",
+        TABLES_DIR / "runtime_csv_lineage_for_manuscript.csv",
+        TABLES_DIR / "mechanism_taxonomy_for_manuscript.csv",
+        TABLES_DIR / "metric_claim_boundary_for_manuscript.csv",
+        TABLES_DIR / "randomized_onset_scenario_summary.csv",
+        TABLES_DIR / "randomized_onset_lead_time_summary.csv",
+        TABLES_DIR / "randomized_onset_event_shift_validation.csv",
+        TABLES_DIR / "randomized_onset_claim_boundary.csv",
     ]
     atomic_write_csv(tables[0], core_rows, CORE_TABLE_FIELDS)
     atomic_write_csv(tables[1], sensitivity_rows, SENSITIVITY_TABLE_FIELDS)
@@ -6020,6 +8970,23 @@ def main() -> None:
     atomic_write_csv(tables[28], main_results_rows, MAIN_RESULTS_COMPACT_FIELDS)
     atomic_write_csv(tables[29], main_results_paper_rows, MAIN_RESULTS_PAPER_SUBSET_FIELDS)
     atomic_write_csv(tables[30], paper_figure_rows, PAPER_FIGURE_SELECTION_FIELDS)
+    atomic_write_csv(tables[31], paper_runtime_feature_rows, PAPER_RUNTIME_FEATURE_IMPORTANCE_FIELDS)
+    atomic_write_csv(tables[32], ml_policy_timing_rows, ML_POLICY_TIMING_BY_SCENARIO_FIELDS)
+    atomic_write_csv(tables[33], mechanism_classification_rows, MECHANISM_POLICY_CLASSIFICATION_FIELDS)
+    atomic_write_csv(tables[34], final_policy_rows, FINAL_POLICY_SET_FIELDS)
+    atomic_write_csv(tables[35], scenario_c_qos_event_rows, SCENARIO_C_QOS_EVENT_TIMING_FIELDS)
+    atomic_write_csv(tables[36], event_timeline, EVENT_TIMELINE_FIELDS)
+    atomic_write_csv(tables[37], scenario_b_tradeoff, SCENARIO_B_TRADEOFF_FIELDS)
+    atomic_write_csv(tables[38], scenario_b_tradeoff_definition, SCENARIO_B_TRADEOFF_METRIC_DEFINITION_FIELDS)
+    atomic_write_csv(tables[39], policy_activation_matrix, POLICY_ACTIVATION_MATRIX_FIELDS)
+    atomic_write_csv(tables[40], result_variability_rows, RESULT_VARIABILITY_FIELDS)
+    atomic_write_csv(tables[41], runtime_csv_lineage_rows, RUNTIME_CSV_LINEAGE_FIELDS)
+    atomic_write_csv(tables[42], mechanism_taxonomy_rows, MECHANISM_TAXONOMY_MANUSCRIPT_FIELDS)
+    atomic_write_csv(tables[43], metric_claim_boundary_rows, METRIC_CLAIM_BOUNDARY_FIELDS)
+    atomic_write_csv(tables[44], randomized_summary_rows, RANDOMIZED_ONSET_SCENARIO_SUMMARY_FIELDS)
+    atomic_write_csv(tables[45], randomized_lead_rows, RANDOMIZED_ONSET_LEAD_TIME_SUMMARY_FIELDS)
+    atomic_write_csv(tables[46], randomized_shift_rows, RANDOMIZED_ONSET_EVENT_SHIFT_VALIDATION_FIELDS)
+    atomic_write_csv(tables[47], randomized_claim_boundary_rows, RANDOMIZED_ONSET_CLAIM_BOUNDARY_FIELDS)
     scenario_instrumented_table = TABLES_DIR / "scenario_transport_instrumented_summary.csv"
     instrumented_endpoint_table = TABLES_DIR / "instrumented_transport_endpoint_summary.csv"
     tables.extend([scenario_instrumented_table, instrumented_endpoint_table])
@@ -6038,15 +9005,31 @@ def main() -> None:
         importance_rows,
         feature_summary_rows,
         stability_rows,
-        final_networking_rows,
+        final_networking_rows_for_paper,
         ml_metric_rows,
+        event_timeline,
+        scenario_b_tradeoff,
         transport_endpoint + instrumented_endpoint,
+        scenario_c_qos_event_rows,
+        randomized_summary_rows,
         missing_optional,
     )
     missing_optional = paper_relevant_missing_optional(missing_optional)
     figure_usefulness_rows = organize_figures(figure_paths)
     atomic_write_csv(tables[10], figure_usefulness_rows, FIGURE_USEFULNESS_FIELDS)
     atomic_write_csv(tables[24], figure_usefulness_rows, FIGURE_MANIFEST_FIELDS)
+    atomic_write_text(
+        AUDIT_DIR / "final_scenario_c_qos_event_extractor_applied.txt",
+        scenario_c_qos_event_audit_text(scenario_c_qos_event_rows),
+    )
+    atomic_write_text(
+        AUDIT_DIR / "final_figure_evidence_chain_audit.txt",
+        figure_evidence_chain_audit_text(paper_figure_rows, scenario_c_qos_event_rows),
+    )
+    atomic_write_text(
+        AUDIT_DIR / "randomized_onset_robustness_audit.txt",
+        randomized_onset_audit_text(randomized_summary_rows, randomized_lead_rows, randomized_shift_rows),
+    )
 
     md_text = paper_report_lines(
         core_rows,
@@ -6060,10 +9043,14 @@ def main() -> None:
         paper_figure_rows,
         feature_summary_rows,
         ml_metric_rows,
+        scenario_c_qos_event_rows,
         metric_window_rows,
         aggregation_note_rows,
         bfd_delay_rows,
         figure_usefulness_rows,
+        randomized_summary_rows,
+        randomized_lead_rows,
+        randomized_shift_rows,
         missing_optional,
         pipeline_statuses,
         markdown=True,
@@ -6080,48 +9067,24 @@ def main() -> None:
         paper_figure_rows,
         feature_summary_rows,
         ml_metric_rows,
+        scenario_c_qos_event_rows,
         metric_window_rows,
         aggregation_note_rows,
         bfd_delay_rows,
         figure_usefulness_rows,
+        randomized_summary_rows,
+        randomized_lead_rows,
+        randomized_shift_rows,
         missing_optional,
         pipeline_statuses,
         markdown=False,
     )
     atomic_write_text(FINAL_DIR / "final_evaluation_report.md", md_text)
     atomic_write_text(FINAL_DIR / "final_evaluation_report.txt", txt_text)
-    atomic_write_text(AUDIT_DIR / "shallow_tree_cost_aware_activation_audit.txt", shallow_tree_audit_text)
+    atomic_write_text(FINAL_DIR / "reproducibility_appendix_notes.md", reproducibility_appendix_notes_text())
+    atomic_write_text(FINAL_DIR / "manuscript_claim_guardrails.md", manuscript_claim_guardrails_text())
 
     elapsed = time.perf_counter() - start
-    validation_hint = (
-        "Generated by analysis/evaluate_results.py from existing compact artifacts; "
-        f"elapsed {elapsed:.2f}s."
-    )
-    audit_text = create_audit_note(
-        input_paths,
-        tables,
-        figure_paths,
-        figure_usefulness_rows,
-        shallow_tree_audit,
-        missing_optional,
-        validation_hint,
-        deleted_figure_files,
-    )
-    inet_metric_audit = create_inet_metric_availability_audit(final_networking_rows, udp_loss_rows)
-    final_networking_audit = create_final_networking_metrics_audit(tables, figure_paths, final_networking_rows, validation_hint)
-    scenario_rationalization_audit = create_scenario_rationalization_audit(
-        figure_usefulness_rows,
-        paper_figure_rows,
-        missing_optional,
-        validation_hint,
-    )
-    atomic_write_text(AUDIT_DIR / "final_evaluation_scientific_refinement_applied.txt", audit_text)
-    atomic_write_text(AUDIT_DIR / "final_evaluation_readability_cleanup_applied.txt", audit_text)
-    atomic_write_text(AUDIT_DIR / "final_evaluation_scenario_level_rework_applied.txt", audit_text)
-    atomic_write_text(AUDIT_DIR / "final_evaluation_consistent_metrics_cleanup_applied.txt", audit_text)
-    atomic_write_text(AUDIT_DIR / "inet_metric_availability_audit.txt", inet_metric_audit)
-    atomic_write_text(AUDIT_DIR / "final_networking_metrics_inet_audit_applied.txt", final_networking_audit)
-    atomic_write_text(AUDIT_DIR / "final_scenario_rationalization_figure_pruning_applied.txt", scenario_rationalization_audit)
 
     print(f"Final evaluation report written to {FINAL_DIR}")
     print(f"Tables: {len(tables)}")

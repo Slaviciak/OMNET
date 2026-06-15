@@ -3,7 +3,7 @@
 Generate a lightweight sanity and outcome report for a scenario dataset.
 
 Assumptions:
-- The dataset CSV was produced by analysis/build_dataset.py.
+- The dataset CSV was produced by analysis/core/build_dataset.py.
 - Empty strings represent missing values.
 - Only simple summary and data quality checks are needed at this stage.
 - The report should stay robust even if some expected columns are missing.
@@ -38,7 +38,7 @@ from pathlib import Path
 from statistics import fmean, median
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 
 
@@ -102,6 +102,7 @@ DEGRADATION_SENSITIVITY_SCENARIO = "regionalbackbone_failure_detection_degradati
 COST_AWARE_BACKUP_SCENARIO = "regionalbackbone_failure_detection_cost_aware_backup"
 COST_AWARE_TRANSPORT_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact"
 COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
+RANDOMIZED_ONSET_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset"
 SUPPORTED_FEATURE_SETS = ("baseline", "extended")
 SENSITIVITY_PROFILES = ("MildSlow", "Moderate", "SevereFast")
 SENSITIVITY_MECHANISMS = (
@@ -135,6 +136,13 @@ TRANSPORT_IMPACT_INSTRUMENTED_CONFIGS = [
     f"RegionalBackboneCostAware{profile}{mechanism}"
     for profile in TRANSPORT_IMPACT_INSTRUMENTED_PROFILES
     for mechanism in SENSITIVITY_MECHANISMS
+]
+RANDOMIZED_ONSET_VALUES = (45, 50, 55, 60, 65, 70, 75)
+RANDOMIZED_ONSET_MECHANISMS = tuple(mechanism for mechanism in SENSITIVITY_MECHANISMS if mechanism != "Hybrid")
+RANDOMIZED_ONSET_CONFIGS = [
+    f"RegionalBackboneCostAwareTransportRandomizedOnset{onset}{mechanism}"
+    for onset in RANDOMIZED_ONSET_VALUES
+    for mechanism in RANDOMIZED_ONSET_MECHANISMS
 ]
 
 OUTCOME_COLUMNS = [
@@ -486,9 +494,43 @@ SCENARIO_PRESETS = {
         "missing_csv_path": DEBUG_OUTPUT_DIR / f"{COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}_missing_values.csv",
         "per_config_csv_path": DEBUG_OUTPUT_DIR / f"{COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}_per_config_summary.csv",
         "outcome_csv_path": OUTCOMES_DIR / f"{COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}_outcome_summary.csv",
-        "report_title": "RegionalBackbone Instrumented Cost-Aware Mixed UDP/TCP Transport-Impact Dataset Sanity Report",
+        "report_title": "Congestion/Queue-Buildup Early Mitigation Dataset Sanity Report",
         "expected_configs": TRANSPORT_IMPACT_INSTRUMENTED_CONFIGS,
         "key_numeric_columns": [
+            "degradation_start_time_s",
+            "degradation_end_time_s",
+            "degradation_target_delay_s",
+            "degradation_target_packet_error_rate",
+            "backup_path_data_rate_bps",
+            "backup_path_extra_delay_s",
+            "receiver_total_packet_count",
+            "receiver_app0_e2e_delay_mean_s",
+            "receiver_app0_throughput_mean_bps",
+            "receiver_tcp_total_received_bytes",
+            "receiver_tcp_goodput_mean_bps",
+            "tcp_service_interruption_duration_s",
+            "tcp_zero_goodput_window_count_after_reference",
+            "tcp_max_endpoint_receive_gap_after_reference_s",
+            "protection_lead_time_before_failure_s",
+            "runtime_model_loaded",
+            "runtime_model_fallback_used",
+            "packet_sequence_gap_total_unobserved_after_hard_failure",
+            "packet_sequence_gap_total_unobserved_between_activation_and_failure",
+            "packet_sequence_gap_total_reordered_between_activation_and_failure",
+        ],
+    },
+    RANDOMIZED_ONSET_SCENARIO: {
+        "dataset_path": DATASETS_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_dataset.csv",
+        "report_path": REPORTS_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_report.txt",
+        "missing_csv_path": DEBUG_OUTPUT_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_missing_values.csv",
+        "per_config_csv_path": DEBUG_OUTPUT_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_per_config_summary.csv",
+        "outcome_csv_path": OUTCOMES_DIR / f"{RANDOMIZED_ONSET_SCENARIO}_outcome_summary.csv",
+        "report_title": "Queue Buildup Randomized-Onset Robustness Dataset Sanity Report",
+        "expected_configs": RANDOMIZED_ONSET_CONFIGS,
+        "key_numeric_columns": [
+            "randomized_onset_time_s",
+            "onset_seed",
+            "qos_event_monitor_start_time_s",
             "degradation_start_time_s",
             "degradation_end_time_s",
             "degradation_target_delay_s",

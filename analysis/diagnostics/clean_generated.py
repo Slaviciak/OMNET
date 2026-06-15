@@ -13,7 +13,7 @@ import argparse
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ANALYSIS_OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 RESULTS_ROOT = PROJECT_ROOT / "results"
 
@@ -41,6 +41,12 @@ SCENARIO_RESULT_DIRS = {
     "regionalbackbone_failure_detection_degraded_link_model_family": RESULTS_ROOT
     / "regionalbackbone"
     / "failure_detection_degraded_link_model_family",
+    "regionalbackbone_failure_detection_cost_aware_backup": RESULTS_ROOT
+    / "regionalbackbone"
+    / "failure_detection_cost_aware_backup",
+    "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented": RESULTS_ROOT
+    / "regionalbackbone"
+    / "ti_inst",
 }
 
 

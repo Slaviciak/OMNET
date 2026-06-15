@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import os
 import time
 from collections import defaultdict
@@ -18,17 +19,31 @@ from pathlib import Path
 from statistics import fmean, stdev
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = PROJECT_ROOT / "analysis" / "output"
 DATASET_DIR = OUTPUT_ROOT / "datasets"
 OUTCOMES_DIR = OUTPUT_ROOT / "outcomes"
 NETWORK_IMPACT_DIR = OUTPUT_ROOT / "network_impact"
 
 DEFAULT_SCENARIO = "regionalbackbone_failure_detection_degraded_link_model_family"
+CORE_SCENARIO = DEFAULT_SCENARIO
 COST_AWARE_BACKUP_SCENARIO = "regionalbackbone_failure_detection_cost_aware_backup"
 COST_AWARE_TRANSPORT_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact"
 COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_instrumented"
-TRANSPORT_SCENARIOS = {COST_AWARE_TRANSPORT_SCENARIO, COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO}
+RANDOMIZED_ONSET_SCENARIO = "regionalbackbone_failure_detection_cost_aware_transport_impact_randomized_onset"
+TRANSPORT_SCENARIOS = {
+    CORE_SCENARIO,
+    COST_AWARE_BACKUP_SCENARIO,
+    COST_AWARE_TRANSPORT_SCENARIO,
+    COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO,
+    RANDOMIZED_ONSET_SCENARIO,
+}
+INET_METRIC_SCENARIOS = {
+    CORE_SCENARIO,
+    COST_AWARE_BACKUP_SCENARIO,
+    COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO,
+    RANDOMIZED_ONSET_SCENARIO,
+}
 
 MECHANISM_ORDER = {
     "ospf_only": 0,
@@ -402,9 +417,10 @@ def parse_float(value: object) -> float | None:
     if not text:
         return None
     try:
-        return float(text)
+        numeric = float(text)
     except ValueError:
         return None
+    return numeric if math.isfinite(numeric) else None
 
 
 def parse_int(value: object) -> int | None:
@@ -415,25 +431,32 @@ def parse_int(value: object) -> int | None:
 
 
 def numeric_or_blank(value: float | int | None) -> object:
-    return "" if value is None else value
+    if value is None:
+        return ""
+    numeric = float(value)
+    return value if math.isfinite(numeric) else ""
 
 
 def mean_or_none(values: list[float]) -> float | None:
-    return fmean(values) if values else None
+    finite_values = [value for value in values if math.isfinite(float(value))]
+    return fmean(finite_values) if finite_values else None
 
 
 def max_or_none(values: list[float]) -> float | None:
-    return max(values) if values else None
+    finite_values = [value for value in values if math.isfinite(float(value))]
+    return max(finite_values) if finite_values else None
 
 
 def sum_or_none(values: list[float]) -> float | None:
-    return sum(values) if values else None
+    finite_values = [value for value in values if math.isfinite(float(value))]
+    return sum(finite_values) if finite_values else None
 
 
 def percentile_or_none(values: list[float], percentile: float) -> float | None:
-    if not values:
+    finite_values = [value for value in values if math.isfinite(float(value))]
+    if not finite_values:
         return None
-    ordered = sorted(values)
+    ordered = sorted(finite_values)
     if len(ordered) == 1:
         return ordered[0]
     position = (len(ordered) - 1) * (percentile / 100.0)
@@ -459,6 +482,8 @@ def numeric_values(rows: list[dict[str, str]], column: str) -> list[float]:
 
 
 def scenario_results_dir(scenario: str) -> Path:
+    if scenario == RANDOMIZED_ONSET_SCENARIO:
+        return RESULTS_ROOT / "ti_randomized_onset"
     if scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
         return RESULTS_ROOT / "ti_inst"
     if scenario == COST_AWARE_TRANSPORT_SCENARIO:
@@ -1226,7 +1251,7 @@ def build_transport_rows(
 
 
 def build_inet_metrics_rows(scenario: str, outcome_rows: list[dict[str, str]]) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
-    if scenario != COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
+    if scenario not in INET_METRIC_SCENARIOS:
         return [], []
 
     by_run_rows: list[dict[str, object]] = []
@@ -1498,7 +1523,7 @@ def metric_classification_lines(scenario: str) -> list[str]:
             "- TCP received bytes/goodput/progress: endpoint-observed proxy from INET TCP application packet-byte vectors; TCP stack RTT/retransmission/cwnd metrics are reported only when explicitly exported."
         )
     else:
-        lines.append("- TCP goodput/retransmission/RTT/cwnd: unavailable because this cohort is UDP-only.")
+        lines.append("- TCP goodput/retransmission/RTT/cwnd: unavailable because this cohort does not export mixed transport endpoint signals.")
     return lines
 
 
@@ -1583,7 +1608,7 @@ def render_report(
             ),
             "- Queue/drop metrics are limited by available INET signals; this report does not claim queue drops.",
             "- Backup-path cost fields report separate components: early backup usage time, avoided post-failure unobserved gaps, transition reordering, UDP delay, queueing, and throughput diagnostics.",
-            "- Cost-aware backup and transport-impact cohorts model a mildly penalized southern backup corridor; legacy cohorts do not model a persistent backup data-plane penalty.",
+            "- Cost-aware degraded-backup diagnostics isolate backup-route opportunity cost; Scenario C additionally stresses the protected primary span with queue buildup and targeted INET telemetry.",
             "- The report is analysis-only and does not modify AI-MRCE, BFD-like, FRR-like routes, runtime models, or outcomes.",
             "",
             "Unavailable / Future Instrumentation",
@@ -1672,7 +1697,7 @@ def main() -> int:
     if scenario in TRANSPORT_SCENARIOS:
         atomic_write_csv(transport_by_run_path, transport_rows, TRANSPORT_BY_RUN_FIELDS)
         atomic_write_csv(transport_summary_path, transport_summary_rows, TRANSPORT_SUMMARY_FIELDS)
-    if scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
+    if scenario in INET_METRIC_SCENARIOS:
         atomic_write_csv(inet_metrics_by_run_path, inet_metrics_by_run_rows, INET_METRICS_BY_RUN_FIELDS)
         atomic_write_csv(inet_metrics_summary_path, inet_metrics_summary_rows, INET_METRICS_SUMMARY_FIELDS)
     report_text = render_report(
@@ -1697,17 +1722,17 @@ def main() -> int:
     if scenario in TRANSPORT_SCENARIOS:
         print(f"[network_impact] Wrote transport by-run CSV: {transport_by_run_path}")
         print(f"[network_impact] Wrote transport summary CSV: {transport_summary_path}")
-    if scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
+    if scenario in INET_METRIC_SCENARIOS:
         print(f"[network_impact] Wrote INET metrics by-run CSV: {inet_metrics_by_run_path}")
         print(f"[network_impact] Wrote INET metrics summary CSV: {inet_metrics_summary_path}")
     print(f"[network_impact] Wrote report: {report_path}")
     if scenario in TRANSPORT_SCENARIOS:
         print("[network_impact] TCP endpoint received-byte/goodput/progress proxy metrics were generated.")
-        if scenario == COST_AWARE_TRANSPORT_INSTRUMENTED_SCENARIO:
+        if scenario in INET_METRIC_SCENARIOS:
             print("[network_impact] Targeted INET metric extraction was attempted for UDP delay percentiles, IPDV, queue/link metrics, and TCP stack signals.")
         print("[network_impact] TCP retransmissions, RTT, cwnd, and exact finite-flow completion are claimed only when explicitly available.")
     else:
-        print("[network_impact] TCP metrics are unavailable because this cohort is UDP-only.")
+        print("[network_impact] TCP metrics are unavailable because this cohort does not export mixed transport endpoint signals.")
     print(f"[network_impact] Total elapsed: {elapsed_text(total_start)}")
     return 0
 

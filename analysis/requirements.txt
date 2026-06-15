@@ -1,6 +1,6 @@
-# Offline ML dependency for analysis/train_risk_model.py
+# Offline ML dependency for analysis/ml/train_risk_model.py
 # Pinned to the currently validated project version for reproducible reporting.
 scikit-learn==1.8.0
 
-# Plotting dependency for analysis/evaluate_results.py final PNG figures.
+# Plotting dependency for analysis/core/evaluate_results.py final PNG figures.
 matplotlib
